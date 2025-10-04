@@ -16,13 +16,14 @@ from zoneinfo import ZoneInfo, available_timezones
 BASE_DIR = Path(__file__).resolve().parents[2]
 IN_PORTFOLIO_DIR = BASE_DIR / 'in' / 'portfolio'
 OUT_DIR = BASE_DIR / 'out'
-ARCHIVE_DIR = BASE_DIR / 'archive'
+# Folder that groups timestamped order runs
+RUNS_DIR = BASE_DIR / 'runs'
 
 # Current active archive timestamp folder (set on first upload after reset)
 _CURRENT_STAMP: Optional[str] = None
 
 def _stamp_now() -> str:
-    tzname = os.getenv('BROKER_ARCHIVE_TZ', 'Asia/Ho_Chi_Minh')
+    tzname = os.getenv('BROKER_RUNS_TZ', os.getenv('BROKER_ARCHIVE_TZ', 'Asia/Ho_Chi_Minh'))
     try:
         tz = ZoneInfo(tzname)
     except Exception:
@@ -30,12 +31,12 @@ def _stamp_now() -> str:
     now = datetime.now(tz) if tz else datetime.now()
     return now.strftime('%Y%m%d_%H%M')  # e.g., 20251004_0930
 
-def _ensure_archive_stamp() -> str:
+def _ensure_run_stamp() -> str:
     global _CURRENT_STAMP
     if not _CURRENT_STAMP:
         _CURRENT_STAMP = _stamp_now()
-        (ARCHIVE_DIR / _CURRENT_STAMP / 'portfolio').mkdir(parents=True, exist_ok=True)
-        print(f"[srv] archive stamp initialized: {_CURRENT_STAMP}", flush=True)
+        (RUNS_DIR / _CURRENT_STAMP / 'portfolio').mkdir(parents=True, exist_ok=True)
+        print(f"[srv] run stamp initialized: {_CURRENT_STAMP}", flush=True)
     return _CURRENT_STAMP
 
 def _git_commit_push(paths: list[Path], message: str) -> Dict[str, Any]:
@@ -303,7 +304,7 @@ def _resp(data: Dict[str, Any], status: int = 200):
 
 def ensure_dirs():
     IN_PORTFOLIO_DIR.mkdir(parents=True, exist_ok=True)
-    ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+    RUNS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def reset_portfolio() -> Dict[str, Any]:
@@ -313,10 +314,10 @@ def reset_portfolio() -> Dict[str, Any]:
         if p.is_file() and not p.name.startswith('.'):
             p.unlink(missing_ok=True)
             removed.append(p.name)
-    # Clear current archive stamp; next upload initializes a new timestamped folder
+    # Clear current run stamp; next upload initializes a new timestamped folder
     global _CURRENT_STAMP
     _CURRENT_STAMP = None
-    return {"status": "ok", "removed": removed, "archive_reset": True}
+    return {"status": "ok", "removed": removed, "runs_reset": True}
 
 
 def write_csv_exact(name: str, content_text: str) -> Dict[str, Any]:
@@ -328,19 +329,19 @@ def write_csv_exact(name: str, content_text: str) -> Dict[str, Any]:
     data = content_text.encode('utf-8')
     with dest.open('wb') as f:
         f.write(data)
-    # Also write to archive/<stamp>/portfolio and push to trigger pipeline
-    stamp = _ensure_archive_stamp()
-    arch_dest = ARCHIVE_DIR / stamp / 'portfolio' / f"{safe}.csv"
-    with arch_dest.open('wb') as f:
+    # Also write to runs/<stamp>/portfolio and push to trigger pipeline
+    stamp = _ensure_run_stamp()
+    run_dest = RUNS_DIR / stamp / 'portfolio' / f"{safe}.csv"
+    with run_dest.open('wb') as f:
         f.write(data)
-    git_res = _git_commit_push([arch_dest], f"archive: add portfolio {safe}.csv for {stamp}")
+    git_res = _git_commit_push([run_dest], f"runs: add portfolio {safe}.csv for {stamp}")
     return {
         "status": "ok",
         "saved": str(dest.relative_to(BASE_DIR)),
-        "archived": str(arch_dest.relative_to(BASE_DIR)),
+        "run_saved": str(run_dest.relative_to(BASE_DIR)),
         "bytes": len(data),
         "git": git_res,
-        "archive_stamp": stamp,
+        "run_stamp": stamp,
     }
 
 
@@ -372,13 +373,13 @@ def _env_truth(name: str, default: bool = False) -> bool:
 
 
 def finalize_and_run() -> Dict[str, Any]:
-    # New flow: results are produced by CI pipeline triggered from archive commits.
+    # New flow: results are produced by CI pipeline triggered from runs/ commits.
     # This endpoint now just reports the current archive stamp and latest scheduler status.
     scheduler_status = POLICY_SCHEDULER.status() if POLICY_SCHEDULER is not None else None
     return {
         "status": "ok",
-        "message": "Results are produced by CI on archive push; no local run executed.",
-        "archive_stamp": _CURRENT_STAMP,
+        "message": "Results are produced by CI on runs/ push; no local run executed.",
+        "run_stamp": _CURRENT_STAMP,
         "policy_scheduler": scheduler_status,
     }
 
