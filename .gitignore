@@ -1,0 +1,22 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Data inputs/outputs
+in/portfolio/*.csv
+out/
+.coverage
+*.xlsx
+
+# VSCode
+.vscode/
+
+# Scratch / local HTML test files
+scratch/
+/*.html
+
+# Python virtual environment
+venv/
+# config/policy_overrides.json

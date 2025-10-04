@@ -1,0 +1,264 @@
+ĐỀ XUẤT TỔNG HỢP: TUNING THAM SỐ CHO ENGINE BROKER-GPT
+Ngày: 2025-10-02
+
+====================================
+0) TÓM TẮT ĐIỀU HƯỚNG
+====================================
+- Phân loại tham số thành 3 nhóm theo nguyên tắc:
+  (1) Tune bằng công thức (calibrator): các tham số có thể nội suy từ dữ liệu định lượng.
+  (2) Tune hàng ngày bằng AI/script (generate_policy_overrides.py): chỉ giữ các nút thực sự cần phản ứng với tin tức/tâm lý.
+  (3) Đặt cố định: hằng số chiến lược, thông số thị trường, hoặc thứ chỉ nên đổi sau backtest dài hạn.
+- Tối giản các khóa do AI điều khiển để giảm chồng chéo, tăng tính ổn định, dễ audit.
+- Áp dụng guardrails: biên, tốc độ thay đổi/ngày, TTL, decay, rationale bắt buộc, kill-switch theo chế độ thị trường.
+- Tăng minh bạch: log có cấu trúc, A/B nhỏ, giám sát các chỉ số then chốt và kế hoạch rollback rõ ràng.
+
+
+====================================
+1) NHÓM TUNE BẰNG CÔNG THỨC (CALIBRATOR)
+====================================
+1.1 Quantile gates cho ngưỡng chọn lệnh
+- Các ngưỡng ngầm quyết định mức độ “khó/dễ” để một mã đủ điều kiện (ví dụ q_add, q_new).
+- Công thức: với mục tiêu K lệnh (add/new) trên N mã có tín hiệu, lấy q ≈ 1 - K/N. Tự động nội suy ngưỡng theo phân phối điểm hiện tại.
+- Lợi ích: số lệnh khớp tiệm cận mục tiêu, không phải “đặt tay” ngưỡng mỗi ngày.
+
+1.2 TP/SL động theo ATR
+- Biến thể dùng ATR: tp_atr_mult = tp_pct / ATR_med, sl_atr_mult = sl_pct / ATR_med, với ATR_med là trung vị ATR14% toàn thị trường.
+- Mục tiêu: khi biến động cao, ngưỡng TP/SL nới ra; biến động thấp, siết lại, nhưng vẫn giữ tương đương với tỉ lệ tĩnh trong điều kiện “trung bình”.
+
+1.3 Ngưỡng chế độ thị trường (market filter) từ phân vị lịch sử
+- risk_off_index_drop_pct: chọn tại phân vị “giảm mạnh” (ví dụ top 10% phiên giảm).
+- idx_chg_smoothed_hard_drop: ngưỡng giảm trung bình 6 ngày, cùng cỡ với risk_off_index_drop_pct.
+- vol_ann_hard_ceiling: trần vol năm (ví dụ phân vị 95%).
+- trend_norm_hard_floor: sàn xu hướng chuẩn hóa (ví dụ phân vị 10%).
+- index_atr_soft_pct / index_atr_hard_pct: lấy từ phân vị ATR14% (ví dụ 80% và 95%).
+- market_score_soft_floor / hard_floor: ngưỡng xác suất risk-on từ phân phối điểm mô hình regime.
+- risk_off_breadth_floor: lấy từ phân vị thấp của breadth (tỷ lệ cổ phiếu > MA50).
+- risk_off_drawdown_floor: lấy từ phân vị cao của drawdown VN-Index.
+- Tất cả ngưỡng trên do calibrator tính định kỳ (hàng ngày/tuần) từ dữ liệu lịch sử mới nhất.
+
+1.4 Thanh khoản tối thiểu (min_liq_norm)
+- Ràng buộc: ADTV_20d >= M * quy mô lệnh kỳ vọng.
+- M là hệ số mục tiêu (ví dụ 20). Nội suy min_liq_norm (0..1) sao cho chỉ các mã có thanh khoản thuộc top X% mới thỏa điều kiện.
+- Mục tiêu: tránh “kẹt thanh khoản” khi giải ngân.
+
+1.5 Ngưỡng gần giá trần (near_ceiling_pct)
+- Tính theo phân vị cao của Price / BandCeiling (ví dụ ~98%), chặn trong [0.90..0.999].
+- Nếu giá đã ở quá sát trần theo thống kê lịch sử, hạn chế mua đuổi.
+
+1.6 Tham số sizing danh mục
+- cov_reg: cường độ co rút hiệp phương sai (Ledoit–Wolf) trên lookback cố định (ví dụ 90 ngày).
+- softmax_tau: tìm bằng bisection để đạt ENP mục tiêu (enp_target_add/new).
+- dynamic_caps: pos_max ≈ 1.2 / ENP_total; pos_min ≈ 0.7 * pos_max; sector_max ≈ 4 * pos_max (giới hạn trong [0.25..0.40]); sector_min ≈ 0.8 * sector_max.
+
+1.7 Pricing – thang suy giảm xác suất khớp
+- decay_scale_min_ticks: trung vị ATR14 chuyển sang đơn vị tick (giới hạn [3..20]). Xác suất khớp giảm theo khoảng cách giá tương ứng biến động điển hình.
+
+1.8 TTL lệnh theo độ biến động
+- TTL_base (phút) là hàm bậc thang của annualized vol của chỉ số: vol thấp → TTL dài hơn; vol cao → TTL ngắn lại (ví dụ 14’ → 8’). TTL_soft/hard ngắn hơn base một bậc.
+
+
+====================================
+2) NHÓM TUNE HÀNG NGÀY BẰNG AI (TỐI GIẢN)
+====================================
+2.1 Giữ lại (nên để AI điều chỉnh)
+- buy_budget_frac: “đòn bẩy” risk-on/off theo tin tức/tâm lý vĩ mô.
+  + Bounds: [0.02 .. 0.18]
+  + Rate limit: max Δ/ngày ≤ 0.04
+  + TTL/reset: tự về mặc định sau 3 phiên nếu không tái khẳng định
+- add_max, new_max: kiểm soát nhịp vào lệnh theo cơ hội/catalyst.
+  + Bounds: [0 .. min(10, ceil(N/6))]
+  + Rate limit: max Δ/ngày ≤ 2
+  + Ràng buộc: tổng vốn giải ngân dự kiến không vượt buy_budget_frac
+- sector_bias, ticker_bias: phản ứng tin tức ngành/mã (dùng ít và đúng chỗ).
+  + Biên độ: |sector_bias| ≤ 0.15; |ticker_bias| ≤ 0.20
+  + Tính thưa: ≤ 5 sector và ≤ 10 ticker hoạt động đồng thời
+  + Rate limit: max Δ/ngày mỗi mục ≤ 0.05
+  + TTL/expiry: hết hạn sau 5 phiên; nếu không tái khẳng định thì decay 20%/phiên
+  + Bắt buộc “rationale” (chuỗi ngắn) để audit
+- news_risk_tilt (tùy chọn): thang [-1 .. +1] biểu diễn tâm lý vĩ mô; nội bộ map sang điều chỉnh nhỏ cho buy_budget_frac và add_max/new_max.
+
+2.2 Bỏ khỏi AI (chuyển về công thức hoặc cố định)
+- thresholds.base_add, thresholds.base_new, thresholds.trim_th:
+  + Lý do: đã có quantile gates/ATR cân chỉnh; tránh “double-steer”.
+  + Thay thế: đặt mục tiêu K lệnh → nội suy quantile; trim theo R/ATR/trailing return.
+- sizing.add_share, sizing.new_share, sizing.reuse_sell_proceeds_frac:
+  + Lý do: có thể quyết định bằng công thức quan sát được (breadth, số cơ hội add/new, regime/vol).
+  + Hiệu ứng: giảm chồng chéo với buy_budget_frac + add_max/new_max.
+
+2.3 Guardrails chung cho AI overrides
+- Bounds & rate-limit: áp trước khi ghi đè.
+- TTL & expiry: mỗi override có ngày hết hạn; auto-decay nếu không tái khẳng định.
+- Kill-switch: khi thị trường về risk-off cứng, drawdown vượt ngưỡng, hoặc vol > trần → vô hiệu AI overrides và rơi về cấu hình baseline.
+- Confidence gating: nếu độ tự tin phân tích tin thấp (< ngưỡng), giữ nguyên kỳ trước.
+- Logging bắt buộc: {param, old→new, reason, nguồn headline, expiry, actor, timestamp}.
+- Weekly cap: giới hạn thay đổi tích lũy/tuần để tránh “đánh võng”.
+- Consistency check: kiểm tra tổng vốn, giới hạn vị thế/ngành sau khi merge override.
+
+
+====================================
+3) NHÓM ĐẶT CỐ ĐỊNH (KHÔNG TUNE HÀNG NGÀY)
+====================================
+3.1 Trọng số mô hình (weights)
+- w_trend, w_momo, w_liq, w_vol_guard, w_sector, w_beta, w_fundamental, v.v.
+- Cố định theo backtest dài hạn/triết lý chiến lược; chỉ đổi khi có nghiên cứu lại toàn cục.
+
+3.2 Ngưỡng kỹ thuật tĩnh và hành vi exit/trim
+- tp_pct, sl_pct (tỉ lệ chốt lời/cắt lỗ cơ bản); các sàn tp/sl tối thiểu nếu dùng ATR.
+- exit_on_ma_break (bật/tắt); các mốc RSI cố định (ví dụ 45) cho trim/exit theo động lượng.
+- Tham số nâng/hạ tín hiệu (ví dụ tilt_exit_downgrade_min, exit_downgrade_min_r) được đặt hằng theo khẩu vị rủi ro.
+
+3.3 Pricing & chi phí giao dịch
+- Chiến lược đặt lệnh theo chế độ (risk_on_buy/sell, risk_off_buy/sell) – quyết định thiết kế, ít thay đổi.
+- Hệ số fallback ATR (mua/bán) khi thiếu dữ liệu: đặt hằng.
+- Chi phí/thuế giao dịch: đặt theo quy định thị trường; chỉ đổi khi quy định đổi.
+
+3.4 Hằng số vi mô thị trường (microstructure)
+- Biên độ trần/sàn theo sàn giao dịch, bước giá, lô chẵn, quy tắc khớp lệnh… → hằng số.
+
+3.5 Phương pháp và giới hạn rủi ro
+- Phương pháp risk_weighting (score_softmax, inverse_atr, v.v.) → cố định.
+- Giới hạn tĩnh: max_pos_frac, max_sector_frac, min_names_target → phản ánh khẩu vị rủi ro nhà đầu tư.
+- Tham số Black–Litterman/Mean–Variance (danh sách giá trị để thử) → phục vụ backtest, không thay động.
+
+3.6 Khác
+- market_index_symbol (ví dụ VNINDEX) → cố định.
+- evaluation.days_to_liq_frac (ví dụ 0.20) → giả định cố định về khả năng thoát vị thế.
+- Feature flags (bật/tắt chuẩn hóa robust, on_run calibrations) → quyết định vận hành, không tune mỗi ngày.
+
+
+====================================
+4) CHECKLIST TRIỂN KHAI
+====================================
+- Thu gọn allowed_keys của generate_policy_overrides.py theo bộ tối giản: 
+  {buy_budget_frac, add_max, new_max, sector_bias, ticker_bias, (tùy chọn) news_risk_tilt}.
+- Áp bounds, rate-limit, TTL, decay, rationale, expiry ngay trong script trước khi ghi file overrides.
+- Di chuyển logic base_add/base_new/trim_th sang quantile/ATR/R-based công thức.
+- Viết unit-test cho: merge overrides, decay/expiry của bias, consistency checks về vốn và giới hạn.
+- Ghi log có cấu trúc và build bảng audit thay đổi theo ngày.
+- Thiết lập kill-switch và weekly cap.
+- A/B nhỏ (10–20% danh mục) trước khi mở rộng.
+- Cập nhật tài liệu: mô tả guardrails, sơ đồ precedence (default → calibrations → AI).
+
+
+====================================
+5) PHỤ LỤC CÔNG THỨC (PSEUDOCODE)
+====================================
+5.1 Quantile gate
+  q = max(0.50, min(0.995, 1 - K / max(1, N)))
+  threshold = percentile(score_array, q)
+
+5.2 ATR-based TP/SL
+  ATR_pct = ATR14 / Price_close
+  ATR_med = median(ATR_pct_all_names)
+  tp_atr_mult = clip(tp_pct / ATR_med, 0.5, 4.0)
+  sl_atr_mult = clip(sl_pct / ATR_med, 0.5, 4.0)
+
+5.3 Market filters từ phân vị
+  risk_off_index_drop_pct = percentile(daily_ret_index, 10th_percentile)
+  vol_ann_hard_ceiling = percentile(ann_vol_index, 95th_percentile)
+  index_atr_soft_pct = percentile(ATR14_pct_index, 80th)
+  index_atr_hard_pct = percentile(ATR14_pct_index, 95th)
+  breadth_floor = percentile(breadth_series, 10th)
+  drawdown_floor = percentile(drawdown_series, 80th)
+
+5.4 Liquidity guard
+  order_size_target = NAV * buy_budget_frac / max(1, add_max + new_max)
+  required_adtv = M * order_size_target
+  min_liq_norm = rank_percentile(ADTV_all, required_adtv)
+
+5.5 Near-ceiling
+  ratio = price / band_ceiling
+  near_ceiling_pct = clip(percentile(ratio_all, 98th), 0.90, 0.999)
+
+5.6 Ledoit–Wolf shrinkage
+  cov_reg = ledoit_wolf_shrinkage(returns_matrix_lookback)
+
+5.7 Softmax tau theo ENP mục tiêu
+  def enp(weights): return 1.0 / sum(w**2)
+  find tau by bisection s.t. enp(softmax(score / tau)) ≈ enp_target
+
+5.8 Dynamic caps từ ENP
+  pos_max = 1.2 / ENP_total
+  pos_min = 0.7 * pos_max
+  sector_max = clip(4.0 * pos_max, 0.25, 0.40)
+  sector_min = 0.8 * sector_max
+
+5.9 Fill-prob decay theo ATR ticks
+  decay_scale_min_ticks = clip(median(ATR14_in_ticks_all), 3.0, 20.0)
+
+5.10 TTL theo vol
+  if vol_ann <= 25%: ttl_base = 14
+  elif vol_ann <= 40%: ttl_base = 11
+  else: ttl_base = 8
+  ttl_soft = max(2, ttl_base - 3)
+  ttl_hard = max(2, ttl_base - 5)
+
+5.11 Mapping news_risk_tilt → hành động
+  delta_budget = tilt * 0.02    # ±2 điểm % NAV
+  delta_slots  = round(tilt * 1)
+  buy_budget_frac = clip(buy_budget_frac + delta_budget, bounds...)
+  add_max += delta_slots ; new_max += delta_slots
+
+5.12 Decay & TTL cho bias
+  for each bias in {sector,ticker}:
+    if not reaffirmed_today:
+      bias_value *= 0.80
+    if today >= expiry_date:
+      remove bias
+
+5.13 Merge overrides (precedence)
+  policy = deep_copy(policy_default)
+  policy = merge(policy, calibrations)         # công thức
+  policy = merge_with_bounds(policy, overrides_ai)  # AI + guardrails
+  assert consistency_checks(policy)
+
+
+====================================
+6) RUNBOOK HÀNG NGÀY
+====================================
+Sáng (trước mở cửa):
+- Chạy calibrators để tính toàn bộ tham số công thức: quantile gates, ATR multipliers, market filters, liquidity, sizing.
+- Ghi ra policy_calibrated.json (hoặc inject trực tiếp vào memory/config runtime).
+- Chạy AI script đọc tin tức/sentiment → đề xuất overrides tối giản.
+- Áp guardrails, TTL, decay, rationale, expiry → sinh policy_overrides.json.
+- Merge theo thứ tự: policy_default → policy_calibrated → policy_overrides.
+- Chạy consistency checks (vốn, caps, số lệnh, giới hạn ngành).
+
+Trong ngày:
+- Monitor metrics (mục 7), nếu trigger kill-switch → tắt overrides, rơi về baseline.
+
+Cuối ngày:
+- Ghi log audit, snapshot cấu hình, tổng hợp attribution (hiệu ứng của overrides).
+
+
+====================================
+7) METRICS CẦN GIÁM SÁT
+====================================
+- Exposures: tổng vốn giải ngân vs buy_budget_frac; phân bổ add/new vs mục tiêu.
+- Count & hit-rate: số lệnh add/new, tỉ lệ thành công, PnL/holding time cho add vs new.
+- Fill-quality: xác suất khớp dự báo vs thực tế; slippage vs chuẩn.
+- Risk: realized vol, max drawdown, VaR; vi phạm caps; ngày/đoạn risk-off vs hành vi.
+- Regime: accuracy của mô hình regime (confusion matrix theo nhãn up/down).
+- Liquidity: % lệnh vi phạm guard thanh khoản; thời gian thoát theo days_to_liq_frac.
+- Bias attribution: PnL của sector_bias/ticker_bias; coverage; decay/expiry compliance.
+- Drift detection: thay đổi tham số qua thời gian, số lần đụng bounds/rate-limit.
+
+
+====================================
+8) KẾ HOẠCH ROLLBACK
+====================================
+- Toggles: công tắc tắt toàn bộ AI overrides tức thời; chỉ giữ policy_default + calibrations.
+- Freeze: đóng băng buy_budget_frac ở mức an toàn (ví dụ 0.05) khi vol/đ drawdown vượt trần.
+- TTL emergency: rút TTL lệnh về mức ngắn trong biến động cực đoan.
+- Versioned configs: lưu bản chụp hàng ngày; rollback = chọn snapshot gần nhất ổn định.
+- Quy trình: phát hiện sự cố → bật kill-switch → đánh giá → chỉ mở lại AI sau khi nguyên nhân rõ ràng.
+
+
+====================================
+9) NÂNG CẤP TƯƠNG LAI (TÙY CHỌN)
+====================================
+- Thay quantile cố định bằng quantile điều kiện theo regime (risk-on/off),
+  ví dụ q_new thấp hơn khi risk-on để nới điều kiện mở mới.
+- Dynamic K (số slot add/new) dựa trên breadth và dispersion cơ hội.
+- Tối ưu multi-objective (ENP mục tiêu + tracking error) khi tìm softmax_tau.
+- Hiệu chỉnh near_ceiling_pct theo nhóm thanh khoản (small/mid/large cap).

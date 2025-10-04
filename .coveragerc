@@ -1,0 +1,20 @@
+[run]
+branch = True
+# Limit measurement to our application code
+source = scripts
+omit =
+    */.venv/*
+    */venv/*
+    tests/*
+    out/*
+
+[report]
+show_missing = True
+skip_empty = True
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.: 
+
+[html]
+directory = out/coverage/html
+
