@@ -16,6 +16,50 @@ from zoneinfo import ZoneInfo, available_timezones
 BASE_DIR = Path(__file__).resolve().parents[2]
 IN_PORTFOLIO_DIR = BASE_DIR / 'in' / 'portfolio'
 OUT_DIR = BASE_DIR / 'out'
+ARCHIVE_DIR = BASE_DIR / 'archive'
+
+# Current active archive timestamp folder (set on first upload after reset)
+_CURRENT_STAMP: Optional[str] = None
+
+def _stamp_now() -> str:
+    tzname = os.getenv('BROKER_ARCHIVE_TZ', 'Asia/Ho_Chi_Minh')
+    try:
+        tz = ZoneInfo(tzname)
+    except Exception:
+        tz = None
+    now = datetime.now(tz) if tz else datetime.now()
+    return now.strftime('%Y%m%d_%H%M')  # e.g., 20251004_0930
+
+def _ensure_archive_stamp() -> str:
+    global _CURRENT_STAMP
+    if not _CURRENT_STAMP:
+        _CURRENT_STAMP = _stamp_now()
+        (ARCHIVE_DIR / _CURRENT_STAMP / 'portfolio').mkdir(parents=True, exist_ok=True)
+        print(f"[srv] archive stamp initialized: {_CURRENT_STAMP}", flush=True)
+    return _CURRENT_STAMP
+
+def _git_commit_push(paths: list[Path], message: str) -> Dict[str, Any]:
+    added = []
+    for p in paths:
+        if p.exists():
+            added.append(str(p.relative_to(BASE_DIR)))
+    if not added:
+        return {"ok": True, "out": "no changes"}
+    cmds = [
+        ['git', 'config', 'user.name', os.getenv('BROKER_GIT_USER', 'server-bot')],
+        ['git', 'config', 'user.email', os.getenv('BROKER_GIT_EMAIL', 'server-bot@local')],
+        ['git', 'add'] + added,
+        ['git', 'commit', '-m', message],
+        ['git', 'push'],
+    ]
+    out_all = []
+    ok_overall = True
+    for c in cmds:
+        r = run_cmd(c)
+        out_all.append(r.get('out', ''))
+        ok_overall = ok_overall and bool(r.get('ok'))
+        # If commit produced no changes, proceed to push to be safe
+    return {"ok": ok_overall, "out": ''.join(out_all)}
 
 
 def _parse_time_list(raw: str) -> List[dtime]:
@@ -259,6 +303,7 @@ def _resp(data: Dict[str, Any], status: int = 200):
 
 def ensure_dirs():
     IN_PORTFOLIO_DIR.mkdir(parents=True, exist_ok=True)
+    ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def reset_portfolio() -> Dict[str, Any]:
@@ -268,7 +313,10 @@ def reset_portfolio() -> Dict[str, Any]:
         if p.is_file() and not p.name.startswith('.'):
             p.unlink(missing_ok=True)
             removed.append(p.name)
-    return {"status": "ok", "removed": removed}
+    # Clear current archive stamp; next upload initializes a new timestamped folder
+    global _CURRENT_STAMP
+    _CURRENT_STAMP = None
+    return {"status": "ok", "removed": removed, "archive_reset": True}
 
 
 def write_csv_exact(name: str, content_text: str) -> Dict[str, Any]:
@@ -280,7 +328,20 @@ def write_csv_exact(name: str, content_text: str) -> Dict[str, Any]:
     data = content_text.encode('utf-8')
     with dest.open('wb') as f:
         f.write(data)
-    return {"status": "ok", "saved": str(dest.relative_to(BASE_DIR)), "bytes": len(data)}
+    # Also write to archive/<stamp>/portfolio and push to trigger pipeline
+    stamp = _ensure_archive_stamp()
+    arch_dest = ARCHIVE_DIR / stamp / 'portfolio' / f"{safe}.csv"
+    with arch_dest.open('wb') as f:
+        f.write(data)
+    git_res = _git_commit_push([arch_dest], f"archive: add portfolio {safe}.csv for {stamp}")
+    return {
+        "status": "ok",
+        "saved": str(dest.relative_to(BASE_DIR)),
+        "archived": str(arch_dest.relative_to(BASE_DIR)),
+        "bytes": len(data),
+        "git": git_res,
+        "archive_stamp": stamp,
+    }
 
 
 def run_cmd(cmd: list[str]) -> Dict[str, Any]:
@@ -311,24 +372,13 @@ def _env_truth(name: str, default: bool = False) -> bool:
 
 
 def finalize_and_run() -> Dict[str, Any]:
-    print('[srv] === finalize: SKIP policy (forced) ===', flush=True)
-    pol: Dict[str, Any] = {"ok": True, "out": "<skipped>", "source": "skipped"}
-    print('[srv] === finalize: broker.sh orders ===', flush=True)
-    ords = run_cmd(['bash', 'broker.sh', 'orders'])
-    files = [
-        str((OUT_DIR / 'orders' / n).relative_to(BASE_DIR))
-        for n in ('orders_final.csv', 'orders_print.txt', 'orders_reasoning.csv', 'orders_analysis.txt')
-        if (OUT_DIR / 'orders' / n).exists()
-    ]
-    ok_policy = True
-    status_ok = (ok_policy and ords.get('ok'))
+    # New flow: results are produced by CI pipeline triggered from archive commits.
+    # This endpoint now just reports the current archive stamp and latest scheduler status.
     scheduler_status = POLICY_SCHEDULER.status() if POLICY_SCHEDULER is not None else None
     return {
-        "status": "ok" if status_ok else "error",
-        "skipped_policy": True,
-        "policy": pol,
-        "orders": ords,
-        "orders_files": files,
+        "status": "ok",
+        "message": "Results are produced by CI on archive push; no local run executed.",
+        "archive_stamp": _CURRENT_STAMP,
         "policy_scheduler": scheduler_status,
     }
 

@@ -1,0 +1,90 @@
+name: Archive Run
+
+on:
+  push:
+    paths:
+      - 'archive/**/portfolio/**'
+
+concurrency:
+  group: archive-run-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  run-orders:
+    name: Run orders for latest archive stamp
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'requirements.txt'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Determine latest archive stamp
+        id: stamp
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          stamps=(archive/*)
+          if [ ${#stamps[@]} -eq 0 ]; then
+            echo "::error::No archive stamps found"; exit 2; fi
+          latest=$(ls -1d archive/* | sort | tail -n 1)
+          stamp=$(basename "$latest")
+          echo "stamp=$stamp" >> "$GITHUB_OUTPUT"
+          echo "Latest stamp: $stamp"
+
+      - name: Prepare inputs from archive portfolio
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp="${{ steps.stamp.outputs.stamp }}"
+          mkdir -p in/portfolio
+          cp -f archive/"$stamp"/portfolio/*.csv in/portfolio/
+
+      - name: Run orders
+        shell: bash
+        env:
+          BROKER_UNI_LIMIT: '0'
+        run: |
+          set -euo pipefail
+          ./broker.sh orders
+
+      - name: Copy outputs to archive (flattened)
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp="${{ steps.stamp.outputs.stamp }}"
+          dest="archive/$stamp"
+          mkdir -p "$dest"
+          shopt -s nullglob
+          for f in out/orders/*; do
+            base=$(basename "$f")
+            cp -f "$f" "$dest/$base"
+          done
+
+      - name: Commit and push archive results
+        shell: bash
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          stamp="${{ steps.stamp.outputs.stamp }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "archive/$stamp"
+          git commit -m "archive: results for $stamp" || echo "No changes to commit"
+          git push origin "$BRANCH_NAME"
+
