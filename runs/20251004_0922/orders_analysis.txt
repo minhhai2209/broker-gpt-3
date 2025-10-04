@@ -1,0 +1,29 @@
+Session now (clock): post
+Session (file): post
+Regime risk_on: False
+Buy budget frac: 0.0
+Buy budget frac (effective): 0.0
+Top sectors: Công nghiệp, Dịch vụ tiện ích, Hàng tiêu dùng không thiết yếu, Hàng tiêu dùng thiết yếu
+Holdings: 3 tickers
+Proposed orders: 2
+Execution window hint: Thị trường cân bằng; cần đọc tín hiệu dòng tiền theo từng nhịp. Phiên đã đóng; cập nhật kế hoạch cho phiên kế tiếp dựa trên bối cảnh hiện tại. (VNINDEX +0.00%; Breadth>MA50 28%; Risk-on 81%; ATR14 1.73%; Trend vs MA200 18.9%).
+VNINDEX Δ% (smoothed): 0.000
+Trend strength vs MA: 0.189
+Breadth (>MA50): 0.276
+Breadth (>MA200): 0.000
+Risk-on probability: 0.81
+MA200 slope (20d/MA200): 0.0294
+Uptrend (Close>MA200 & slope>0): True
+Drawdown from peak: 3.0%
+Turnover pct (252d): 50.0
+VNINDEX ATR14%: 1.73
+Index ATR percentile: 87.3%
+US EPU percentile: 25.0%
+S&P 500 drawdown: 0.0%
+DXY percentile: 5.0%
+Brent mom 63d: 0.0%
+Filtered (market guard): CII, CTG, HAG, MBB, MWG, SSI, STB, TCB, VCG, VIX, VRE
+Filtered (liquidity): BWE, CTD, NT2, TLG
+Filtered (near ceiling): -
+No previous orders snapshot found (first run or file missing)
+[warn] failed to update position_state.csv: name 'stateless_meta' is not defined
