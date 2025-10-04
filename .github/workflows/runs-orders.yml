@@ -53,7 +53,7 @@ jobs:
             echo "pending=" >> "$GITHUB_OUTPUT"
           else
             {
-              echo "pending<<'EOF'"
+              echo "pending<<EOF"
               for stamp in "${pending[@]}"; do
                 echo "$stamp"
               done

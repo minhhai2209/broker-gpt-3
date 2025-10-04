@@ -1,20 +1,20 @@
-name: Tuning Weekly
+name: Tuning TTL, FillProb, Watchlist
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 3 * * 1'  # 10:00 ICT, Mondays
+    - cron: '10 8 * * 1-5'  # 15:10 ICT, Mon–Fri (after market close)
 
 concurrency:
-  group: tuning-weekly-${{ github.ref }}
+  group: tuning-daily-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: write
 
 jobs:
-  weekly:
-    name: Weekly structural tuning suite
+  ttl_fillprob_watchlist:
+    name: Calibrate TTL, Fill Probability, Watchlist
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -25,13 +25,11 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Run weekly calibrations
+      - name: Run daily calibrations
         run: |
-          python -m scripts.engine.calibrate_regime --horizon 63 --write
-          python -m scripts.engine.calibrate_market_filter --write
-          python -m scripts.engine.calibrate_risk_limits --write
-          python -m scripts.engine.calibrate_sizing --write
-          python -m scripts.engine.calibrate_thresholds --write
+          python -m scripts.engine.calibrate_ttl_minutes --write
+          python -m scripts.engine.calibrate_fill_prob --write
+          python -m scripts.engine.calibrate_watchlist --write
 
       - name: Persist tuned policy (commit and push)
         env:
@@ -45,7 +43,7 @@ jobs:
           git fetch origin "$BRANCH_NAME"
           git rebase "origin/$BRANCH_NAME" || { echo 'Rebase failed, trying to continue'; }
           git add config/policy_overrides.json
-          git commit -m "chore(policy): update policy_overrides via tuning-weekly" || echo "No changes to commit"
+          git commit -m "chore(policy): update policy_overrides via tuning-daily" || echo "No changes to commit"
           for i in 1 2 3; do
             if git push origin "$BRANCH_NAME"; then exit 0; fi
             echo "Push failed, retry $i/3 after rebase"
@@ -59,7 +57,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: tuning-artifacts-weekly
+          name: tuning-artifacts-daily
           path: |
             out/
             config/policy_overrides.json

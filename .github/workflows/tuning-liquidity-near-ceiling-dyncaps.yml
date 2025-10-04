@@ -1,9 +1,9 @@
-name: Tuning Nightly
+name: Tuning Liquidity, Near-Ceiling, Dynamic Caps
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 15 * * 1-5'  # 22:00 ICT, Mon–Fri
+    - cron: '10 8 * * 1-5'  # 15:10 ICT, Mon–Fri (aligned with daily)
 
 concurrency:
   group: tuning-nightly-${{ github.ref }}
@@ -13,8 +13,8 @@ permissions:
   contents: write
 
 jobs:
-  nightly:
-    name: Nightly micro-tuning suite
+  liquidity_near_ceiling_dyncaps:
+    name: Calibrate Liquidity, Near-Ceiling, Dynamic Caps
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
