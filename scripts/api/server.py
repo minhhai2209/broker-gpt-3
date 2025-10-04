@@ -334,13 +334,13 @@ def write_csv_exact(name: str, content_text: str) -> Dict[str, Any]:
     run_dest = RUNS_DIR / stamp / 'portfolio' / f"{safe}.csv"
     with run_dest.open('wb') as f:
         f.write(data)
-    git_res = _git_commit_push([run_dest], f"runs: add portfolio {safe}.csv for {stamp}")
+    # Do NOT commit here; commit occurs at /done after all uploads finish
     return {
         "status": "ok",
         "saved": str(dest.relative_to(BASE_DIR)),
         "run_saved": str(run_dest.relative_to(BASE_DIR)),
         "bytes": len(data),
-        "git": git_res,
+        "pending_commit": True,
         "run_stamp": stamp,
     }
 
@@ -373,13 +373,39 @@ def _env_truth(name: str, default: bool = False) -> bool:
 
 
 def finalize_and_run() -> Dict[str, Any]:
-    # New flow: results are produced by CI pipeline triggered from runs/ commits.
-    # This endpoint now just reports the current archive stamp and latest scheduler status.
+    """
+    Finalize the current upload session by committing all files in
+    runs/<stamp>/portfolio. This triggers the external CI to produce outputs.
+
+    - Fails fast if there is no active stamp or no files to commit.
+    - Resets the active stamp so a subsequent upload session starts fresh.
+    """
+    global _CURRENT_STAMP
+    ensure_dirs()
+    if not _CURRENT_STAMP:
+        return {
+            "status": "error",
+            "error": "no_active_session",
+            "hint": "Upload portfolio files first via /portfolio/upload",
+        }
+    stamp = _ensure_run_stamp()
+    portfolio_dir = RUNS_DIR / stamp / 'portfolio'
+    files: List[Path] = [p for p in portfolio_dir.glob('*.csv') if p.is_file()]
+    if not files:
+        return {
+            "status": "error",
+            "error": "no_files",
+            "hint": f"No CSV files found in {str(portfolio_dir.relative_to(BASE_DIR))}",
+        }
+    git_res = _git_commit_push(files, f"runs: add portfolio batch for {stamp}")
+    # Reset current stamp to ensure next upload batch starts a new run folder
+    _CURRENT_STAMP = None
     scheduler_status = POLICY_SCHEDULER.status() if POLICY_SCHEDULER is not None else None
     return {
-        "status": "ok",
-        "message": "Results are produced by CI on runs/ push; no local run executed.",
-        "run_stamp": _CURRENT_STAMP,
+        "status": "ok" if git_res.get("ok") else "error",
+        "committed": [str(p.relative_to(BASE_DIR)) for p in files],
+        "git": git_res,
+        "run_stamp": stamp,
         "policy_scheduler": scheduler_status,
     }
 
