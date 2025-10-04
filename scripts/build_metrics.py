@@ -287,7 +287,11 @@ def build_metrics(snapshot_path: str = 'out/snapshot.csv', industry_map_path: st
 def build_metrics_df(snapshot_df: pd.DataFrame, industry_map_df: pd.DataFrame, prices_history_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     if prices_history_df is None or prices_history_df.empty:
         raise ValueError('prices_history_df must be provided with data')
+    if snapshot_df is None or snapshot_df.empty:
+        raise ValueError('snapshot_df must be provided with data')
     df = snapshot_df.copy()
+    if 'Price' not in df.columns:
+        raise ValueError('snapshot_df missing required column: Price')
     df['Ticker'] = df['Ticker'].astype(str).str.upper()
     for col in ('AsOfVN', 'AsOfPrint'):
         if col in df.columns:
@@ -425,6 +429,19 @@ def build_metrics_df(snapshot_df: pd.DataFrame, industry_map_df: pd.DataFrame, p
                         'RS_Trend50': round(rs_trend50, 4) if np.isfinite(rs_trend50) else np.nan})
         addons_df = pd.DataFrame(rows)
         df = df.merge(addons_df, on='Ticker', how='left')
+    # Compute HOSE tick size (thousand VND) based on current price
+    def _hose_tick_thousand(p: float):
+        # Pricing step sizes on HOSE: <10k -> 10 VND (0.01), 10k-49.95k -> 50 VND (0.05), >=50k -> 100 VND (0.10)
+        val = pd.to_numeric(pd.Series([p]), errors='coerce').iloc[0]
+        if pd.isna(val):
+            return ''
+        if val < 10.0:
+            return 0.01
+        if val < 49.95:
+            return 0.05
+        return 0.10
+    df['TickSizeHOSE_Thousand'] = df['Price'].apply(_hose_tick_thousand)
+
     # Session summary DF
     session_summary = pd.DataFrame([{
         'SessionPhase': session_phase,
