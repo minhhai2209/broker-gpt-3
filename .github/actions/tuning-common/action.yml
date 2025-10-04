@@ -23,12 +23,14 @@ runs:
     - name: Install dependencies
       shell: bash
       run: |
+        set -euo pipefail
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
     - name: Prepare sample inputs
       shell: bash
       run: |
+        set -euo pipefail
         mkdir -p in/portfolio
         if [ -f samples/portfolio.csv ]; then
           cp -f samples/portfolio.csv in/portfolio/sample_portfolio.csv
@@ -39,4 +41,5 @@ runs:
       env:
         BROKER_UNI_LIMIT: '0'
       run: |
+        set -euo pipefail
         ./broker.sh orders

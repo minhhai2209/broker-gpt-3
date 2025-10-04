@@ -53,8 +53,9 @@ jobs:
 
       - name: Install Codex CLI
         run: |
+          set -euo pipefail
           npm install -g @openai/codex@latest
-          codex --version || true
+          codex --version
 
       - name: Configure Codex auth from secret
         env:
@@ -71,12 +72,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.codex"
-          if [ -f .codex/config.toml ]; then
-            cp -f .codex/config.toml "$HOME/.codex/config.toml"
-            chmod 600 "$HOME/.codex/config.toml"
-          else
-            echo "::warning::.codex/config.toml not found in repo; proceeding without pinned config"
-          fi
+          test -f .codex/config.toml || { echo '::error::.codex/config.toml not found in repo; aborting per fail-fast policy'; exit 2; }
+          cp -f .codex/config.toml "$HOME/.codex/config.toml"
+          chmod 600 "$HOME/.codex/config.toml"
 
       - name: Generate policy_overrides via Codex
         run: |
