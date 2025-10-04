@@ -40,9 +40,18 @@ jobs:
           cp -f out/orders/policy_overrides.json config/policy_overrides.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "$BRANCH_NAME"
+          git rebase "origin/$BRANCH_NAME" || { echo 'Rebase failed, trying to continue'; }
           git add config/policy_overrides.json
           git commit -m "chore(policy): update policy_overrides via tuning-nightly" || echo "No changes to commit"
-          git push origin "$BRANCH_NAME"
+          for i in 1 2 3; do
+            if git push origin "$BRANCH_NAME"; then exit 0; fi
+            echo "Push failed, retry $i/3 after rebase"
+            git fetch origin "$BRANCH_NAME"
+            git rebase "origin/$BRANCH_NAME" || true
+            sleep 2
+          done
+          echo "::error::Failed to push after retries"; exit 1
 
       - name: Upload artifacts
         if: ${{ always() }}
