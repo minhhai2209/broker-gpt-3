@@ -1,10 +1,19 @@
 {
-  "add_max": 4,
-  "new_max": 2,
   "sector_bias": {
-    "Bất động sản": -0.08,
-    "Dịch vụ tiện ích": 0.05,
-    "Hàng tiêu dùng thiết yếu": 0.04
+    "Dịch vụ tiện ích": 0.08,
+    "Tài chính": 0.04,
+    "Bất động sản": -0.1,
+    "Công nghiệp": -0.03,
+    "Hàng tiêu dùng thiết yếu": 0.02
   },
-  "buy_budget_frac": 0.094
+  "ticker_bias": {
+    "POW": 0.08,
+    "NT2": 0.06,
+    "VCB": 0.03,
+    "SSI": 0.03,
+    "VHM": -0.07,
+    "VIC": -0.04,
+    "HPG": -0.03
+  },
+  "buy_budget_frac": 0.102
 }
