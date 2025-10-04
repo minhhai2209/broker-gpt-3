@@ -14,13 +14,57 @@ permissions:
 
 jobs:
   run-orders:
-    name: Run orders for latest timestamp
+    name: Run orders for pending timestamps
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Determine pending run stamps
+        id: pending
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d runs ]; then
+            echo "::error::Missing runs directory"; exit 2; fi
+          mapfile -t run_dirs < <(find runs -mindepth 1 -maxdepth 1 -type d -print | sort)
+          if [ ${#run_dirs[@]} -eq 0 ]; then
+            echo "::error::No runs stamps found"; exit 2; fi
+          pending=()
+          for dir in "${run_dirs[@]}"; do
+            stamp=$(basename "$dir")
+            if [ ! -d "$dir/portfolio" ]; then
+              echo "Skipping $stamp (missing portfolio directory)"
+              continue
+            fi
+            if ! compgen -G "$dir/portfolio/*.csv" > /dev/null; then
+              echo "Skipping $stamp (no portfolio CSV files)"
+              continue
+            fi
+            if compgen -G "$dir/orders_final.csv" > /dev/null; then
+              echo "Skipping $stamp (orders already present)"
+              continue
+            fi
+            pending+=("$stamp")
+          done
+          if [ ${#pending[@]} -eq 0 ]; then
+            echo "No pending run stamps detected"
+            echo "pending_count=0" >> "$GITHUB_OUTPUT"
+            echo "pending=" >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "pending<<'EOF'"
+              for stamp in "${pending[@]}"; do
+                echo "$stamp"
+              done
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            echo "pending_count=${#pending[@]}" >> "$GITHUB_OUTPUT"
+            printf 'Pending stamps: %s\n' "${pending[*]}"
+          fi
+
       - name: Set up Python
+        if: steps.pending.outputs.pending_count != '0'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -28,62 +72,73 @@ jobs:
           cache-dependency-path: 'requirements.txt'
 
       - name: Install Python dependencies
+        if: steps.pending.outputs.pending_count != '0'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Determine latest run stamp
-        id: stamp
-        shell: bash
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          stamps=(runs/*)
-          if [ ${#stamps[@]} -eq 0 ]; then
-            echo "::error::No runs stamps found"; exit 2; fi
-          latest=$(ls -1d runs/* | sort | tail -n 1)
-          stamp=$(basename "$latest")
-          echo "stamp=$stamp" >> "$GITHUB_OUTPUT"
-          echo "Latest stamp: $stamp"
-
-      - name: Prepare inputs from run portfolio
-        shell: bash
-        run: |
-          set -euo pipefail
-          stamp="${{ steps.stamp.outputs.stamp }}"
-          mkdir -p in/portfolio
-          cp -f runs/"$stamp"/portfolio/*.csv in/portfolio/
-
-      - name: Run orders
+      - name: Run orders for pending stamps
+        if: steps.pending.outputs.pending_count != '0'
         shell: bash
         env:
           BROKER_UNI_LIMIT: '0'
+          PENDING_STAMPS: ${{ steps.pending.outputs.pending }}
         run: |
           set -euo pipefail
-          ./broker.sh orders
-
-      - name: Copy outputs to run folder (flattened)
-        shell: bash
-        run: |
-          set -euo pipefail
-          stamp="${{ steps.stamp.outputs.stamp }}"
-          dest="runs/$stamp"
-          mkdir -p "$dest"
-          shopt -s nullglob
-          for f in out/orders/*; do
-            base=$(basename "$f")
-            cp -f "$f" "$dest/$base"
-          done
+          if [ -z "${PENDING_STAMPS:-}" ]; then
+            echo "No pending stamps to process"
+            exit 0
+          fi
+          while IFS= read -r stamp; do
+            [[ -n "$stamp" ]] || continue
+            echo "::group::Processing $stamp"
+            rm -rf in/portfolio
+            mkdir -p in/portfolio
+            shopt -s nullglob
+            for f in runs/"$stamp"/portfolio/*.csv; do
+              cp -f "$f" in/portfolio/
+            done
+            rm -rf out/orders
+            ./broker.sh orders
+            dest="runs/$stamp"
+            mkdir -p "$dest"
+            if [ ! -f out/orders/orders_final.csv ]; then
+              echo "::error::orders_final.csv not produced for $stamp"
+              exit 3
+            fi
+            shopt -s nullglob
+            for f in out/orders/*; do
+              base=$(basename "$f")
+              cp -f "$f" "$dest/$base"
+            done
+            echo "::endgroup::"
+          done <<< "$PENDING_STAMPS"
 
       - name: Commit and push run results
+        if: steps.pending.outputs.pending_count != '0'
         shell: bash
         env:
           BRANCH_NAME: ${{ github.ref_name }}
+          PENDING_STAMPS: ${{ steps.pending.outputs.pending }}
         run: |
           set -euo pipefail
-          stamp="${{ steps.stamp.outputs.stamp }}"
+          if [ -z "${PENDING_STAMPS:-}" ]; then
+            echo "No pending stamps to commit"
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "runs/$stamp"
-          git commit -m "runs: results for $stamp" || echo "No changes to commit"
+          declare -a processed=()
+          while IFS= read -r stamp; do
+            [[ -n "$stamp" ]] || continue
+            processed+=("$stamp")
+            git add "runs/$stamp"
+          done <<< "$PENDING_STAMPS"
+          if [ ${#processed[@]} -eq 0 ]; then
+            echo "Nothing to commit"
+            exit 0
+          fi
+          summary=$(printf '%s, ' "${processed[@]}")
+          summary=${summary%, }
+          git commit -m "runs: results for $summary" || echo "No changes to commit"
           git push origin "$BRANCH_NAME"
