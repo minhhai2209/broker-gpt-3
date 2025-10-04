@@ -17,6 +17,8 @@ runs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ inputs.python-version }}
+        cache: 'pip'
+        cache-dependency-path: 'requirements.txt'
 
     - name: Install dependencies
       shell: bash
@@ -38,4 +40,3 @@ runs:
         BROKER_UNI_LIMIT: '0'
       run: |
         ./broker.sh orders
-
