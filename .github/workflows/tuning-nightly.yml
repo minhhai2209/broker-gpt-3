@@ -1,0 +1,40 @@
+name: Tuning Nightly
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 15 * * 1-5'  # 22:00 ICT, Mon–Fri
+
+concurrency:
+  group: tuning-nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  nightly:
+    name: Nightly micro-tuning suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup common environment
+        uses: ./.github/actions/tuning-common
+        with:
+          python-version: '3.11'
+
+      - name: Run nightly calibrations
+        run: |
+          python -m scripts.engine.calibrate_near_ceiling --write
+          python -m scripts.engine.calibrate_liquidity --write
+          python -m scripts.engine.calibrate_dynamic_caps --write
+
+      - name: Upload artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tuning-artifacts-nightly
+          path: |
+            out/
+            config/policy_overrides.json
+            out/orders/policy_overrides.json
+

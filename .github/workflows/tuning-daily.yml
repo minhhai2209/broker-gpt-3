@@ -1,0 +1,40 @@
+name: Tuning Daily
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 8 * * 1-5'  # 15:00 ICT, Mon–Fri
+
+concurrency:
+  group: tuning-daily-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  daily:
+    name: Daily calibration suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup common environment
+        uses: ./.github/actions/tuning-common
+        with:
+          python-version: '3.11'
+
+      - name: Run daily calibrations
+        run: |
+          python -m scripts.engine.calibrate_ttl_minutes --write
+          python -m scripts.engine.calibrate_fill_prob --write
+          python -m scripts.engine.calibrate_watchlist --write
+
+      - name: Upload artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tuning-artifacts-daily
+          path: |
+            out/
+            config/policy_overrides.json
+            out/orders/policy_overrides.json
+

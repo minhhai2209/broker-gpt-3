@@ -1,0 +1,42 @@
+name: Tuning Weekly
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 1'  # 10:00 ICT, Mondays
+
+concurrency:
+  group: tuning-weekly-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  weekly:
+    name: Weekly structural tuning suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup common environment
+        uses: ./.github/actions/tuning-common
+        with:
+          python-version: '3.11'
+
+      - name: Run weekly calibrations
+        run: |
+          python -m scripts.engine.calibrate_regime --horizon 63 --write
+          python -m scripts.engine.calibrate_market_filter --write
+          python -m scripts.engine.calibrate_risk_limits --write
+          python -m scripts.engine.calibrate_sizing --write
+          python -m scripts.engine.calibrate_thresholds --write
+
+      - name: Upload artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tuning-artifacts-weekly
+          path: |
+            out/
+            config/policy_overrides.json
+            out/orders/policy_overrides.json
+
