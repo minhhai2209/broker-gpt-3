@@ -226,9 +226,7 @@
       "cross": 0.9,
       "near_ceiling": 0.05,
       "min": 0.05,
-      "decay_scale_min_ticks": 5.0,
-      "partial_fill_kappa": 0.65,
-      "min_fill_notional_vnd": 5000000.0
+      "decay_scale_min_ticks": 17.8
     },
     "slippage_model": {
       "alpha_bps": 5.0,
@@ -312,9 +310,9 @@
   },
   "orders_ui": {
     "ttl_minutes": {
-      "base": 12,
-      "soft": 9,
-      "hard": 7
+      "base": 14,
+      "soft": 11,
+      "hard": 8
     },
     "ttl_bucket_minutes": {
       "low": {
@@ -335,10 +333,24 @@
     },
     "watchlist": {
       "enable": 1,
-      "min_priority": 0.3,
+      "min_priority": 0.284,
       "micro_window": 3
     },
-    "suggestions_top_n": 3
+    "suggestions_top_n": 3,
+    "ttl_bucket_thresholds": {
+      "p75": 0.00835709051006694,
+      "p95": 0.016094279668643595,
+      "latest": 0.00771660211853395
+    },
+    "ttl_bucket_state": {
+      "current": "low",
+      "sigma": 0.00771660211853395
+    },
+    "ttl_minutes_baseline": {
+      "base": 12,
+      "soft": 9,
+      "hard": 7
+    }
   },
   "market": {
     "microstructure": {
