@@ -2,8 +2,6 @@ name: Orders Run (timestamped)
 
 on:
   push:
-    paths:
-      - 'runs/**/portfolio/**'
 
 concurrency:
   group: runs-orders-${{ github.ref }}
