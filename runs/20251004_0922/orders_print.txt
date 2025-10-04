@@ -1,8 +1,0 @@
-FPT — LO — 100 — Giá đặt: 94.10 (nghìn) — Giá thị trường: 93.40 (nghìn) — Chốt lời (Take Profit) | TP1_ATR
-HPG — LO — 200 — Giá đặt: 27.85 (nghìn) — Giá thị trường: 27.65 (nghìn) — Bán toàn bộ (Exit)
-
-BẢNG TỔNG HỢP TIỀN:
-• Tổng mua: 0 (nghìn)
-• Tổng bán: 14980 (nghìn)
-• Net (mua − bán): -14980 (nghìn)
-• Gợi ý: nếu cần xem bằng VND, nhân 1.000 ngoài phạm vi prompt.
