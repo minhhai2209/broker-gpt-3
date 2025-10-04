@@ -54,24 +54,26 @@ jobs:
           npm install -g @openai/codex@latest
           codex --version || true
 
-      - name: Configure Codex credentials from secrets
+      - name: Configure Codex auth from secret
         env:
           CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
-          CODEX_CONFIG_TOML: ${{ secrets.CODEX_CONFIG_TOML }}
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.codex"
-          # Write auth.json (required for headless auth). Keep permissions strict.
           if [ -z "${CODEX_AUTH_JSON:-}" ]; then
             echo "::error::Missing secret CODEX_AUTH_JSON"; exit 1; fi
           printf '%s' "$CODEX_AUTH_JSON" > "$HOME/.codex/auth.json"
           chmod 600 "$HOME/.codex/auth.json"
-          # Write config.toml (capture current local config for reproducibility)
-          if [ -z "${CODEX_CONFIG_TOML:-}" ]; then
-            echo "::warning::Missing secret CODEX_CONFIG_TOML; continuing without ~/.codex/config.toml";
-          else
-            printf '%s' "$CODEX_CONFIG_TOML" > "$HOME/.codex/config.toml"
+
+      - name: Install Codex config from repo
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.codex"
+          if [ -f .codex/config.toml ]; then
+            cp -f .codex/config.toml "$HOME/.codex/config.toml"
             chmod 600 "$HOME/.codex/config.toml"
+          else
+            echo "::warning::.codex/config.toml not found in repo; proceeding without pinned config"
           fi
 
       - name: Generate policy_overrides via Codex
@@ -88,4 +90,3 @@ jobs:
           path: |
             config/policy_overrides.json
             out/debug/**
-
