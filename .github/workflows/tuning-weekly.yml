@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   weekly:
@@ -32,6 +32,19 @@ jobs:
           python -m scripts.engine.calibrate_risk_limits --write
           python -m scripts.engine.calibrate_sizing --write
           python -m scripts.engine.calibrate_thresholds --write
+
+      - name: Persist tuned policy (commit and push)
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          test -f out/orders/policy_overrides.json || { echo '::error::runtime policy not found'; exit 2; }
+          cp -f out/orders/policy_overrides.json config/policy_overrides.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add config/policy_overrides.json
+          git commit -m "chore(policy): update policy_overrides via tuning-weekly" || echo "No changes to commit"
+          git push origin "$BRANCH_NAME"
 
       - name: Upload artifacts
         if: ${{ always() }}

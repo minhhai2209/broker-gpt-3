@@ -1,4 +1,4 @@
-name: Generate Policy Overrides
+name: Tuning AI Overrides
 
 on:
   workflow_dispatch:
@@ -17,15 +17,15 @@ on:
         default: "20"
 
 concurrency:
-  group: generate-policy-overrides-${{ github.ref }}
+  group: tuning-ai-overrides-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   generate:
-    name: Generate policy_overrides.json via Codex CLI
+    name: Generate and persist policy_overrides.json via Codex CLI
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -82,6 +82,18 @@ jobs:
           echo "Running rounds=$BROKER_CX_GEN_ROUNDS"
           python -m scripts.ai.generate_policy_overrides
 
+      - name: Persist generated overrides (commit and push)
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          test -f config/policy_overrides.json || { echo '::error::generated config/policy_overrides.json missing'; exit 2; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add config/policy_overrides.json
+          git commit -m "chore(policy): update policy_overrides via tuning-ai" || echo "No changes to commit"
+          git push origin "$BRANCH_NAME"
+
       - name: Upload artifacts
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -90,3 +102,4 @@ jobs:
           path: |
             config/policy_overrides.json
             out/debug/**
+
