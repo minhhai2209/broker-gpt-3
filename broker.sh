@@ -113,11 +113,36 @@ commit_and_push_policy() {
     echo "[policy] No changes to commit in $file"
     return 0
   fi
+  # Ensure we are on a branch (not detached) for pull/rebase safety
+  local branch
+  branch=$(git rev-parse --abbrev-ref HEAD)
+  if [[ "$branch" == "HEAD" ]]; then
+    echo "[error] Detached HEAD; checkout a branch before pushing"
+    exit 2
+  fi
+  echo "[git] Fetching and rebasing on origin/$branch"
+  git fetch origin "$branch"
+  # Rebase to incorporate any remote updates before committing/pushing
+  if ! git rebase "origin/$branch"; then
+    echo "[error] Rebase failed; resolve conflicts then re-run"
+    exit 3
+  fi
   git add "$file"
   git commit -m "chore(policy): update policy_overrides via Codex CLI"
   gh_switch_account
-  git push
-  echo "[policy] Committed and pushed $file"
+  # Final safety: small retry window in case of concurrent pushes
+  for i in 1 2 3; do
+    if git push origin "$branch"; then
+      echo "[policy] Committed and pushed $file"
+      return 0
+    fi
+    echo "[warn] Push failed, retry $i/3 after rebase"
+    git fetch origin "$branch"
+    git rebase "origin/$branch" || true
+    sleep 2
+  done
+  echo "[error] Failed to push after retries"
+  exit 4
 }
 
 run_policy() {

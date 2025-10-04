@@ -103,9 +103,20 @@ jobs:
           test -f config/policy_overrides.json || { echo '::error::generated config/policy_overrides.json missing'; exit 2; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Ensure we are up-to-date before committing/pushing
+          git fetch origin "$BRANCH_NAME"
+          git rebase "origin/$BRANCH_NAME" || { echo 'Rebase failed, attempting to continue per fail-fast policy'; }
           git add config/policy_overrides.json
           git commit -m "chore(policy): update policy_overrides via tuning-ai" || echo "No changes to commit"
-          git push origin "$BRANCH_NAME"
+          # Push with small retry window in case of concurrent updates
+          for i in 1 2 3; do
+            if git push origin "$BRANCH_NAME"; then exit 0; fi
+            echo "Push failed, retry $i/3 after rebase"
+            git fetch origin "$BRANCH_NAME"
+            git rebase "origin/$BRANCH_NAME" || true
+            sleep 2
+          done
+          echo "::error::Failed to push after retries"; exit 1
 
       - name: Upload artifacts
         if: ${{ always() }}
