@@ -1,355 +1,203 @@
-Kiến trúc và Thuật toán của Broker GPT Engine
+# Broker GPT — SYSTEM_DESIGN (facts only)
+
+> Bản mô tả kiến trúc/luồng xử lý **dựa trên thực trạng codebase** của repo `broker-gpt-2` (cập nhật tới 2025‑10‑05, VN). Tài liệu này **chỉ nêu sự kiện** (file, hàm, cấu trúc, đầu vào/đầu ra, tham số) theo mã nguồn hiện có; không đánh giá đúng/sai hay so sánh.
+
+---
+
+## 1) Phạm vi & giả định hệ thống
+
+* Ngôn ngữ/Runtime: Python 3.10+.
+* Môi trường đích: macOS/Linux/WSL (terminal), có thể chạy qua shell script.
+* Phụ thuộc chính: `pandas`, `numpy`, `requests`, `openpyxl`, `pydantic`, `Flask`, `Flask-Cors`, `playwright`, `beautifulsoup4`, `openai` (xem `requirements.txt`).
+* Dữ liệu thị trường: sử dụng API VNDirect DChart (HTTP JSON) cho OHLC(EOD/1m) và snapshot nội phiên.
+* Dữ liệu cơ bản: có script thu thập từ Vietstock, lưu thành CSV trong `data/`.
+
+---
+
+## 2) Cấu trúc thư mục chính & entrypoints
+
+```
+repo/
+├─ broker.sh                      # script hợp nhất: orders | tests | policy | server | fundamentals
+├─ run_orders.sh                  # helper đơn giản chạy generate_orders.py
+├─ requirements.txt
+├─ config/
+│  ├─ policy_default.json         # baseline policy (commented JSON)
+│  └─ policy_overrides.json       # overrides runtime (được sinh/cập nhật bởi công cụ/AI)
+├─ data/
+│  ├─ industry_map.csv            # map Ticker→Sector
+│  └─ fundamentals_vietstock.csv  # (nếu đã crawl) chỉ số cơ bản
+├─ in/portfolio/                  # input CSV: Ticker,Quantity,AvgCost (...)
+├─ out/                           # toàn bộ artifacts sinh ra khi chạy
+│  ├─ data/                       # cache lịch sử OHLC mỗi mã (<T>_daily.csv)
+│  ├─ intraday/                   # snapshot nội phiên (latest.csv, *_intraday.csv)
+│  ├─ orders/                     # file lệnh và chẩn đoán
+│  └─ ... (snapshot.csv, metrics.csv, presets_all.csv, ...)
+├─ runs/                          # server API lưu đợt upload để commit
+└─ scripts/
+   ├─ generate_orders.py          # entrypoint Python cho tác vụ "orders"
+   ├─ api/server.py               # Flask API (tùy chọn)
+   ├─ engine/                     # mô-đun core: pipeline, config, volatility, risk, calibrators
+   ├─ indicators/                 # chỉ báo kỹ thuật nội bộ (MA/RSI/MACD/ATR/Bollinger/Beta)
+   ├─ collect_intraday.py         # lấy snapshot nội phiên (VNDirect 1m)
+   ├─ fetch_ticker_data.py        # cache OHLC EOD (VNDirect DChart)
+   ├─ build_snapshot.py           # tạo out/snapshot.csv
+   ├─ build_metrics.py            # tính metrics + session_summary
+   ├─ compute_sector_strength.py  # breadth/RSI/ATR theo ngành
+   ├─ precompute_indicators.py    # precomputed indicators → out/precomputed_indicators.csv
+   ├─ build_presets_all.py        # presets giá (Aggr/Bal/Cons/Break/MR)
+   ├─ orders_io.py                # ghi orders_*.csv, tính fill/slippage/limit-lock
+   ├─ report_portfolio_pnl.py     # thống kê PnL danh mục (summary/by-sector)
+   └─ ai/                         # generate policy_overrides (guardrails, Codex CLI)
+```
 
-Tổng quan Hệ thống
+---
 
-Broker GPT Engine được thiết kế theo mô hình pipeline dữ liệu kết hợp với một bộ quyết định lệnh (order engine) hoạt động theo cấu hình chính sách và tín hiệu thị trường. Hệ thống bao gồm các thành phần chính sau:
-	•	Pipeline dữ liệu: Thu thập và xử lý dữ liệu đầu vào (danh mục hiện tại của người dùng, dữ liệu giá lịch sử, giá nội phiên, chỉ số thị trường, dữ liệu ngành và yếu tố bổ trợ) để tạo ra các biến đặc trưng và đầu vào cho bộ quyết định lệnh. Pipeline này được triển khai trong các module như scripts/engine/pipeline.py và các script liên quan (ví dụ: scripts/build_snapshot.py, scripts/build_metrics.py,…).
-	•	Chính sách và cấu hình: Bộ tham số cấu hình chiến lược (policy) được định nghĩa trong tệp JSON mặc định (ví dụ config/policy_default.json). Một số tham số quan trọng có thể được tinh chỉnh hàng ngày qua file override (ví dụ config/policy_overrides.json) bằng AI. Hệ thống hợp nhất hai cấu hình này (chỉ lấy những khóa được phép override) để tạo policy runtime cuối cùng dùng trong phiên giao dịch ￼ ￼.
-	•	Bộ máy ra quyết định (Order Engine): Sử dụng dữ liệu pipeline và cấu hình policy ở trên để xác định chế độ thị trường hiện tại và đánh giá từng mã cổ phiếu. Từ đó quyết định hành động (mua mới, mua bổ sung, giữ, chốt lời từng phần hoặc bán) cho mỗi mã, đồng thời tính toán khối lượng và giá đặt lệnh phù hợp. Thành phần này nằm chủ yếu trong scripts/order_engine.py và các module con dưới thư mục scripts/engine/ (như config_io.py, schema.py, portfolio_risk.py,…).
-	•	Tương tác bên ngoài: Engine lấy dữ liệu qua API và web khi cần (ví dụ: gọi API VNDirect để lấy giá OHLC ￼, dùng Playwright để thu thập dữ liệu cơ bản từ Vietstock). Ngoài ra, có một server API (trong scripts/api/server.py) để nhận danh mục từ extension trình duyệt và trả về lệnh gợi ý, nhưng core engine vẫn chạy cục bộ theo pipeline nêu trên.
+## 3) Luồng end‑to‑end (tác vụ **orders**)
 
-Hệ thống không duy trì trạng thái phiên liên tục trong bộ nhớ – mỗi lần chạy engine là độc lập (stateless) dựa trên dữ liệu đầu vào. Tuy nhiên, engine có ghi lại một số trạng thái cục bộ qua file để dùng cho lần chạy sau, ví dụ file out/orders/position_state.csv lưu các cờ trạng thái dừng lỗ/chốt lời từng mã đã đạt trước đó. Khi chạy, engine sẽ nạp file này (nếu có) để biết mã nào đã chốt một phần, dừng lỗ một phần,… từ lần trước ￼. Nhìn chung, kiến trúc này tối ưu cho việc ra quyết định nhanh dựa trên snapshot dữ liệu mới nhất, đồng thời dễ audit từng bước thông qua các file đầu ra chi tiết.
+### 3.1. Khởi chạy
 
-Dưới đây, ta sẽ đi sâu vào từng thành phần: pipeline xử lý dữ liệu, cấu hình chiến lược và tinh chỉnh tham số, mô-đun nhận diện chế độ thị trường, thuật toán quyết định lệnh mua/bán, quản lý trạng thái phiên, tương tác API bên ngoài, và các kỹ thuật tối ưu hóa được áp dụng.
+* CLI: `./broker.sh` (mặc định `orders`) hoặc `python scripts/generate_orders.py`.
+* Script shell chuẩn bị virtualenv, cài `requirements.txt`, rồi chạy entrypoint.
 
-Pipeline Dữ liệu và Xử lý Đầu vào
+### 3.2. Pipeline dữ liệu (stateless per run)
 
-Pipeline dữ liệu chuẩn bị toàn bộ dữ liệu đầu vào cần thiết cho engine, được thực thi qua hàm ensure_pipeline_artifacts() trong scripts/engine/pipeline.py. Các bước chính gồm:
-	1.	Nạp danh mục và chuẩn hóa: Engine đọc danh mục hiện tại từ các file CSV trong thư mục in/portfolio/ (có thể một hoặc nhiều file) với schema Ticker,Quantity,AvgCost,…. Các file này được gộp lại (nếu nhiều nguồn) để có danh mục hợp nhất. Mã cổ phiếu được chuẩn hóa (loại bỏ ký tự đặc biệt như * nếu có) và đơn vị giá vốn điều chỉnh về “nghìn đồng/cp” đúng định dạng hệ thống. Kết quả là DataFrame portfolio_df và được ghi ra out/portfolio_clean.csv ￼ ￼. Nếu danh mục rỗng hoặc không có mã hợp lệ, engine sẽ dừng với lỗi (đảm bảo có ít nhất một mã HOSE trong danh mục để làm vũ trụ phân tích).
-	2.	Xây dựng vũ trụ mã (universe): Engine xác định danh sách mã cần phân tích dựa trên danh mục và dữ liệu có sẵn. Trước tiên, nó tải danh sách mã từ file data/industry_map.csv (danh sách tất cả mã và ngành) – đây coi như vũ trụ mặc định. Sau đó engine đảm bảo mọi mã trong danh mục (từ bước 1) đều có trong vũ trụ, thêm các chỉ số thị trường chính (VNINDEX, VN30, VN100) vào vũ trụ nếu chưa có. Kết quả là list uni chứa toàn bộ ticker cần lấy dữ liệu. Có biến môi trường BROKER_UNI_LIMIT để giới hạn số mã (dùng cho phát triển, test) nhưng mặc định là không giới hạn ￼ ￼.
-	3.	Tải dữ liệu giá lịch sử: Sử dụng danh sách mã uni, engine gọi hàm ensure_and_load_history_df(uni, ...) (định nghĩa trong scripts/fetch_ticker_data.py) để tải dữ liệu giá lịch sử (OHLC) cho ~700 ngày gần nhất (tương đương >= ~400 phiên giao dịch) ￼. Cơ chế cache thông minh được áp dụng: hàm này kiểm tra trong thư mục out/data/ xem đã có CSV lịch sử cho từng mã chưa, nếu có thì chỉ tải bổ sung phần thiếu. Việc tải dùng API VNDirect DChart (qua requests GET) để lấy dữ liệu theo khoảng thời gian yêu cầu ￼ ￼. Mỗi mã được lưu cache ra file CSV riêng trong out/data/ (tên file thường dạng <Ticker>_daily.csv). Kết quả bước này là DataFrame prices_history_df chứa dữ liệu giá dài hạn (daily) của tất cả mã trong vũ trụ, và file hợp nhất out/prices_history.csv được ghi để tiện kiểm tra.
-	4.	Cập nhật dữ liệu nội phiên (intraday): Nếu đang trong giờ giao dịch (xác định qua múi giờ và lịch HOSE), engine sẽ gọi ensure_intraday_latest(uni, ...) để lấy snapshot giá nội trong ngày cho các mã vũ trụ ￼. Thực tế, module scripts/collect_intraday.py thực hiện việc này bằng cách kết nối API (hoặc nguồn dữ liệu web) để lấy giá gần nhất, sau đó ghi ra out/intraday/latest.csv. Trong các khung thời gian nghỉ (ngoài phiên), bước này có thể bị bỏ qua hoặc dùng dữ liệu cuối phiên trước. Thời điểm các phiên (sáng, chiều, ATC,…) được xác định thống nhất trong nhiều module theo múi giờ VN (Asia/Ho_Chi_Minh) ￼.
-	5.	Tạo snapshot hiện tại và chỉ số phiên: Dùng dữ liệu giá vừa có, engine xây dựng DataFrame snapshot_df – ảnh chụp giá hiện tại của toàn bộ mã (thường gồm giá cuối hoặc giá hiện tại của từng mã, tính theo nghìn đồng/cp để khớp đơn vị danh mục) ￼. Thực hiện bởi hàm build_snapshot_df(portfolio_df, ...) trong scripts/build_snapshot.py. Đồng thời, engine tính toán một loạt metrics (chỉ báo) tổng hợp cho từng mã thông qua build_metrics_df(...) trong scripts/build_metrics.py. Các metrics bao gồm: biến động 20 phiên, thanh khoản trung bình 20 phiên (ADTV), RSI14, ATR14%, hệ số beta 60 ngày, sức mạnh giá tương đối,… cũng như các chỉ số breadth (tỷ lệ cổ phiếu trên MA50, MA200) và tóm tắt phiên thị trường (session summary: VN-Index thay đổi bao nhiêu %, đang trong phiên hay không, v.v.). Kết quả là DataFrame metrics_df và session_summary_df. Engine cũng tải thông tin ngành của mã (từ industry_map.csv) để gắn nhãn sector cho từng mã phục vụ tính toán sau ￼. Nếu có dữ liệu cơ bản (fundamentals) – ví dụ file data/fundamentals_vietstock.csv – hệ thống sẽ merge thêm vào metrics (các chỉ số như P/E, ROE, Earnings Yield) ￼. Tất cả được ghi ra các file out/snapshot.csv, out/metrics.csv, out/session_summary.csv và out/fundamentals_snapshot.csv (nếu có).
-	6.	Tính toán sức mạnh ngành và chỉ báo kỹ thuật nâng cao: Engine nhóm các mã theo ngành để tính Sector Strength – đo lường mức tăng/giảm tương đối của từng ngành so với thị trường (ví dụ dựa trên trung bình biến động các mã ngành đó). Kết quả sector_strength_df ghi ra out/sector_strength.csv ￼. Song song, engine tiền tính một số chỉ báo kỹ thuật lịch sử cho mỗi mã (precomputed indicators) dùng cho việc xếp hạng tín hiệu. precompute_indicators_from_history_df(...) trong scripts/precompute_indicators.py tính các thông số như đường MA, ATR14, các mức đỉnh/đáy 52 tuần, v.v., lưu vào out/precomputed_indicators.csv ￼.
-	7.	Yếu tố vĩ mô (tùy chọn): Nếu người dùng cung cấp file data/global_factors.csv chứa các yếu tố vĩ mô (ví dụ chỉ số S&P 500, chỉ số USD, chỉ số bất ổn chính sách kinh tế Mỹ – EPU), pipeline sẽ tính thêm các feature như phần trăm phân vị EPU, drawdown của S&P500, phân vị sức mạnh USD, v.v. và lưu vào out/metrics.csv hoặc out/session_summary.csv. Các ngưỡng chặn (guard) thị trường liên quan yếu tố này được cấu hình trong phần market_filter của policy (ví dụ us_epu_soft_pct, spx_drawdown_hard_pct…). Mặc định nếu không có dữ liệu hoặc không cấu hình thì bỏ qua bước này ￼ ￼.
-	8.	Xây dựng preset chế độ giao dịch: Một đặc trưng của Broker GPT là có các preset chiến lược tùy thuộc chế độ thị trường (ví dụ “conservative”, “balanced”, “aggressive”…) để lựa chọn tham số phù hợp cho từng mã. Hàm build_presets_all_df(...) trong scripts/build_presets_all.py sử dụng dữ liệu snapshot, lịch sử giá, trạng thái phiên hiện tại (đang phiên hay ngoài giờ) và session summary để tạo ra bảng preset cho mỗi mã, ứng với các kịch bản (rủi ro cao, trung bình, thấp). Kết quả presets_df được lưu ra out/presets_all.csv ￼ ￼. Preset này chủ yếu phục vụ tính giá đặt lệnh phù hợp (ví dụ rủi ro on/off sẽ dùng preset khác nhau cho tính giá mua/bán).
-	9.	Tính P&L danh mục (thống kê nhanh): Cuối cùng, pipeline tính lợi nhuận tạm tính của danh mục (dựa trên giá hiện tại so với giá vốn) để tạo báo cáo. Kết quả gồm bảng portfolio_pnl_summary.csv (tổng P&L, % lãi/lỗ toàn danh mục) và portfolio_pnl_by_sector.csv (P&L theo ngành) ￼. Bước này chỉ ghi file để tham khảo, không ảnh hưởng tới logic ra lệnh.
-
-Pipeline đảm bảo sau khi chạy, thư mục out/ sẽ có đầy đủ các file dữ liệu đầu vào chuẩn hóa để audit từng bước (danh mục sạch, lịch sử giá, snapshot giá hiện tại, metrics, sector_strength, presets, P&L…). Lưu ý rằng khi chạy từ broker.sh với tác vụ orders, pipeline sẽ được gọi tự động – người dùng không cần chạy thủ công trước, engine sẽ kiểm tra và tạo đủ dữ liệu cần thiết rồi mới tính lệnh ￼. Điều này giúp đơn giản hóa quy trình: chỉ cần cung cấp danh mục và đảm bảo có kết nối mạng để tải dữ liệu, engine sẽ xử lý tất cả.
-
-Cấu hình Chính sách và Tinh chỉnh Tham số
-
-Chính sách (policy) của Broker GPT quy định các tham số chiến lược dùng bởi engine – từ ngưỡng tín hiệu, cách tính điểm, đến quy tắc quản trị rủi ro, v.v. Hệ thống sử dụng hai tệp JSON chính cho cấu hình:
-	•	Mặc định (baseline): config/policy_default.json chứa đầy đủ tất cả tham số chiến lược mặc định, được thiết kế dựa trên nghiên cứu dài hạn và khẩu vị rủi ro cố định. Ví dụ các phần trong đó: trọng số mô hình điểm (weights) cho yếu tố xu hướng, động lượng, thanh khoản, beta, v.v.; các ngưỡng kỹ thuật như base_add, base_new (ngưỡng điểm để mua bổ sung/mua mới), trim_th (ngưỡng điểm để bắt đầu thu gọn vị thế); ngưỡng chốt lời/cắt lỗ cơ bản (tp_pct, sl_pct); các tham số microstructure (bước giá HOSE, lô chẵn tối thiểu 100, thuế phí giao dịch); giới hạn rủi ro (tỷ trọng tối đa mỗi mã, mỗi ngành, v.v.) và nhiều tham số khác. Hầu hết giá trị trong policy_default là cố định, chỉ thay đổi khi có điều chỉnh chiến lược lớn hoặc backtest dài hạn ￼ ￼.
-	•	Điều chỉnh hằng ngày (overrides): config/policy_overrides.json chứa những thông số có thể thay đổi linh hoạt theo ngày tùy diễn biến thị trường/ngữ cảnh tin tức. Mục đích là để hệ thống phản ứng nhanh với yếu tố khó định lượng (vd tâm lý thị trường, tin tức đột xuất) mà không cần chỉnh tay toàn bộ config. Tuy nhiên, nhằm đảm bảo ổn định, chỉ một tập rất hạn chế các khóa được phép override. Cụ thể, các khóa cho phép gồm:
-	•	buy_budget_frac: Tỷ lệ ngân sách dành cho lệnh mua (trên NAV) – dùng để tilt mức độ “risk-on” hoặc “risk-off” (mua nhiều hay ít) hàng ngày.
-	•	add_max và new_max: Số lượng tối đa lệnh mua bổ sung (cho mã đang có) và mua mới (cho mã chưa có) mà engine được phép đề xuất trong phiên. Hai giá trị này cho phép điều chỉnh nhịp độ giải ngân tùy cơ hội thị trường ￼.
-	•	sector_bias và ticker_bias: Hệ số thiên lệch điểm số cho một số ngành hoặc mã cụ thể, trong khoảng [-0.20..0.20]. Dùng khi có tin tức đặc biệt về ngành/mã đó (vd tin tốt -> bias dương để ưu tiên mua; tin xấu -> bias âm để hạn chế mua) ￼. Mỗi bias kèm theo lý do (rationale) và tự động giảm dần nếu không tái khẳng định sau vài phiên.
-	•	(Tùy chọn) news_risk_tilt: Thang tâm lý vĩ mô [-1..+1] do AI gợi ý (âm = rất rủi ro, dương = lạc quan) để tự động hiệu chỉnh nhỏ buy_budget_frac, add_max, new_max. Ví dụ tilt = +1 có thể tăng nhẹ ngân sách mua và số slot mua mới ￼.
-	•	rationale: Chuỗi văn bản ngắn giải thích lý do cho các thay đổi trên (bắt buộc phải có để người vận hành dễ audit).
-
-Các khóa trên tương ứng đúng với nhóm tham số AI điều chỉnh hàng ngày được đề xuất (như mô tả trong tài liệu cải tiến) ￼ ￼. Toàn bộ phần còn lại của policy (các ngưỡng tính từ dữ liệu, tham số cố định) sẽ không bị ảnh hưởng bởi AI hàng ngày để tránh nhiễu loạn.
-
-Quy trình hợp nhất cấu hình: Khi engine chạy, nó gọi ensure_policy_override_file() trong scripts/engine/config_io.py. Hàm này sẽ lấy file policy mặc định và overlay file override theo các khóa được phép:
-	•	Nếu có config/policy_default.json, engine load vào default_obj. Nếu có config/policy_overrides.json, engine load vào ov_obj rồi lọc ov_obj chỉ còn các khóa được phép (theo danh sách “whitelisted” nêu trên) ￼ ￼. Sau đó, nó deep-merge hai cấu hình: mọi khóa override hợp lệ sẽ ghi đè lên giá trị tương ứng trong default, còn lại giữ nguyên. Kết quả là cấu hình runtime đầy đủ (gồm cả phần mặc định và phần override chọn lọc) được ghi vào out/orders/policy_overrides.json ￼ ￼. Thông báo log xác nhận file cấu hình runtime được chuẩn bị từ baseline + overrides.
-	•	Trường hợp không có file default (có thể bản cũ, dùng trực tiếp policy_overrides làm full config) thì hàm sẽ tìm một file policy_for_calibration.json (nếu có) để merge, hoặc dùng hẳn policy_overrides.json như config đầy đủ. Tuy nhiên trong phiên bản hiện tại, approach mặc định là luôn có default và merge có chọn lọc như trên (giúp bảo vệ các tham số không nên chỉnh hàng ngày) ￼ ￼.
-
-Sau khi hợp nhất, engine đọc file out/orders/policy_overrides.json này và validate theo schema (dùng Pydantic model PolicyOverrides trong scripts/engine/schema.py) để tạo đối tượng pol_obj. Bước validate giúp phát hiện cấu hình thiếu hoặc sai định dạng ngay lập tức (ví dụ thiếu trường bắt buộc sẽ báo lỗi) ￼.
-
-Tự động hiệu chỉnh tham số (Calibrations): Broker GPT engine tích hợp nhiều thuật toán calibration – tức tính toán lại một số tham số dựa trên dữ liệu mới nhất mỗi ngày nhằm tối ưu hiệu quả và giảm công sức chỉnh tay. Các calibrator này chạy ngay trước bước quyết định lệnh, và chúng sẽ cập nhật giá trị mới vào cấu hình runtime (nhiều calibrator cũng ghi luôn kết quả vào file để audit). Dưới đây là các hiệu chỉnh chính:
-	•	Ngưỡng định lượng động (Quantile Gates): Thay vì đặt cố định ngưỡng điểm cho việc chọn mã mua bổ sung/mua mới mỗi ngày, engine tính toán ngưỡng dựa trên phân vị điểm số của thị trường hiện tại. Ý tưởng: ta muốn chọn khoảng K lệnh trên N mã có tín hiệu → lấy ngưỡng điểm tương ứng phân vị ~ (1 - K/N). Calibrator calibrate_thresholds sẽ xác định phân vị q_add và q_new phù hợp sao cho số mã vượt ngưỡng ~ bằng add_max và new_max đặt ra ￼ ￼. Kết quả q_add, q_new được cập nhật vào policy (mặc định ~0.8-0.9 tùy thị trường mỗi ngày). Điều này giúp đảm bảo số lượng lệnh đề xuất tiệm cận mục tiêu, không khi quá nhiều mã vượt ngưỡng (thị trường quá tốt) hoặc quá ít (thị trường kém) ￼.
-	•	TP/SL theo ATR (biến động): Các tỷ lệ chốt lời/cắt lỗ cơ bản (tp_pct, sl_pct) được hiệu chỉnh theo mức biến động thị trường. Calibrator tính ATR14% trung vị của toàn thị trường rồi quy đổi xem mức tp_pct cố định tương ứng bao nhiêu lần ATR (tp_atr_mult) – nếu biến động cao thì cùng % lợi nhuận đó ít lần ATR hơn, biến động thấp thì nhiều ATR hơn. Ngưỡng cắt lỗ tương tự. Mục đích: trong thị trường biến động mạnh, đặt TP/SL xa hơn (nới rộng) để tránh nhiễu; thị trường êm dịu thì TP/SL gần hơn ￼ ￼. Kết quả tp_atr_mult, sl_atr_mult lưu trong policy.thresholds. Nếu ATR quá thấp/hệ số vượt ngưỡng cho trước thì cũng có giới hạn floor/cap hợp lý.
-	•	Bộ lọc thị trường (Market Filter): Dựa trên dữ liệu lịch sử dài, engine định kỳ hiệu chỉnh các ngưỡng xác định thị trường xấu (risk-off) – ví dụ mức giảm điểm VN-Index bao nhiêu % được coi là rất xấu, phần trăm breadth thấp bao nhiêu là cạn cầu, v.v. Các calibrator đọc loạt dữ liệu quá khứ của VN-Index (biến động ngày, drawdown, ATR,…) để lấy các phân vị. Ví dụ: risk_off_index_drop_pct có thể đặt ở mức phân vị 10% của phân phối ngày giảm mạnh (tức top 10% phiên giảm nhiều nhất) ￼; tương tự index_atr_hard_pct là phân vị 95% của ATR14% (khi biến động vượt mức ~95% lịch sử thì rất rủi ro) ￼. Những ngưỡng này được calibrator calibrate_market_filter tính và điền vào policy.market_filter mỗi tuần hoặc mỗi ngày nếu bật ￼ ￼. Mục tiêu: giúp hệ thống tự động cập nhật ngưỡng bảo vệ thị trường theo bối cảnh mới nhất (thay vì dùng cố định có thể lỗi thời).
-	•	Thanh khoản tối thiểu (Liquidity guard): Tham số min_liq_norm (0-1) xác định yêu cầu thanh khoản để một mã đủ điều kiện mua. Engine ước tính quy mô lệnh trung bình dự kiến và đặt điều kiện ADTV20 của mã phải >= M lần quy mô đó. Calibrator tính min_liq_norm tương ứng X% top mã thanh khoản thỏa mãn điều kiện này ￼. Ví dụ nếu đặt M=20, chỉ những mã thuộc khoảng top 80% thanh khoản mới qua được (để tránh kẹt thanh khoản khi mua). Kết quả được calibrate_liquidity ghi vào policy.thresholds.min_liq_norm ￼ ￼.
-	•	Ngưỡng giá sát trần: Để tránh mua đuổi các mã đã tăng sát mức trần, calibrator calibrate_near_ceiling thống kê tỷ lệ price/band_ceiling của lịch sử các mã, lấy phân vị rất cao (ví dụ 98%) làm ngưỡng. Mặc định giới hạn trong khoảng [0.90..0.999] ￼. Kết quả near_ceiling_pct (ví dụ ~0.98) lưu trong policy.thresholds để dùng chặn lệnh mua nếu giá hiện tại của mã > 98% mức trần ngày.
-	•	Thông số sizing danh mục: Một số tham số trong phần sizing của policy được calibrator tinh chỉnh dựa trên dữ liệu mới, chẳng hạn hệ số co rút hiệp phương sai cov_reg dùng cho ước lượng ma trận hiệp phương sai Ledoit–Wolf (điều chỉnh theo số mẫu) ￼. Calibrator calibrate_sizing sẽ tính cov_reg tối ưu dựa trên window lịch sử (90 ngày) và cập nhật vào policy ￼. Ngoài ra, tham số softmax_tau cũng có calibrator (calibrate_softmax_tau) để điều chỉnh nhiệt độ phân bổ điểm nhằm đạt độ đa dạng danh mục mong muốn (ENP – effective number of positions) ￼. Kết quả tau mới ghi vào policy.sizing ￼.
-	•	Hiệu chỉnh thời hạn lệnh (TTL) theo biến động: Thời gian tồn tại lệnh (TTL, tính bằng phút) cho lệnh dừng/chờ khớp được tinh chỉnh dựa trên độ biến động chỉ số. Thị trường dao động ít -> có thể để lệnh lâu hơn; thị trường quá biến động -> lệnh nên nhanh bị hủy nếu không khớp. Calibrator calibrate_ttl_minutes đặt các mốc TTL_base ~ 14’ (vol thấp) đến 8’ (vol cao), rồi tính TTL_soft và TTL_hard ngắn hơn tương ứng ￼. Kết quả điền vào policy.orders_ui.ttl_minutes và dùng để gợi ý hủy lệnh sau TTL nhất định.
-	•	Các calibrator khác: Ngoài ra còn có calibrator cho leader gates (ngưỡng RSI, momentum để xác định mã “leader”), calibrator tính breadth_floor (tỷ lệ cổ phiếu > MA50 thấp nhất để xác định risk-off) ￼, calibrator regime logistic (ước lượng hồi quy logistic xác suất risk_on dựa trên các thành phần mô hình – có ghi ra intercept và threshold tối ưu) ￼ ￼, v.v. Những calibrator “tùy chọn” này có thể được bật qua cấu hình (calibration.on_run) hoặc biến môi trường tương ứng (CALIBRATE_*). Mặc định một số calibrator thiết yếu chạy mỗi lần (ví dụ market_filter, liquidity), số khác chạy theo tuần hoặc tắt nếu không cần thiết để đảm bảo tốc độ.
-
-Tất cả các calibrator khi chạy đều in log chi tiết và ghi kết quả vào file orders_analysis.txt trong thư mục out/orders/ để người dùng dễ theo dõi. Ví dụ log cho thấy “[calibrate] thresholds.q_add=0.850 (pool=40), thresholds.q_new=0.920 (pool=20)” nghĩa là ngưỡng điểm mua bổ sung ~ top 15% và mua mới ~ top 8% trong phân phối điểm, tương ứng để chọn 40 mã bổ sung và 20 mã mới ￼. Nhờ các hiệu chỉnh tự động này, engine giảm tối đa việc chỉnh tay hàng ngày, đảm bảo thích ứng với điều kiện thị trường biến đổi, đồng thời đặt giới hạn an toàn (guardrails) để tránh vượt quá phạm vi hợp lý (ví dụ mỗi ngày AI chỉ được điều chỉnh buy_budget_frac trong ±0.04, add_max/new_max ±2, có TTL sau 3-5 phiên tự reset ￼ ￼).
-
-Tóm lại, cấu hình chiến lược của Broker GPT là sự kết hợp giữa tham số cố định (phản ánh chiến lược dài hạn) và tham số linh hoạt (tinh chỉnh ngắn hạn bởi AI và calibrator). Mọi thay đổi bởi AI đều được ràng buộc chặt (whitelist khóa, giới hạn biên độ, yêu cầu rationale) và có thể bị vô hiệu khi thị trường quá xấu (kill-switch chuyển về baseline nếu kích hoạt risk-off cứng) ￼. Nhờ vậy, engine vừa có tính ổn định, vừa có độ nhạy cần thiết trước diễn biến mới, đảm bảo kết quả đầu ra phù hợp từng ngày nhưng không đi chệch triết lý chiến lược tổng thể.
-
-Nhận diện Chế độ Thị trường (Market Regime)
-
-Trước khi quyết định lệnh cụ thể, engine đánh giá bức tranh thị trường tổng thể – gọi là xác định market regime. Kết quả này ảnh hưởng đến cách phân bổ ngân sách, số lượng lệnh và ưu tiên mua/bán.
-
-Hàm get_market_regime(session_summary, sector_strength, tuning) trong scripts/order_engine.py tạo một đối tượng MarketRegime (được định nghĩa trong scripts/engine/schema.py) chứa các thuộc tính sau:
-	•	Thông tin phiên: phase (giai đoạn hiện tại: pre, morning, lunch, afternoon, ATC, post), in_session (Boolean đang trong giờ giao dịch hay không). Dựa trên session_summary_df (nếu có) hoặc tự động dò theo giờ hệ thống ￼ ￼.
-	•	Chỉ báo thị trường: index_change_pct (% thay đổi VN-Index trong phiên hiện tại), breadth_hint (tỷ lệ cổ phiếu tăng > MA50 – đo lường độ rộng thị trường), trend_strength (sức mạnh xu hướng thị trường, có thể dựa MA200), risk_on (cờ chế độ risk-on hay risk-off, kiểu Boolean), và một chỉ số tổng hợp market_score (0-1) phản ánh mức độ tích cực (xác suất risk-on).
-	•	Ngân sách và hạn mức: buy_budget_frac (tỷ lệ NAV dành cho mua mới, từ policy sau khi có thể đã override AI), add_max, new_max (số lệnh tối đa như đã nói). Các giá trị này được lấy từ cấu hình tuning (pol_obj) đã merge calibrations/overrides.
-	•	Trọng số mô hình và ngưỡng điểm: weights (dict trọng số các thành phần tính điểm), thresholds (dict các ngưỡng điểm – base_add, base_new, trim_th, q_add, q_new, min_liq_norm, near_ceiling_pct, tp_pct, sl_pct, v.v. – sau calibrations), ticker_bias, sector_bias (các bias nếu có từ AI).
-	•	Thông số pricing, sizing, execution: pricing (chiến lược tính giá mua/bán theo chế độ, ví dụ risk_on thì mua giá nào, risk_off thì giá nào), sizing (tham số liên quan phân bổ vốn, vd add_share, new_share – tỷ trọng vốn cho add/new, reuse_sell_proceeds_frac – tỷ lệ tái sử dụng tiền bán,…), execution (tham số vi mô khớp lệnh, vd slip_pct_min, flash_k_atr…). Những phần này được đọc từ policy (cố định) và có calibrations nhỏ (như slip_ticks dựa ATR).
-	•	Các cấu phần khác: sector_strength_rank (điểm sức mạnh 0-1 cho từng ngành, từ sector_strength_df), model_components & model_zscores (giá trị thô từng thành phần mô hình tính điểm thị trường và điểm chuẩn hóa z-score của chúng, dùng cho logistic model risk_on), epu_us_percentile, dxy_percentile, spx_drawdown_pct… (nếu có dữ liệu vĩ mô sẽ điền vào để tham chiếu).
-	•	Neutral-adaptive state: Các trường liên quan chế độ trung tính thích ứng – ví dụ is_neutral (Boolean, nếu thị trường không rõ xu hướng thì bật chế độ neutral), kèm theo neutral_state (config nội bộ), danh sách neutral_partial_tickers, neutral_override_tickers, neutral_accum_tickers (các mã được xử lý đặc biệt trong chế độ neutral, sẽ nói bên dưới), và neutral_stats (thống kê số lượng mã partial/override…).
-
-Như vậy, MarketRegime gói toàn bộ bối cảnh thị trường và tham số chiến lược tại thời điểm đó. Engine tạo đối tượng này xong sẽ sử dụng nó xuyên suốt quá trình ra quyết định lệnh.
-
-Một điểm đặc biệt là chế độ Neutral Adaptive: Nếu thị trường không rõ xu hướng (không hẳn risk-on nhưng cũng chưa đến mức risk-off cứng), engine có thể đánh dấu is_neutral=True. Trong chế độ này, engine có thể thực hiện một số điều chỉnh:
-	•	Cho phép mua mới nhưng ở mức độ “thăm dò” (partial entry) – những mã mua mới có thể gắn nhãn new_partial để mua ít hơn bình thường.
-	•	Giới hạn mua bổ sung (add) ở mức thấp (thậm chí đặt add_max rất nhỏ) vì thị trường chưa đủ mạnh.
-	•	Nếu có mã rất tiềm năng (vượt ngưỡng override), engine cho mua nhưng vẫn theo dõi sát (gắn cờ neutral_override).
-	•	Sau khi quyết định lệnh, engine cập nhật các danh sách mã neutral_partial_set, neutral_override_set, neutral_accum_set để theo dõi trong báo cáo ￼ ￼. Các mã này cũng được ghi chú trong cột “Notes” của lệnh (ví dụ ghi PARTIAL_ENTRY hay NEUTRAL_ADAPT).
-
-Tất cả logic tính neutral đều nằm trong hàm quyết định lệnh, nhưng chịu ảnh hưởng bởi tham số NeutralAdaptive trong policy (nếu cấu hình kích hoạt). Kỹ thuật này nhằm thận trọng trong giai đoạn thị trường lưng chừng: không bỏ lỡ cơ hội nhưng cũng không full vị thế ngay.
-
-Tóm lại, kết quả chính của bước này là engine biết mình đang ở trạng thái thị trường nào (risk-on mạnh mẽ hay risk-off né tránh, hay trung tính) và từ đó xác định cách phân bổ nguồn lực (ngân sách, số lệnh). Ví dụ:
-	•	Nếu risk_on=True: buy_budget_frac có thể ~10-15%, add_max/new_max ở mức cao (cho phép nhiều lệnh), chế độ pricing thiên về mua giá cao hơn để nhanh có hàng, bán giá tham vọng hơn (vì thị trường thuận lợi) ￼ ￼.
-	•	Nếu risk-off: buy_budget_frac giảm xuống rất thấp (ví dụ 2-3%), thậm chí có cơ chế kill-switch dừng mua mới; pricing thì mua cẩn trọng giá thấp, bán hạ giá để thoát nhanh ￼.
-	•	Nếu neutral: Ở giữa hai thái cực trên, cộng thêm logic partial như đã nói.
-
-Engine tận dụng các chỉ báo định lượng (index_change_pct, breadth_hint, volatility, drawdown…) cùng các ngưỡng đã calibrate để quyết định risk_on hay không. Ví dụ, nếu VN-Index giảm hơn ngưỡng risk_off_index_drop_pct và breadth < risk_off_breadth_floor, market_score dưới hard_floor – rõ ràng thị trường rất xấu -> risk_on=false; thậm chí nếu giảm quá nặng (severe) engine sẽ đặt chế độ phòng thủ tuyệt đối (scale ngân sách = 0, dừng mua) ￼ ￼. Ngược lại, nếu hầu hết tín hiệu tích cực, risk_on=true và scale=1 (full ngân sách). Trạng thái neutral khi thị trường chỉ vừa đủ không vi phạm hard_floor nhưng cũng chưa đạt điều kiện risk_on (market_score < soft_floor chẳng hạn), engine sẽ đặt scale <1 để giảm ngân sách tương ứng mức độ tín hiệu yếu ￼ ￼.
-
-Sau khi tính toán, các thông tin quan trọng từ regime (risk_on/off, buy_budget_frac hiệu lực, top sectors dẫn đầu, v.v.) sẽ được in ra phần diagnostics cuối chạy để người dùng nắm được bối cảnh. Ví dụ, orders_analysis.txt sẽ có dòng “Regime risk_on: True/False”, “Buy budget frac: 0.12 (effective XYZ)”, “Top sectors: Finance, Energy,…”, “Risk-on probability: 0.78” v.v. – những thông số này đều từ MarketRegime mà ra ￼ ￼.
-
-Thuật toán Quyết định Lệnh Mua/Bán
-
-Đây là phần lõi của engine – sau khi đã có dữ liệu và biết chế độ thị trường, hệ thống sẽ tính điểm tín hiệu cho từng mã và quyết định hành động tương ứng (mua/bán/giữ). Thuật toán diễn ra như sau:
-
-Tính điểm tín hiệu (Conviction Score) và đặc trưng
-
-Engine duyệt qua từng mã trong danh mục hiện tại trước (những mã nhà đầu tư đang nắm giữ):
-	•	Lấy dữ liệu snapshot cho mã đó (giá hiện tại, khối lượng hiện có, v.v.) và metrics đã tính (RSI, ATR, Beta,…) – nếu thiếu metric nào sẽ cảnh báo. Đồng thời bổ sung các đặc trưng kỹ thuật ngắn hạn từ bảng presets (ví dụ giá MA20, MA50) vào bản ghi snapshot để dùng cho tính toán chỉ báo (vì snapshot ban đầu có thể chỉ có giá, cần thêm MA để tính cắt MA) ￼ ￼.
-	•	Gọi hàm compute_features(ticker, s2, m, normalizers) để tính feature vector cho mã. Các feature có thể gồm: % thay đổi giá so với hôm qua, khoảng cách giá tới MA20, MA50; RSI14; biến động ATR14%; xếp hạng động lượng (MomRetNorm); xếp hạng thanh khoản (LiqNorm); mức độ quá mua/bán (vd RSI so với ngưỡng); v.v. Kết quả là một dict feats các feature. Hệ thống cũng tính thêm pnl_pct – % lãi/lỗ hiện tại của vị thế (dựa trên AvgCost từ danh mục so với giá hiện tại) ￼.
-	•	Tính điểm tín hiệu thông qua hàm conviction_score(feats, sector, regime, ticker). Điểm này nằm từ -1 đến +1, càng cao nghĩa là tín hiệu mua càng mạnh, âm nghĩa là nên bán giảm bớt. Việc tính điểm dựa trên trọng số mô hình trong regime.weights áp dụng lên các feature (xu hướng, động lượng, thanh khoản, volatility guard, sector, beta, fundamental…). Ví dụ một công thức tổng quát: score = w_trend*TrendScore + w_momo*MomentumScore + w_liq*LiqScore + ... cộng dồn các thành phần (có áp dụng scale của sector_bias/ticker_bias nếu có). Tóm lại, mỗi mã có một conviction score phản ánh mức độ hệ thống “tin tưởng nên giữ/mua tiếp” hay không. Kết quả score[ticker] = sc được lưu lại ￼.
-	•	Engine đồng thời lưu toàn bộ đặc trưng feats_all[ticker] = feats cho mục đích ghi file sau này (orders_reasoning.csv chứa các điểm thành phần). Nếu mã thiếu các metric quan trọng nào, engine cũng đánh dấu vào regime.diag_warnings để cảnh báo (ví dụ thiếu RSI14 cho mã X) ￼ ￼.
-
-Sau đó, engine phân loại hành động cho mã đang nắm giữ. Trước tiên, nó gọi classify_action(is_holding=True, score=sc, feats, regime, thresholds_override=..., ticker=t) để lấy gợi ý hành động cơ bản:
-	•	Thuật toán phân loại cơ bản (classify_action): Dựa trên score và các ngưỡng trong regime.thresholds:
-	•	Nếu mã đang giữ:
-	•	Kiểm tra cắt lỗ cứng: nếu %P/L hiện tại ≤ -sl_pct_eff (tức lỗ vượt ngưỡng cho phép) thì trả về "exit" – nghĩa là nên bán hết ngay để dừng lỗ ￼ ￼.
-	•	Kiểm tra chốt lời cứng: nếu %P/L ≥ tp_pct_eff thì trả về "take_profit" – chốt lời toàn bộ vị thế (trường hợp đạt target lợi nhuận) ￼ ￼.
-	•	Kiểm tra cắt lỗ theo dấu hiệu MA (nếu cấu hình exit_on_ma_break=true): nếu giá đã cắt xuống dưới MA50 và RSI hiện tại < ngưỡng exit_ma_break_rsi thì mặc định là tín hiệu bán (exit). Tuy nhiên, có một số điều kiện “giảm nhẹ”:
-	•	Nếu conviction score của mã đủ cao (≥ exit_ma_break_score_gate) và tỷ lệ reward/risk (R-multiple) ≥ ngưỡng cho phép (ví dụ ít nhất 1.0 R) thì hạ từ exit thành “trim” (bán bớt một phần) ￼ ￼.
-	•	Nếu có bias tích cực cho mã đó (ticker_bias) và vượt ngưỡng tilt_exit_downgrade_min, cũng có thể hạ xuống trim thay vì exit ￼ ￼.
-	•	Nếu đang đầu phiên sáng (phase < yêu cầu tối thiểu, ví dụ chưa qua phiên sáng mà có tín hiệu xấu, tránh “panic sell” đầu ngày) thì cũng cho phép downgrade exit -> trim ￼.
-	•	Ngược lại, nếu biến động đang quá cao (ATR percentile cao) thì không giảm nhẹ mà cứ exit thẳng (vì biến động cao rủi ro tăng thêm) ￼.
-	•	Nếu không có điều kiện đặc biệt nào, trường hợp giá cắt MA50 + RSI thấp sẽ trả về "exit" ￼.
-	•	Nếu không rơi vào trường hợp bán ngay ở trên:
-	•	Nếu score >= base_add thì trả về "add" – tín hiệu đủ mạnh để mua bổ sung thêm cho mã đang có ￼.
-	•	Nếu score <= trim_th (hoặc một số điều kiện khác như giá cắt MA20 và RSI thấp, hay MACD histogram âm và RSI thấp) thì trả về "trim" – nghĩa là nên giảm bớt vị thế (bán bớt một phần) do tín hiệu suy yếu ￼.
-	•	Nếu không rơi vào trường hợp nào, trả về "hold" – giữ nguyên không hành động ￼.
-	•	Nếu mã chưa có (is_holding=False):
-	•	Nếu score >= base_new thì trả về "new" – có tín hiệu đủ mạnh để mua mới mã đó ￼.
-	•	Ngược lại trả về "ignore" (bỏ qua, không làm gì).
-
-Các ngưỡng base_add, base_new, trim_th nêu trên chính là tham số trong policy (có thể đã calibrate theo transaction cost). Thông thường base_add ~0.6–0.7, base_new ~0.8–0.9, trim_th có thể âm (ví dụ -0.2) để chủ động hạ vị thế khi điểm số âm.
-
-Sau khi có default_action từ classify_action cho mã đang giữ, engine thực hiện thêm các kiểm tra nâng cao về trạng thái lệnh dừng lỗ/chốt lời từng phần (stateless stops) để đưa ra quyết định cuối cùng:
-	•	Nếu mã có thiết lập chốt lời nhiều bước hoặc dừng lỗ nhiều bước (xem policy.thresholds: các tham số tp1_frac, sl_trim_step_1_trigger, sl_trim_step_2_trigger,…): engine sẽ xem % lỗ hiện tại so với giá vốn. Ví dụ:
-	•	Nếu mã đang lỗ đạt ngưỡng step2 (loss_pct ≥ sl_step2_trigger, chẳng hạn 80% mức dừng lỗ) thì engine quyết định bán hết ngay (action='exit', note='SL_STEP2') bất kể default_action là gì, vì coi như chạm stop-loss khẩn cấp. Đồng thời đánh dấu trạng thái sl_step_hit_80=True để lần sau biết mã này đã exit bởi step2 ￼.
-	•	Nếu chưa tới step2 mà đạt step1 (loss_pct ≥ sl_step1_trigger, ví dụ 50% mức dừng lỗ) và trước đó chưa bán step1 thì engine đặt action='trim' với trim_frac tương ứng (ví dụ bán 25% – sl_step1_frac) kèm note SL_STEP1 ￼ ￼. Điều này nghĩa là bán giảm một phần để giảm rủi ro, và đánh dấu sl_step_hit_50=True cho mã đó.
-	•	Ngược lại, với lãi:
-	•	Nếu mã đang lãi ≥ tp_pct_eff và chưa từng chốt lời phần nào (tp1_done_state = False) và có cấu hình chốt lời từng phần (tp1_frac > 0) thì engine cho chốt lời một phần: action='take_profit' với tp_frac (ví dụ 50% – nghĩa là bán một nửa) kèm note TP1_ATR ￼ ￼. Đồng thời đánh dấu trạng thái tp1_done=True để biết đã chốt 1 phần.
-	•	Nếu RSI rất thấp và giá dưới MA20/MA50 (động lượng yếu) mà default_action không phải exit/take_profit, engine cũng có thể quyết định “trim” một phần (30%) với note MOM_WEAK để giảm vị thế do tín hiệu xấu ￼ ￼.
-
-Sau các bước trên, nếu bất kỳ meta_decision nào được tạo (trim/exit một phần do stoploss, take_profit, momentum yếu), engine sẽ ghi đè hành động:
-	•	Gán act[ticker] = meta_decision.action (thay vì default_action) ￼ ￼.
-	•	Lưu chi tiết sell_meta[ticker] = meta_decision và nếu đó là lệnh dừng (stop_order) thì đặt TTL override (thời hạn lệnh) cho mã đó ￼ ￼.
-	•	Cập nhật position_state để lần sau biết trạng thái (như đã bán 50% do SL1, đã chốt lời 50% do TP1…) – trạng thái này sẽ ghi ra file position_state.csv cuối phiên cho persistence.
-
-Nếu không có meta_decision đặc biệt, engine sẽ dùng default_action. Kết thúc vòng lặp qua danh mục đang có, mỗi mã sẽ có một act[ticker] thuộc {hold, add, trim, exit, take_profit, trim (từng phần)}. Lưu ý: exit và take_profit trong context này nghĩa là bán toàn bộ hoặc bán một phần lớn vị thế (khác với trim – thường bán một phần nhỏ).
-
-Tiếp theo, engine xét các mã chưa có trong danh mục (nhưng thuộc vũ trụ phân tích). Nó lặp qua mỗi mã trong snapshot_df trừ những mã đã có (held) hoặc mã không thuộc universe (phòng trường hợp) ￼:
-	•	Tương tự, lấy snapshot và metrics cho mã, tính toán feats đặc trưng và điểm sc y hệt quy trình trên ￼ ￼. Đối với mã mới này cũng áp dụng ticker_bias nếu có (vd bias ngành) vào điểm.
-	•	Lấy thresholds_override nếu mã đó có override riêng (policy cho phép đặt ngoại lệ tham số cho từng mã trong ticker_overrides).
-	•	Gọi classify_action(False, score=sc, ...). Nếu kết quả là "new", engine đặt act[ticker] = "new" – tức đánh dấu mã này là ứng viên mua mới ￼ ￼. Nếu kết quả “ignore” thì engine sẽ không thêm vào act (coi như mặc định bỏ qua).
-	•	Engine cũng lưu scores[ticker] = sc và feats_all[ticker] = feats cho các mã mới để sau này ghi file reasoning. Nếu có thông tin tính toán dừng lỗ cho mã mới (tp_sl_info như ATR cho TP/SL), engine lưu vào tp_sl_map để dùng khi tính kích thước lệnh ￼ ￼.
-
-Đến đây, engine đã hình thành một danh sách hành động sơ bộ cho toàn bộ các mã:
-	•	Với mã đang có: có thể là “hold” (giữ nguyên), “add” (mua thêm), “trim” (bán bớt), hoặc “exit”/“take_profit” (bán hết hoặc bán phần lớn).
-	•	Với mã chưa có: hoặc “new” (mua mới) hoặc không có hành động (bỏ qua).
-
-Trước khi chuyển sang bước tính toán lượng và giá lệnh, engine áp dụng một số bộ lọc loại trừ thêm trên danh sách hành động này nhằm đảm bảo tuân thủ điều kiện thị trường và quy tắc kiểm soát rủi ro:
-	•	Bộ lọc giá trần: Bất kỳ hành động “mua” (add hoặc new) nào nếu giá hiện tại của mã đã quá gần giá trần – cụ thể nếu Price >= near_ceiling_pct * BandCeiling – sẽ bị loại bỏ (đổi thành hold). Điều này nhằm tránh mua đuổi những mã tăng kịch biên độ. Engine thêm mã đó vào debug_filters["near_ceiling"] và ghi lý do audit (ví dụ “(ADD) price 49.0 within 0.98 of ceiling 50.0”) ￼.
-	•	Bộ lọc thị trường chung (guard_new): Nếu chế độ thị trường đang kích hoạt bảo vệ (guard_new) – ví dụ thị trường rất xấu hoặc có risk_off mềm – engine có thể hoãn các lệnh mua mới. Cụ thể, nếu guard_new=True, nhiều khả năng new_max sẽ bị đặt về 0 (scale=0) hoặc ngân sách mua scale giảm mạnh (sẽ áp dụng ở bước phân bổ vốn). Ngoài ra, logic guard còn chặn ngay nếu market quá xấu: scale=0.0 nếu “severe” (chỉ số giảm quá mạnh hoặc vol vượt trần) ￼ ￼. Mã nào bị loại do điều kiện thị trường xấu cũng sẽ chuyển thành hold và thêm vào debug_filters["market"] với note “market filter active – defer adding until trend/breadth improves” ￼.
-	•	Bộ lọc thanh khoản: Nếu mã có LiqNorm (xếp hạng thanh khoản) dưới min_liq_norm (tham số calibrate), tức thanh khoản không đạt yêu cầu, engine sẽ loại bỏ các lệnh mua cho mã đó. Lý do thường được ghi vào debug_filters["liquidity"]. (Trong code, check này thực hiện gián tiếp: nếu min_liq_norm > 0, engine yêu cầu cột LiqNorm phải có và >0 với mã mua; nếu thiếu thì coi như vi phạm và dừng). Mã bị loại sẽ không có lệnh mua.
-	•	Giới hạn số lượng lệnh: Engine tôn trọng tối đa add_max và new_max lệnh. Mặc dù các ngưỡng điểm q_add, q_new đã phần nào đảm bảo điều này (vì điểm cutoff tương ứng), nhưng engine vẫn kiểm soát lần cuối:
-	•	Tập hợp các mã có hành động "add" (mua bổ sung) thành danh sách add_names. Nếu số lượng > add_max, sẽ ưu tiên những mã điểm cao hơn. Thực hiện bằng cách sắp xếp theo score giảm dần và cắt danh sách.
-	•	Tương tự với "new": lấy new_names điểm từ cao xuống và chỉ lấy top new_max. Các mã vượt ngưỡng nhưng nằm ngoài top này sẽ bị chuyển thành "hold" hoặc thậm chí không có trong orders_final (có thể đưa vào watchlist). Đoạn mã sắp xếp new_sorted = sorted(new_names, key=lambda x: score, reverse=True)[:regime.new_max] thể hiện điều đó ￼. Nếu một mã “new” bị cắt bỏ do vượt quá new_max, engine có thể thêm vào debug filter ("market" hoặc "liquidity") theo bối cảnh neutral override (trong code phức tạp phần neutral, nhưng đơn giản: giới hạn số lệnh mua mới).
-
-Các bộ lọc trên đảm bảo tuân thủ kỷ luật: ví dụ không vượt quá số lệnh dự kiến, không mua mã thanh khoản yếu/trần, và nếu thị trường xấu thì ngừng mua. Mọi mã bị loại sẽ xuất hiện trong file orders_filtered.csv (nếu có) với lý do và giá trị liên quan để audit ￼.
-
-Phân bổ ngân sách và tính toán khối lượng đặt lệnh
-
-Sau khi có danh sách cuối cùng các mã sẽ mua hoặc bán, engine bắt đầu tính kích thước lệnh (sizing) cho từng mã:
-
-Trước hết, tính NAV (giá trị tài sản) và chia ngân sách:
-	•	NAV ước tính được tính từ danh mục (tổng giá trị thị trường hiện tại, có trong portfolio_pnl_summary.csv – cột TotalMarket). Giả sử NAV = X (nghìn đồng).
-	•	Ngân sách mua thô = buy_budget_frac * NAV. Đây là tổng giá trị cho các lệnh mua (bao gồm mua mới và mua bổ sung) khi risk_on/off đã tính đến ￼ ￼.
-	•	Nếu có tùy chọn tái sử dụng tiền bán (reuse_sell_proceeds_frac > 0): Engine tính tổng dự kiến thu được từ các lệnh bán (sell_candidates) và cộng một phần (theo tỷ lệ config) vào ngân sách mua. Ví dụ nếu sẽ bán thu về 500 triệu và cho phép dùng 50% thì cộng thêm 250 vào ngân sách mua ￼ ￼. Kết quả là target_gross_buy.
-
-Kế đến, xác định phương pháp phân bổ ngân sách cho danh sách mã mua:
-	•	Engine có tham số allocation_model trong policy (vd 'mean_variance', 'risk_budget' hoặc mặc định 'proportional').
-	•	Nếu allocation_model = 'mean_variance': Engine sử dụng module portfolio_risk.py để tối ưu danh mục theo lý thuyết trung bình-phương sai Markowitz. Cụ thể:
-	•	Chuẩn bị dữ liệu giá lịch sử của các mã sẽ mua (cộng chỉ số thị trường VN-Index) từ prices_history_df. Tính log-returns và ma trận hiệp phương sai có shrinkage Ledoit–Wolf (với tham số cov_reg đã hiệu chỉnh) ￼ ￼.
-	•	Ước lượng suất sinh kỳ vọng hàng năm cho từng mã, kết hợp mô hình Black–Litterman nếu có: compute_expected_returns(mu_inputs) tính toán mu dựa trên điểm số hiện tại (score_view) và một số giả định (lợi suất phi rủi ro, premium thị trường) ￼.
-	•	Giải bài toán tối ưu: solve_mean_variance_weights(mu_annual, cov, risk_alpha, max_pos_frac, max_sector_frac, min_names_target, ...) để tìm vector trọng lượng tối ưu hóa hàm utility (thu nhập kỳ vọng – risk_alpha * phương sai). Có ràng buộc giới hạn tỷ trọng tối đa mỗi mã, mỗi ngành, và tối thiểu số mã nắm giữ ￼ ￼. Kết quả trả về trọng số cho mỗi mã (dạng Series).
-	•	Nếu cấu hình risk_blend_eta > 0: engine kết hợp trọng số tối ưu trên với trọng số risk parity (trọng số tỉ lệ nghịch với độ biến động) theo tỷ lệ eta để tăng đa dạng hóa. Tức trọng số cuối = (1-eta)w_opt + etaw_risk_parity ￼ ￼.
-	•	Cuối cùng nhân trọng số với tổng ngân sách mua ra phân bổ tiền cho từng mã (alloc). Engine lưu diagnostic về kết quả (trọng số, lợi suất kỳ vọng danh mục, vol danh mục, v.v.) vào regime.evaluation.mean_variance để audit ￼ ￼.
-	•	Nếu allocation_model = 'risk_budget': Engine dùng phương pháp Risk Budgeting – ở đây triển khai đơn giản: mỗi mã được phân tiền tỷ lệ với điểm số / (độ biến động^2) (tương tự nguyên lý equal risk contribution).
-	•	Code _allocate_risk_budget tính cho từng mã một trọng số = score / (gamma * sigma^2) với sigma là độ lệch chuẩn (hoặc ATR) của mã đó; gamma là tham số risk_aversion. Sau đó chuẩn hóa tổng thành ngân sách ￼ ￼. Mã có điểm cao và biến động thấp sẽ được phân tiền nhiều hơn. Điều này nhằm tối ưu risk-adjusted score.
-	•	Nếu allocation_model khác (hoặc default): Engine dùng phân bổ tỷ lệ theo điểm số (proportional) – tức chia ngân sách tỉ lệ thuận với điểm score của mỗi mã. Để tránh chỉ tập trung vốn vào một mã điểm cao nhất, hệ thống có thể dùng softmax với nhiệt độ tau (sizing.softmax_tau) để làm phân phối phân bổ mượt hơn. Softmax tau cũng được calibrate để đạt độ phân tán mục tiêu (ENP). Việc này được thực hiện trong hàm allocate_proportional được gọi nếu không dùng hai phương pháp trên ￼.
-
-Engine cũng có bước đảm bảo partial entry cho neutral: nếu neutral_active=True và có một tỷ lệ partial_entry_frac (ví dụ 0.5), nó sẽ giảm phân bổ cho những mã thuộc diện new_partial hoặc neutral_override đi còn 50% so với bình thường ￼ ￼. Điều này nghĩa là trong thị trường neutral, các lệnh mua mới chỉ dùng nửa ngân sách dự kiến (mua thăm dò).
-
-Kết quả của bước này là hai dictionary: add_alloc (số tiền phân bổ cho mỗi mã thuộc nhóm mua bổ sung) và new_alloc (cho nhóm mua mới). Tổng hai phần này xấp xỉ target_gross_buy. Nếu có scale < 1 do market guard, engine sẽ áp dụng giảm đều trên cả hai: add_alloc[t] *= scale và new_alloc[t] *= scale (scale có thể 0 nếu thị trường quá tệ, đồng nghĩa không mua gì) ￼ ￼. Đồng thời regime.buy_budget_frac_effective được tính = buy_budget_frac * scale để phản ánh tỷ lệ thực tế sau khi giảm do điều kiện thị trường ￼ ￼.
-
-Tiếp theo, engine tiến hành điều chỉnh rủi ro và đảm bảo nguyên tắc trên phân bổ:
-	•	Áp dụng risk weighting theo tùy chọn:
-	•	Nếu policy yêu cầu risk_weighting = 'risk_parity': engine sẽ tái phân bổ dùng risk parity thuần. Có hàm _risk_parity_alloc(alloc) tính lại phần tiền mỗi mã sao cho đóng góp rủi ro ngang nhau, với điều kiện vẫn giữ tổng như cũ. Implement: tính cov matrix cho các mã đó, tính trọng số risk parity, rồi trộn với trọng số ban đầu theo tham số risk_parity_floor (ví dụ giữ ít nhất 20% trọng số gốc) để không lệch quá nhiều ￼ ￼. Mục tiêu: tránh all-in một mã nếu mã đó biến động lớn.
-	•	Nếu risk_weighting = 'inverse_atr' hoặc 'inverse_sigma': engine sẽ tính lại phân bổ tỉ lệ nghịch với độ biến động (ATR% hoặc độ lệch chuẩn sigma). Mỗi mã có hệ số 1/σ, sau đó chuẩn hóa thành tỷ trọng – tức mã nào biến động thấp được phân nhiều vốn hơn. Nếu 'hybrid', engine hòa trộn trọng số gốc với trọng số nghịch biến động theo tỷ lệ risk_blend (từ 0-1) ￼ ￼.
-	•	Kết quả cuối cùng trả về add_alloc và new_alloc đã điều chỉnh rủi ro ￼.
-	•	Đảm bảo lô chẵn tối thiểu: Sau các bước, có thể một số mã được phân quá ít tiền (dưới 1 lot cổ phiếu). Hàm _ensure_min_lot_alloc sẽ kiểm tra từng phân bổ: tính số tiền tối thiểu cần để mua 1 lô (100 cp * giá hiện tại). Nếu phân bổ alloc[t] nào < số đó mà tổng ngân sách vẫn thừa, nó sẽ cố gắng tái phân phối phần thừa từ các mã được phân quá nhiều sang mã thiếu để mỗi mã mua được tối thiểu 1 lô ￼ ￼. Cách làm: sắp xếp danh sách thiếu tiền và thừa tiền, rồi lấy bớt từ mã thừa nhiều nhất chuyển sang mã thiếu nhỏ nhất, lặp đến khi không còn thiếu hoặc hết thừa ￼ ￼. Điều kiện là tổng thừa phải >= tổng thiếu. Nếu không đáp ứng thì thôi.
-	•	Kết quả: cập nhật lại add_alloc và new_alloc sau đảm bảo min lot (nếu có nhiều mã và ngân sách đủ) ￼ ￼.
-
-Giờ engine có số tiền cụ thể (nghìn đồng) dự tính chi cho mỗi mã cần mua. Tiếp theo là tính số lượng cổ phiếu và giá đặt cho từng lệnh:
-
-Trước tiên, engine chuẩn bị các biến như max_pos_frac, max_sector_frac từ cấu hình risk (tỷ lệ NAV tối đa cho một mã hoặc một ngành). Đồng thời lấy held_qty từ danh mục (số lượng hiện có mỗi mã), tính nav_for_caps = NAV + ước tính tiền sẽ mua - tiền sẽ bán (để làm mốc tính tỷ trọng sau giao dịch).
-	•	Với mỗi mã trong add_names (mua bổ sung):
-	•	Lấy giá hiện tại và giá trần/sàn từ snapshot.
-	•	Tính giá đặt mua qua hàm pick_limit_price(t, "BUY", snap_row, preset_row, metrics_row, regime). Hàm này xét nhiều yếu tố:
-	•	Nếu regime.risk_on, ưu tiên chiến lược giá hơi cao hơn để dễ khớp (có thể chọn mức giá giữa tham chiếu và trần tùy preset). Ngược lại risk_off thì đặt giá thấp (gần sàn) cho an toàn.
-	•	Nếu preset có gợi ý (ví dụ mức giá technical), dùng preset. Nếu không, dùng công thức fallback: giá limit = giá hiện tại – buy_mult * ATR (ATR quy đổi ra giá) ￼. Sau đó làm tròn về bước giá và không vượt biên trần/sàn ￼.
-	•	Kết quả trả về một giá giới hạn (limit price) tính bằng nghìn đồng/cp.
-	•	Lấy budget = add_alloc[t] (nghìn đồng).
-	•	Tính số lượng cổ phiếu tối đa mua được: qty0 = floor( budget / limit_price ), có xét lô 100 cổ phiếu (phải chia hết cho 100) ￼ ￼.
-	•	Áp dụng các giới hạn vị thế:
-	•	Giới hạn tỷ trọng mã: Tính giá trị hiện có của mã = held_qty * giá hiện tại. Tính giá trị tối đa cho phép = max_pos_frac * NAV. Từ đó suy ra số lượng tối đa có thể mua thêm cap_qty sao cho (số lượng hiện có + mua thêm) * giá <= max_pos_frac * NAV ￼ ￼. Nếu qty0 vượt quá, giảm xuống = cap_qty.
-	•	Giới hạn tỷ trọng ngành: Lấy tổng giá trị hiện có của ngành (cộng các mã cùng sector) từ một biến sector_expo_k. Tính giá trị tối đa cho phép cho ngành = max_sector_frac * NAV. Tính số lượng tối đa có thể mua thêm mã này để không vượt ngành tối đa (phân bổ headroom cho ngành) ￼. Giới hạn này đặc biệt nếu danh mục đang nắm nhiều mã cùng ngành, sẽ hạn chế mua thêm cùng ngành.
-	•	Giới hạn thanh khoản ADTV: Engine kiểm tra AvgTurnover20D (ADTV, nghìn đồng) của mã từ metrics. Nó đặt mặc định multiplier = 20 (có thể config trong calibration_targets.liquidity.adtv_multiple). Tính giá trị tối đa có thể mua = 20 * ADTV. Suy ra số lượng max_qty. Đảm bảo qty_cap <= max_qty để không đặt lệnh vượt quá 1/20 khối lượng giao dịch trung bình ngày của mã ￼ ￼. Điều này tránh việc lệnh mua quá lớn gây ảnh hưởng giá hay khó khớp.
-	•	Giới hạn rủi ro trên mỗi giao dịch: Sử dụng tham số risk_per_trade_frac (tỷ lệ NAV tối đa chấp nhận mất nếu dừng lỗ cho một lệnh) và ước lượng khoảng cách dừng lỗ cho mã. Engine tính ATR (hoặc lấy sl_pct_eff nếu có) để ước lượng khi mua giá này, stop-loss tiềm năng sẽ cách bao nhiêu %/nghìn đồng. Từ đó tính số tiền tối đa chấp nhận rủi ro = rpt * NAV. Số lượng tối đa = (tiền chấp nhận rủi ro) / (khoảng cách stop * giá) ￼ ￼. Nếu qty_cap đang cao hơn mức này thì giảm xuống. Mục đích: mỗi lệnh nếu sai, lỗ tối đa chỉ khoảng vài % NAV.
-	•	Giới hạn giải ngân theo tranche: Nếu cấu hình tranche_frac (ví dụ 0.3) và max_pos_frac > 0, engine cũng áp dụng: chỉ cho mua tối đa 30% khoảng headroom vị thế trong một lần. Ví dụ nếu còn có thể mua 10k cổ phiếu trước khi chạm max_pos, tranche_frac=0.3 nghĩa lần này chỉ mua nhiều nhất 3000 cổ phiếu ￼. Điều này giúp chia mua thành nhiều phần, tránh dồn hết một lần.
-	•	Sau các giới hạn, engine có qty_cap cuối cùng. Số lượng quyết định = min(qty0, qty_cap). Nếu sau tất cả qty_cap về 0 thì mã đó sẽ không có lệnh.
-	•	Kiểm tra điều kiện giá: Nếu giá limit chọn > giá thị trường hiện tại (nghĩa là lệnh mua đặt giá cao hơn thị trường – trường hợp này có thể xảy ra khi risk_on muốn mua chạy hoặc do rounding tick) thì engine ghi nhận vào filter “limit_gt_market” và bỏ qua lệnh đó (vì không hợp lý mua giá cao hơn giá khớp hiện tại) ￼ ￼.
-	•	Nếu qty > 0 sau tất cả: Engine tạo một đối tượng Order cho mã: Order(ticker, side="BUY", quantity=qty, limit_price=limit, note=...) và thêm vào danh sách orders. Note ở đây sẽ là "Mua gia tăng" kèm các tag nếu có (ví dụ nếu regime neutral, tag thêm NEUTRAL_ADAPT; nếu mã thuộc diện neutral_accum do add bị giới hạn, cũng tag) ￼ ￼. Đồng thời:
-	•	Cập nhật notes[ticker] = note_text để lát nữa ghi file.
-	•	Cập nhật sector_expo_k[sector] += qty * price để biết đã dùng bao nhiêu room ngành ￼.
-	•	Cập nhật held_qty[ticker] += qty (vì đã mua thêm, lượng cổ phiếu nắm tăng lên) để khi tính mã khác cùng ngành thì sector_expo được tính đúng.
-	•	Tăng spent_buy_k += qty * limit (tổng tiền mua đã dùng thực tế).
-	•	Với mỗi mã trong new_names (mua mới):
-	•	Quy trình tương tự như trên: tính limit = pick_limit_price("BUY",...) cho mã mới đó (thường dùng preset conservative khi risk_off hoặc balanced).
-	•	budget = new_alloc[t], tính qty0 (số lượng mua tối đa từ ngân sách).
-	•	Áp gần như các giới hạn y hệt (max_pos_frac, max_sector_frac, ADTV, risk_per_trade, tranche). Tuy nhiên với mã mới, hiện held_qty=0 nên tính headroom = max_pos * NAV.
-	•	Đặc biệt: Engine có một logic cho mã mua mới: nếu tính ra qty > 0 nhưng nhỏ hơn lot, nó sẽ quyết định bỏ qua luôn. Cụ thể:
-	•	Nếu qty >= lot thì nó giữ nguyên lot (hoặc có check nếu qty lẻ < lot thì đặt = lot tối thiểu).
-	•	Nếu 0 < qty < lot, nó sẽ đặt qty = 0 (tức không mua) ￼ ￼. Điều này đảm bảo không tạo lệnh odd-lot nhỏ lẻ.
-	•	Kiểm tra giá limit > giá thị trường tương tự như trên, nếu vi phạm thì bỏ qua mã đó (filter limit_gt_market) ￼ ￼.
-	•	Nếu qty > 0: Tạo Order side="BUY" cho mã mới với note "Mua mới" kèm tag:
-	•	Nếu regime neutral: thêm tag NEUTRAL_ADAPT.
-	•	Nếu mã nằm trong neutral_partial_names: thêm tag PARTIAL_ENTRY (nghĩa là mua một phần vì thị trường chưa rõ) ￼ ￼.
-	•	Nếu mã trong neutral_override_names: tag NEUTRAL_GATE_OVERRIDE.
-	•	Thêm order vào list, notes, cập nhật sector_expo_k và held_qty tương tự.
-	•	Tăng spent_buy_k.
-	•	Lưu ý: Các lệnh bán (SELL) đã được chuẩn bị ngay sau khi xác định hành động. Trong code, phần “Pre-compute SELL orders” sẽ duyệt qua actions và tạo Order(...) cho các mã có action thuộc {trim, take_profit, exit} với số lượng phù hợp (dựa trên % trim_frac hoặc toàn bộ nếu exit) ￼ ￼. Giá bán cũng tính qua pick_limit_price(t, "SELL", ...) – logic ngược với mua: risk_on thì bán giá cao (kiên nhẫn), risk_off thì bán giá thấp hơn để thoát sớm ￼ ￼. Sau đó các lệnh SELL được lưu tạm vào list sell_candidates và chưa gộp vào orders vội để còn tính proceeds và ngân sách mua như trên. Đến cuối quá trình, engine sẽ append tất cả sell_candidates vào list orders ￼.
-
-Sau khi duyệt hết mã cần mua, engine có thể còn ngân sách dư thừa do làm tròn lô hoặc do caps. Nó sẽ cố gắng phân phối lại phần dư (leftover):
-	•	Tính leftover_k = total_alloc_k - spent_buy_k – tức bao nhiêu ngân sách chưa dùng. Nếu leftover > một ngưỡng nhỏ (min_ticket_k, ví dụ 10 triệu) thì sẽ thử xài nốt.
-	•	Tập hợp tất cả mã đã mua (add + new) thành list, sắp xếp theo điểm giảm dần. Nếu partial_allow_leftover = False, loại bỏ những mã partial/override (tức không bơm thêm vốn vào mã chỉ mua thăm dò) ￼ ￼.
-	•	Vòng lặp: với danh sách mã đó, duyệt từng mã xem có thể mua thêm chút nào từ leftover:
-	•	Tính nhanh qty_try = có thể mua thêm bao nhiêu với leftover_k (dùng cùng hàm _apply_caps_and_qty nhưng thay budget = leftover_k cho mã đó).
-	•	Nếu qty_try > 0 và tiêu tốn cost_k <= leftover_k: thì tăng order của mã đó (nếu order đã tồn tại thì cộng thêm quantity, nếu chưa có – trường hợp hiếm – thì tạo mới). Trừ leftover_k đi và đánh dấu progressed ￼ ￼.
-	•	Tiếp tục cho đến khi hết leftover hoặc không mã nào thêm được nữa hoặc đạt max 32 vòng (tránh loop vô tận).
-	•	Quá trình này đảm bảo nếu còn tiền dư có thể đủ mua vài lô nữa, engine sẽ tận dụng để không bỏ vốn trống. Tất nhiên tuân thủ các cap, vì _apply_caps_and_qty sẽ không vượt giới hạn.
-
-Kết thúc, engine hợp nhất danh sách lệnh bán vào: chèn tất cả sell_candidates (nếu có) vào list orders ￼. Đến đây, mảng orders chứa toàn bộ lệnh final (cả BUY và SELL với số lượng, giá).
-
-Engine cập nhật một số thuộc tính regime để ghi log:
-	•	regime.ttl_overrides = ttl_override_map (các mã nào đặt lệnh dừng với TTL đặc biệt) ￼.
-	•	regime.debug_filters = debug_filters và regime.filtered_records = filtered_records (danh sách mã và lý do bị filter) để tiện ghi file audit ￼.
-
-Nếu hàm quyết định lệnh (ở code cũ decide_actions) được gọi độc lập, engine còn chuẩn bị một analysis_lines cơ bản cho trường hợp test: ví dụ in “Regime risk_on: True/False” và nếu neutral active thì in số mã partial, override, add_capped đã xử lý ￼ ￼. Các cảnh báo thiếu dữ liệu (diag_warnings) cũng được tổng kết (đếm bao nhiêu mã thiếu RSI, ATR…) và in ra ￼ ￼.
-
-Cuối cùng, hàm trả về cấu trúc (orders, notes, regime) hoặc (orders, …) tùy phiên bản triển khai. Danh sách orders này sẽ được dùng để xuất ra file kết quả.
-
-Xuất kết quả và Báo cáo
-
-Engine sử dụng các hàm I/O trong scripts/orders_io.py để ghi các output sau khi có orders:
-	•	Danh sách lệnh cuối – out/orders/orders_final.csv: chứa các lệnh BUY/SELL được đề xuất, gồm cột Ticker, Side, Quantity, LimitPrice. Hàm write_orders_csv sẽ sắp xếp các lệnh BUY trước rồi SELL sau, và trong mỗi nhóm có thể sắp xếp theo Priority nội bộ (Priority có thể dựa trên điểm hoặc xác suất fill) ￼. File này dùng để người dùng đặt lệnh nhanh, format tối giản. Đoạn code ghi file ￼ cho thấy hàm được gọi với toàn bộ orders list, kèm theo snapshot, presets, regime, feats, scores để hàm tự tính thêm cột ẩn nếu cần. Nếu trước đó đã có file orders_final từ lần chạy trước, engine còn in ra so sánh (diff) xem có mã nào mới thêm, mã nào bị gỡ, hoặc lệnh nào thay đổi số lượng/giá ￼ ￼. Thông tin diff này in ra log với prefix [diff] để người dùng dễ quan sát thay đổi qua từng ngày.
-	•	Bản in thân thiện – out/orders/orders_print.txt: file text hiển thị danh sách lệnh ở dạng dễ đọc, kèm giá thị trường hiện tại. Ví dụ: BUY 1000 HPG @ 21.5 (market 21.0) để tiện copy hoặc xem nhanh ￼. Được tạo bởi hàm print_orders(orders, snapshot).
-	•	Lý do tín hiệu chi tiết – out/orders/orders_reasoning.csv: chứa điểm số và các thành phần feature của mỗi mã ra lệnh. Mỗi mã một dòng với các cột như Score, RS_Trend50, Beta60D, LiqNorm, RSI14, v.v. và cột Notes giải thích (vd MOM_WEAK, SL_STEP1, NEUTRAL_ADAPT…). File này phục vụ người dùng muốn kiểm tra tại sao mã đó được mua/bán (ví dụ điểm cao nhờ xu hướng + thanh khoản, hay bị trim do RSI thấp). Được ghi qua hàm write_orders_csv_enriched hoặc tương tự trong orders_io, sử dụng feats_all và scores để điền giá trị ￼.
-	•	Chất lượng lệnh – out/orders/orders_quality.csv: file này tổng hợp tất cả thông tin mỗi lệnh: Ticker, Side, Quantity, LimitPrice cùng các cột: MarketPrice (giá thị trường hiện tại), FillProb (xác suất khớp – tính từ mô hình microstructure: chức năng _fill_prob), ExpR (lợi nhuận kỳ vọng?), Priority (mức ưu tiên), TTL_Min (số phút TTL lệnh), Signal (loại tín hiệu: add/new/trim/…), Notes. Các lệnh BUY trong file này đã được sắp xếp theo Priority giảm dần, lệnh SELL tương tự. Người dùng có thể dựa cột Priority để quyết định ưu tiên lệnh nào trước nếu vốn hạn chế. Engine tính Priority = Score * FillProb, rồi so với một ngưỡng tối thiểu để quyết định watchlist (bên dưới) ￼ ￼.
-	•	Watchlist – out/orders/orders_watchlist.csv: các lệnh BUY bị loại ra khỏi final do độ ưu tiên thấp hoặc tín hiệu micro yếu. Engine có cơ chế: nếu chỉ số VN-Index không tăng hoặc mã đó không tăng intraday (microstructure xấu), hoặc Priority < min_priority (mặc định 0.25), thì đẩy lệnh BUY đó sang watchlist thay vì thực hiện ngay ￼ ￼. Các lệnh này được ghi vào file watchlist để người dùng theo dõi, có thể thực hiện sau nếu điều kiện cải thiện. Đoạn code trên cho thấy engine tách orders thành buy_kept và buy_watch: những BUY có prio >= threshold và index micro ok thì giữ, còn lại bỏ ra ￼ ￼. Sau đó loại chúng khỏi orders_final và ghi riêng file watchlist ￼ ￼. Trong watchlist file có các cột tương tự orders_final kèm các thông tin enrich (score, etc.). Mặc định watchlist bật, có thể tắt qua config orders_ui.enable.
-	•	Phân tích & chẩn đoán – out/orders/orders_analysis.txt: đây là báo cáo tóm tắt chế độ thị trường và chẩn đoán khi chạy. Engine tổng hợp nhiều thông tin vào analysis_lines rồi ghi file ￼ ￼. Nội dung gồm:
-	•	Thời điểm phiên (clock vs file),
-	•	Chế độ risk_on và buy_budget (hiệu lực sau guard): ví dụ “Buy budget frac (effective): 0.08”,
-	•	Top sectors dẫn đầu điểm số,
-	•	Số lượng mã trong danh mục và số lệnh đề xuất,
-	•	Gợi ý thời điểm thực thi (Execution window hint) – ví dụ khuyến cáo nên đặt lệnh buổi sáng hay chiều tùy thanh khoản (hàm _suggest_execution_window trong code có thể gợi ý dựa trên phiên),
-	•	Các chỉ số thị trường: VNINDEX thay đổi %, Trend strength, Breadth >MA50, Breadth >MA200, Xác suất risk-on (từ logistic model), độ dốc MA200, drawdown từ đỉnh của VN-Index, phần trăm turnover (thanh khoản) hiện tại so với lịch sử, ATR% và phân vị ATR của Index, v.v. (bao gồm cả EPU, S&P500 drawdown nếu có) ￼ ￼.
-	•	Nếu neutral active, in chi tiết bao nhiêu mã partial, override, add_capped (bị giới hạn add) ￼.
-	•	Nếu có cảnh báo diag_warnings (như thiếu RSI cho X mã), in ra thống kê bao nhiêu mã thiếu gì ￼ ￼.
-	•	Những dòng calibrations quan trọng (ví dụ “[calibrate] thresholds.q_add=…, q_new=…”) cũng được ghi vào cuối file này trong quá trình chạy calibrator ￼.
-	•	Thành phần chế độ thị trường – out/orders/regime_components.json: file JSON ghi snapshot các thành phần mô hình thị trường (model_components), risk_on_probability, các ngưỡng thị trường đã dùng, v.v. để phục vụ audit chi tiết ￼ ￼. File này giúp kiểm tra ví dụ điểm TrendStrength = 0.5 hay RiskOnProbability = 0.78, etc. Kết hợp với orders_analysis.txt để xem engine đánh giá thị trường ra sao.
-	•	Đánh giá danh mục – out/orders/portfolio_evaluation.txt và .csv: chứa các thông số đánh giá phân bổ danh mục hiện tại sau khi đề xuất lệnh. Ví dụ: Herfindahl–Hirschman Index (HHI) đo độ tập trung, top-n holdings, phân bổ ngành, thanh khoản bình quân (Days to liquidate), ATR% từng mã, beta của danh mục, cờ cảnh báo (vd mã nào gần trần). File CSV kèm chi tiết từng mã. Những file này được tạo bởi hàm report_portfolio_evaluation nào đó (có thể trong orders_io hoặc riêng) sau khi có orders. Trong README có liệt kê những file này như kết quả để người dùng tham khảo ￼.
-
-Tất cả các tệp trên tạo thành một báo cáo toàn diện sau mỗi lần chạy. Người dùng bình thường có thể chỉ cần xem orders_final.csv và orders_print.txt để thực thi lệnh. Nhưng với mục tiêu phân tích sâu, các file reasoning, analysis, evaluation, watchlist, filtered… đều có sẵn để mổ xẻ quyết định của engine.
-
-Quản lý Trạng thái Phiên và Giao dịch
-
-Như đề cập, engine Broker GPT chủ yếu stateless giữa các lần chạy – mỗi ngày hoặc mỗi lần chạy lệnh nó đọc dữ liệu mới và quyết định lại từ đầu. Tuy nhiên, có một số khía cạnh về trạng thái cần làm rõ:
-	•	Trạng thái phiên giao dịch: Engine có hiểu biết về các pha phiên trong ngày (sáng, trưa, chiều, ATC, đóng cửa) và hành xử phù hợp:
-	•	Trong phiên (09:00–11:30 và 13:00–14:45): engine cố gắng cập nhật giá intraday và xác định in_session=True. Một số logic như micro_window (mặc định 3 phút) trong filter watchlist dùng để kiểm tra xem mã đó trong ít phút gần đây có tăng giá hay không (nếu đang giảm micro thì đưa watchlist) ￼.
-	•	Cuối phiên (sau 14:45): engine coi như phiên đóng, in_session=False. Lúc này nó sẽ không kỳ vọng có intraday mới nữa, thay vào đó có thể tập trung hoàn thiện chỉ báo EOD. Trong trạng thái post, nó cũng ngăn không cho xảy ra exit do MA-break khi “panic” vì policy thường cấu hình exit_ma_break_min_phase = morning (tức chỉ cho phép bán do thủng MA sau phiên sáng, chứ cuối phiên thì đằng nào cũng xem như điều chỉnh ngày mai) ￼ ￼.
-	•	Thời gian nghỉ (trước 9h và 11h30-13h): engine sẽ không có intraday (sẽ log “chuẩn bị EOD, không intraday” như README), và nếu chạy trong giai đoạn này thường mục đích là để chuẩn bị sẵn lệnh cho phiên sắp tới (dùng giá cuối hôm trước).
-	•	Trạng thái vị thế (Position State): Engine lưu lại một số thông tin liên quan các lệnh trước đó:
-	•	File position_state.csv ghi nhận cho mỗi mã các cờ: đã chốt lời một phần chưa (tp1_done), đã kích hoạt stop-loss step1/step2 chưa (sl_step_hit_50, sl_step_hit_80), và cooldown_until nếu có (cooldown dùng khi mã mới bán hết, có thể cho mã nghỉ 1-2 phiên không mua lại ngay).
-	•	Lần chạy sau, engine đọc file này (nếu có) để điền vào regime.position_state và từ đó gán vào từng ticker trong quá trình classify_action. Ví dụ, nếu tp1_done=True rồi thì sẽ bỏ qua việc take_profit lần nữa mà chuyển sang exit ở lần tới khi đạt TP target. Hoặc nếu mã vừa bán hết hôm qua (cooldown_until = ngày mai) thì engine sẽ gạt bỏ tín hiệu mua mới hôm nay (đợi qua cooldown).
-	•	Cơ chế cooldown: Nếu policy có cooldown_days (số phiên tạm nghỉ sau khi bán hoàn toàn), engine sẽ ghi cooldown_until = hôm nay + cooldown_days. Trong classify_action nếu thấy ticker đó trong position_state với cooldown_until >= today thì dù score cao cũng ép action = hold (bỏ qua) để tránh mua lại quá sớm.
-	•	Các cờ này giúp engine giữ nhớ ngắn hạn: tránh double-sell, tránh mua lại ngay mã vừa cắt lỗ.
-	•	TTL (Time-to-live) của lệnh: Engine không giao dịch tự động mà chỉ đề xuất lệnh, nhưng có khái niệm TTL để hỗ trợ quyết định. Trong orders_quality, cột TTL_Min (ví dụ 8/11/14 phút) gợi ý thời gian để hủy lệnh nếu không khớp. TTL được tính bởi calibrator dựa trên độ biến động: vol thấp cho TTL dài (14’), vol cao TTL ngắn (8’), plus TTL_soft/hard ngắn hơn base vài phút ￼. Nếu lệnh có cờ stop_order (ví dụ lệnh bán cắt lỗ nhanh), engine có thể set TTL_override thấp (3 phút) ￼.
-	•	Việc quản lý TTL giúp người dùng biết nên đợi lệnh bao lâu trước khi hủy. Hệ thống không tự hủy, nhưng thông tin TTL xuất trong orders_analysis (“TTL base/soft/hard = 14/11/8”) và cột TTL_Min trong orders_quality.
-	•	Server API trạng thái: scripts/api/server.py triển khai một Flask app nhẹ cho phép nhận danh mục từ extension và trả kết quả lệnh qua HTTP (port 8787). Nó gọi engine generate_orders mỗi khi có request. Server này duy trì engine “nóng” nhưng thật ra mỗi request vẫn thực hiện pipeline + order_engine từ đầu. Không có phiên kéo dài nên không có khái niệm session memory ở server, chỉ là tiện tích hợp UI.
-
-Tựu trung, engine quản lý trạng thái theo nguyên tắc nhất quán và an toàn:
-	•	Dùng dữ liệu thời gian thực nếu có, nhưng tuân thủ phiên (không lấy intraday khi ngoài giờ).
-	•	Không lưu trạng thái biến động trong memory, mọi thứ quan trọng đều đẩy ra file (giúp dễ debug và cũng reset sạch mỗi lần chạy).
-	•	Lưu lại các cờ quan trọng về vị thế để tránh lặp sai lầm (bán rồi mua lại ngay).
-	•	Gợi ý TTL để người dùng quản lý lệnh trong ngày.
-
-Nhờ đó, mỗi lần chạy engine (dù cách nhau vài phút hay qua đêm) đều tái lập quyết định tối ưu dựa trên thông tin hiện có, chứ không bị ảnh hưởng bởi kết quả lần trước ngoại trừ những gì cố ý mang sang (như đã chốt lời một phần rồi).
-
-Tương tác với Hệ thống Backend và API Bên ngoài
-
-Broker GPT engine tích hợp chặt chẽ với các nguồn dữ liệu bên ngoài và một số dịch vụ backend để hoàn thành nhiệm vụ:
-	•	Kết nối API dữ liệu giá: Như đã trình bày trong pipeline, engine sử dụng API của VNDirect (DChart) để tải dữ liệu lịch sử OHLC. URL mẫu: https://dchart-api.vndirect.com.vn/dchart/history?symbol=<Mã>&resolution=D&from=<epoch>&to=<epoch> ￼. Kết quả trả về JSON chứa mảng thời gian t (unix timestamp) và giá open, high, low, close. Engine xử lý:
-	•	Tải những khoảng thiếu (ví dụ từ ngày cuối có trong CSV đến ngày hôm nay).
-	•	Ghi/merge vào CSV cache. Có xử lý trường hợp API trả về trùng hoặc thiếu data (drop duplicates theo timestamp) ￼.
-	•	Nếu API lỗi nhiều lần, engine ghi mã đó vào out/data/fetch_errors.txt để cảnh báo ￼.
-	•	Cách làm tự động này giúp tăng tốc lần chạy sau: ngày hôm sau chỉ cần tải 1 ngày mới thay vì tải lại toàn bộ, và nếu có mất mạng tạm thì vẫn có dữ liệu cũ không bị mất.
-	•	Dữ liệu intraday: Có thể engine cũng dùng VNDirect (resolution=1) hay nguồn khác (có thể từ FireAnt hoặc chính web VND). Do code chi tiết không được trích, nhưng trong README có nói intraday best-effort. Module collect_intraday.py có khả năng dùng WebSocket hoặc API riêng. Chưa rõ, nhưng kết quả là file CSV intraday lưu các mã với giá, khối lượng hiện tại.
-	•	Dữ liệu chỉ số thị trường: Engine có tự động fetch các chỉ số VNINDEX, VN30, VN100 lịch sử (nếu chưa có) và thêm vào out/data như các mã khác ￼. Nên người dùng không cần cung cấp, engine lo luôn.
-	•	Dữ liệu vĩ mô: Phần ensure_global_factors(OUT_DIR) trong pipeline cố gắng cập nhật các yếu tố toàn cầu. Nếu data/global_factors.csv không có hoặc lỗi, engine sẽ bỏ qua (non-fatal). Tuy nhiên, khi có file, engine có thể tự động kéo dữ liệu mới cho các cột:
-	•	SPX_Close (chỉ số S&P 500) – có thể dùng API Yahoo/AlphaVantage,
-	•	US_EPU (chỉ số Economic Policy Uncertainty) – có thể tải từ website PolicyUncertainty (Baker, Bloom, Davis),
-	•	DXY (chỉ số Dollar Index), Brent Oil – có thể từ API tài chính.
-	•	Code collect_global_factors.py có thể gửi request HTTP đến các nguồn như FRED hoặc scraping (cần xem code, nhưng do có user-agent, requests có thể).
-	•	Kết quả global_factors sẽ ghi ra metrics_df các cột EPU_Percentile, SPX_Drawdown_Pct,… và calibrator market_filter sẽ dùng chúng. Nếu không có (ví dụ người dùng không cung cấp file) thì skip.
-	•	Dữ liệu cơ bản (Fundamentals): Engine cung cấp script scripts/collect_vietstock_fundamentals.py để tự động thu thập chỉ số tài chính doanh nghiệp từ website Vietstock (EPS, PE, ROE, v.v.). Tập lệnh này sử dụng Playwright để mở trình duyệt ẩn danh và scrape dữ liệu. Trong broker.sh, tác vụ fundamentals chạy hàm ensure_playwright_browser() rồi gọi script này ￼ ￼. Kết quả sẽ lưu ở data/fundamentals_vietstock.csv. Engine pipeline sau đó merge vào metrics như nêu trên. Người dùng có thể định kỳ chạy thu thập này để cập nhật dữ liệu cơ bản, giúp model có thêm yếu tố định giá (ví dụ EarningsYield, ROE) trong điểm số.
-	•	Tích hợp AI (Codex CLI): Phần AI model được dùng để tạo file policy_overrides.json hàng ngày:
-	•	Script scripts/ai/generate_policy_overrides.py khi chạy (thông qua broker.sh policy) sẽ tương tác với công cụ OpenAI Codex CLI (hoặc GPT-4) với chế độ đặc biệt. Nó xây dựng một prompt bằng tiếng Việt mô tả tình hình (có thể kèm tóm tắt phân tích đã có) và yêu cầu AI xuất ra JSON chỉ chứa các khóa override cho phép ￼ ￼.
-	•	Prompt rất cụ thể: nêu rõ được phép chỉnh những key nào, không được đụng đến calibrator keys, phải có rationale, có thể dùng multi-round (AI phân tích nhiều bước) và cuối cùng in JSON override ￼ ￼.
-	•	Sau đó script gọi codex exec với model GPT-5 + web_search ￼ (có nghĩa AI có quyền search tin tức nếu cần) để AI suy nghĩ. AI có thể trả lời nhiều vòng (nếu chưa chắc sẽ in “CONTINUE” kèm phân tích, script sẽ ghi tích lũy phân tích đó vào file để cung cấp lại prompt vòng sau) ￼. Cuối cùng AI sẽ ghi file JSON kết quả (trong thư mục tạm) rồi script copy về config/policy_overrides.json ￼. Mỗi lần chạy có log như “[codex] Round 1: Generating via Codex CLI…” ￼.
-	•	Các khóa AI có thể điều chỉnh như liệt kê: buy_budget_frac, add_max, new_max, sector_bias, ticker_bias, news_risk_tilt, rationale ￼. Script cũng áp guardrails cứng sau khi AI tạo xong: hàm apply_guardrails sẽ kiểm tra giá trị có nằm trong bounds cho phép không (vd buy_budget_frac trong [0.02, 0.18], delta so với lần trước <= 0.04, sector_bias/ticker_bias số lượng không quá 5/10 cái, mỗi cái |bias| <= 0.2, v.v. đúng như Improvement doc) ￼ ￼. Nếu AI đề xuất vượt giới hạn, script sẽ hiệu chỉnh lại hoặc loại bỏ khóa đó trước khi lưu.
-	•	Cuối cùng, broker.sh policy còn tự động commit file lên Git (như một cách lưu lại thay đổi hàng ngày).
-	•	Nhờ tích hợp AI này, các tham số định tính như tâm lý, sự kiện (mà model định lượng khó nắm bắt) được đưa vào policy một cách có nguyên tắc. Tuy nhiên, engine không trực tiếp gọi AI khi chạy orders – mà sử dụng file override đã có. Nghĩa là quy trình AI override thường chạy trước phiên (sáng sớm) để chuẩn bị policy ngày đó, sau đó engine dùng kết quả.
-	•	Server API (tương tác ngoài): Như đã nói, engine cung cấp một server Flask (chạy qua broker.sh server). Server này lắng nghe HTTP POST chứa danh mục CSV, nó sẽ:
-	•	Lưu danh mục vào in/portfolio/,
-	•	Gọi pipeline + order_engine (có thể gọi qua generate_orders.py hoặc import module) để tạo orders,
-	•	Đáp lại JSON gồm danh sách orders_final (hoặc cũng có thể kèm reasoning).
-	•	Cách này cho phép tích hợp engine vào một extension Chrome: người dùng trên web có thể gửi danh mục hiện tại (từ tài khoản chứng khoán chẳng hạn) đến engine và nhận lại lệnh gợi ý nhanh chóng.
-	•	Thông báo và Logging: Engine in nhiều thông báo ra stdout để người chạy trên terminal theo dõi tiến trình: ví dụ “[orders] Removing stale out/ directory” khi xóa kết quả cũ (broker.sh mỗi lần chạy orders xóa thư mục out/ để đảm bảo sạch) ￼, “[setup] Installing requirements” khi tạo venv, “[fetch]…” khi tải dữ liệu, “[calibrate] …” cho từng calibrator, “[diff] …” cho thay đổi lệnh so với lần trước, “[filter] market: HPG, VHM, …” liệt kê các mã bị filter, v.v. Các log này giúp debug và cũng được ghi phần lớn vào files output.
-
-Tóm lại, engine tương tác nhịp nhàng với các nguồn dữ liệu tài chính (API giá, web tin tức nếu AI tìm kiếm), và cung cấp điểm tích hợp (qua server API, qua Git history override) để phù hợp với quy trình làm việc thực tế. Mọi kết nối đều có dự phòng (cache, retry) để tăng độ tin cậy.
-
-Kỹ thuật Tối ưu hóa và Đặc điểm Triển khai
-
-Broker GPT Engine áp dụng một số kỹ thuật tối ưu và thiết kế triển khai đáng chú ý nhằm nâng cao hiệu quả và tính ổn định:
-	•	Tối ưu hiệu năng với Pandas và vector hóa: Hầu hết các phép tính trên tập dữ liệu nhiều mã (snapshot, metrics, sector strength) đều dùng Pandas DataFrame xử lý vector thay vì vòng lặp thuần Python. Ví dụ tính rank thanh khoản LiqNorm cho hàng trăm mã chỉ mất vài dòng sort và map ￼, hay tính các thống kê robust (median, MAD) để chuẩn hóa các feature cũng làm bằng Pandas + NumPy ￼ ￼. Nhờ vậy, pipeline có thể xử lý ~100 mã cổ phiếu trong vài giây, và thuật toán quyết định cũng nhanh chóng trên vector điểm. Các phép tính phức tạp như hiệp phương sai, tối ưu Markowitz tận dụng thư viện NumPy (giải hệ phương trình) nên đủ nhanh cho ~20-30 mã mua.
-	•	Sử dụng cache và incremental update: Như đã nhấn mạnh, engine cache dữ liệu giá cục bộ và chỉ tải phần mới thiếu. Điều này tiết kiệm rất nhiều thời gian và giảm tải API (ví dụ tải 700 ngày lịch sử VNINDEX một lần, về sau mỗi ngày chỉ tải thêm 1 ngày) ￼ ￼. Việc merge được code cẩn thận để không trùng dữ liệu ￼. Ngoài ra, các file output trung gian (CSV) giúp tránh việc tính lại từ đầu khi debug – người dùng có thể cung cấp sẵn out/metrics.csv nếu muốn bỏ qua pipeline, engine sẽ dùng nếu thấy file đủ.
-	•	Calibrations tự động: Đây là điểm tối ưu hóa theo chiều sâu chiến lược: loại bỏ nhu cầu tuning thủ công mỗi ngày. Ví dụ, trước đây một nhà quản lý danh mục có thể phải điều chỉnh ngưỡng điểm mua/bán hàng ngày tùy số cơ hội, nhưng engine đã tự tính dựa trên phân phối điểm hiện tại ￼. Điều này không chỉ tiết kiệm thời gian mà còn giúp hệ thống phản ứng kịp với thay đổi thị trường (số cơ hội nhiều ít) một cách nhất quán và có cơ sở định lượng. Tương tự, calibrator thanh khoản đảm bảo mỗi lệnh không vượt X lần ADTV nên người dùng không cần lo lắng điều chỉnh thủ công khi NAV tăng/giảm.
-	•	Giới hạn AI và chồng chéo: Engine thiết kế rõ phần nào do AI quyết (sentiment) phần nào do calibrator (định lượng) để tránh double-steering – ví dụ ngưỡng base_add, base_new đã có calibrator quantile nên loại khỏi AI override hoàn toàn ￼; tỷ trọng mua add/new (add_share, new_share) có thể tính từ số cơ hội và breadth nên cũng cố định theo công thức, không cho AI can thiệp ￼. Nhờ vậy, sự ổn định tăng lên vì AI chỉ sờ vào vài tham số quan trọng nhất. Các guardrails (giới hạn phạm vi, tốc độ thay đổi, TTL) được áp cho AI đảm bảo output an toàn ￼.
-	•	Xử lý vi phạm dữ liệu đầu vào: Engine có nhiều kiểm tra tính hợp lệ của dữ liệu, ví dụ:
-	•	Nếu danh mục rỗng hoặc không có mã HOSE -> SystemExit thông báo ngay ￼.
-	•	Nếu JSON policy lỗi định dạng -> SystemExit với message lỗi JSON ￼.
-	•	Nếu metrics.csv thiếu cột bắt buộc cho tính điểm (ví dụ LiqNorm) -> báo lỗi liệt kê cột thiếu ￼ ￼.
-	•	Nếu policy thiếu trường cần (exit_ma_break_min_phase chẳng hạn) -> raise trong model validator của Pydantic ￼ ￼.
-	•	Những việc này giúp phát hiện sớm vấn đề, tránh tính toán sai âm thầm.
-	•	Quản trị rủi ro tích hợp: Engine tính toán phân bổ vốn theo phương pháp tối ưu (Markowitz + risk parity) để đa dạng hóa và quản trị rủi ro danh mục ngay trong khâu đề xuất lệnh. Việc áp dụng black–litterman cho thấy hệ thống coi trọng việc đưa quan điểm chủ quan (điểm số) một cách thận trọng vào kỳ vọng lợi suất ￼ ￼, tránh overweight mã điểm cao nếu không tương xứng. Kết hợp risk parity blend giúp danh mục không bị chi phối bởi mã quá biến động ￼. Ngoài ra hàng loạt giới hạn: tỷ trọng/tên/sector/khối lượng giao dịch/ATR dừng lỗ… giúp mỗi lệnh đề xuất đều nằm trong khung rủi ro cho phép, chứ không chỉ nhìn tín hiệu. Đây là điểm mạnh so với những hệ thống chỉ dựa signal.
-	•	Logging chi tiết và phân tách module: Mặc dù file order_engine.py khá lớn (~4500 dòng), nhiều chức năng đã được tách ra module con (engine/pipeline.py, engine/config_io.py, engine/portfolio_risk.py, engine/calibrate_*.py) giúp code dễ bảo trì hơn ￼. Mỗi module phụ đều có mô tả docstring về việc tách ra cho gọn. Logging cũng rất chi tiết ở từng bước calibrator, nên khi cần tối ưu hay debug, developer có thể thấy ngay calibrator nào failed (engine luôn bắt exception và print warning, nhưng không dừng hệ thống – thay vào đó bỏ qua calibrator đó, tránh ảnh hưởng luồng chính) ￼ ￼. Triết lý “fail-safe” này giúp engine chạy trơn tru kể cả khi một bước phụ bị lỗi, chỉ cần cốt lõi vẫn hoạt động.
-	•	Tương thích và tiện ích: Hệ thống cung cấp sẵn một bộ tests (thư mục tests/) để đảm bảo các hàm hoạt động đúng. Có tích hợp coverage. Ngoài ra, broker.sh giúp việc chạy trở nên đơn giản: ./broker.sh orders lo hết từ cài đặt môi trường, tải Playwright lần đầu, đến in file kết quả. Việc commit policy overrides qua Git cũng là một cách thú vị để giữ lịch sử những lần AI can thiệp tham số, hỗ trợ phân tích sau này.
-
-Nhìn chung, Broker GPT Engine là một hệ thống phức hợp nhưng được xây dựng rất có tổ chức. Kiến trúc pipeline – policy – decision engine tách bạch, cộng thêm các lớp AI, calibrator, risk quản trị đan xen một cách hợp lý. Thuật toán ra quyết định lệnh chú trọng cân bằng giữa tín hiệu và rủi ro, giữa tự động và kiểm soát, đồng thời tối ưu trải nghiệm người dùng qua các báo cáo rõ ràng. Tất cả mã nguồn và cấu hình quan trọng đã được nêu rõ ở trên, từ những file pipeline (pipeline.py, build_*.py) đến các file chiến lược (policy_default.json, config_io.py) và logic lệnh (order_engine.py, classify_action, portfolio_risk.py). Sự tương tác nhuần nhuyễn giữa các thành phần này cho phép Broker GPT hoạt động như một “môi giới AI” thông minh, hỗ trợ nhà đầu tư ra quyết định hàng ngày một cách có hệ thống và hiệu quả.
-
-Nguồn tham khảo:
-	•	Mã nguồn GitHub dự án Broker GPT ￼ ￼ ￼ ￼ ￼ ￼ ￼ ￼ ￼ ￼ ￼ ￼ ￼ ￼ ￼ ￼ ￼ ￼ ￼ ￼ (xem chi tiết trong repository minhhai2209/broker-gpt).
+Pipeline hợp nhất bởi `scripts/engine/pipeline.py`, đảm bảo đủ artifacts trước khi quyết định lệnh. Các bước và đầu ra mặc định:
+
+1. **Ingest danh mục**: đọc các CSV trong `in/portfolio/` → chuẩn hóa mã/đơn vị → `out/portfolio_clean.csv`.
+2. **Universe**: lấy danh mục mã từ `data/industry_map.csv`, cộng thêm các chỉ số `VNINDEX, VN30, VN100`, đảm bảo mã trong danh mục nằm trong universe (có thể giới hạn bằng env `BROKER_UNI_LIMIT`).
+3. **Lịch sử OHLC**: gọi VNDirect DChart, cache mỗi mã vào `out/data/<Ticker>_daily.csv`; hợp nhất thành `out/prices_history.csv` (có cột `Date,Ticker,Open,High,Low,Close,Volume,t`).
+4. **Intraday snapshot**: lấy 1‑phút gần nhất cho universe vào `out/intraday/latest.csv` (best‑effort; có cơ chế fallback cache).
+5. **Snapshot & Metrics**:
+
+   * `out/snapshot.csv`: ảnh chụp giá hiện tại (ghép intraday/daily/override giá).
+   * `out/metrics.csv`: RSI14, ATR14%, ADTV20k, Beta60D, MACD‑Hist, Mom(12‑1/6‑1), TickSizeHOSE…; kèm `Sector` (từ industry_map) và thông tin phiên.
+   * `out/session_summary.csv`: `SessionPhase, InVNSession, VNIndex, IndexChangePct, Advancers/Decliners, TotalValue`.
+   * (nếu có) ghép dữ liệu cơ bản từ `data/fundamentals_vietstock.csv` → `out/fundamentals_snapshot.csv`.
+6. **Sector strength**: breadth theo MA20/50/200, ATR%, RSI trung bình theo ngành → `out/sector_strength.csv`.
+7. **Precomputed indicators**: MA/ATR/đỉnh‑đáy, … → `out/precomputed_indicators.csv`.
+8. **Presets giá** (per ticker): dải band ngày ±7%, tính `*_Buy1/2/Sell1/2(_Tick)` cho 5 preset `Cons/Bal/Aggr/Break/MR` → `out/presets_all.csv`.
+9. **PnL**: thống kê nhanh danh mục → `out/portfolio_pnl_summary.csv`, `out/portfolio_pnl_by_sector.csv`.
+
+### 3.3. Policy & tuning tại runtime
+
+* Baseline: `config/policy_default.json` (định nghĩa `weights`, `thresholds`, `pricing`, `sizing`, `execution`, `market_filter`, `regime_model`, `orders_ui`...).
+* Overrides: `config/policy_overrides.json` (chỉ tập khóa whitelisted) → hợp nhất có chọn lọc → ghi bản **runtime** vào `out/orders/policy_overrides.json`.
+* Tập khóa **được phép override** (ở cấp map): `buy_budget_frac`, `add_max`, `new_max`, `sector_bias`, `ticker_bias`, `thresholds`, `sizing`, `pricing`, `orders_ui`, `market_filter`, `regime_model`.
+* Bộ sinh overrides (tùy chọn): `scripts/ai/generate_policy_overrides.py` sử dụng Codex CLI + guardrails để sinh/cập nhật `config/policy_overrides.json`.
+
+### 3.4. Nhận diện **Market Regime** (phiên hiện tại)
+
+* Đọc `out/prices_history.csv` (series VNINDEX) để tính: Garman‑Klass sigma (vol), percentile, momentum 63D, drawdown, trend_strength (MA200/MA50), và bucket TTL (low/medium/high).
+* Các trường trong đối tượng `MarketRegime` gồm: phase, in_session, index_change_pct, breadth_hint, risk_on, buy_budget_frac, add_max/new_max, weights, thresholds, sector/ticker_bias, pricing/sizing/execution, các percentile/diagnostics (vol, momentum, drawdown…), TTL bucket/state và neutral‑adaptive metadata.
+
+### 3.5. Quyết định hành động & xếp hạng
+
+* Chấm điểm theo `weights` (trend/momentum/liquidity/beta/sector/fundamentals…) và áp điều kiện trong `thresholds` (`base_add`, `base_new`, `trim_th`, `q_add`, `q_new`, `min_liq_norm`, `near_ceiling_pct`, `tp/sl` dạng phần trăm hoặc ATR‑based, v.v.).
+* Hành động sinh ra gồm các nhãn như: `add`, `new`, `trim`, `take_profit`, `exit` (các lệnh SELL có thể gắn thêm meta `STOP_FINAL`, TTL override…).
+* Bộ lọc microstructure: chặn/giảm ưu tiên khi giá **gần trần** (near‑ceiling) theo `thresholds.near_ceiling_pct`.
+* Chế độ **neutral‑adaptive** (tùy cấu hình): có thể sinh `partial entry`, giới hạn `add_max`, theo dõi danh sách neutral_*.
+
+### 3.6. Định giá lệnh (limit price) & tick size
+
+* Ưu tiên preset theo chế độ thị trường: `risk_on_buy/sell`, `risk_off_buy/sell` (ví dụ BUY ưu tiên Aggr→Bal→Cons…).
+* Fallback theo ATR nếu preset không khả dụng; mọi giá được **round** theo bước giá HOSE (0.01/0.05/0.10 nghìn).
+* Ràng buộc dải ngày (BandFloor/BandCeiling) để tránh đặt ngoài biên.
+
+### 3.7. Ghi đầu ra
+
+* **File để nhập lệnh**: `out/orders/orders_final.csv` (4 cột cố định: `Ticker,Side,Quantity,LimitPrice`) — sắp xếp BUY trước, sau đó theo ưu tiên nội bộ.
+* **Bảng chẩn đoán**:
+
+  * `out/orders/orders_quality.csv`: ước lượng `FillProb`, `FillRateExp`, `SlipBps/Pct`, `LimitLock`, Priority (nội bộ)…
+  * `out/orders/orders_reasoning.csv`: Action, Score và các feature chính (above_ma20/50, rsi, macdh_pos, liq_norm, atr_pct, pnl_pct).
+  * `out/orders/orders_print.txt`: bản in tóm tắt lệnh và tổng tiền mua/bán.
+  * `out/orders/orders_analysis.txt`: phân tích bộ lọc, hint khung thời gian thực thi, v.v.
+  * `out/orders/regime_components.json`: snapshot các chỉ số chế độ thị trường/diagnostics.
+* **Các file khác (tùy)**: `orders_watchlist.csv`, `trade_suggestions.txt`, `portfolio_evaluation.(txt|csv)`.
+
+---
+
+## 4) Chính sách (Policy) & Calibrations
+
+### 4.1. Policy baseline & overrides
+
+* Baseline lưu toàn bộ tham số chiến lược (commented JSON).
+* Overrides merge theo whitelist; kết quả runtime ghi vào `out/orders/policy_overrides.json` và được toàn bộ luồng sử dụng.
+
+### 4.2. Guardrails cho overrides (khi sinh bằng AI)
+
+* Ràng buộc biên độ/TTL cho `buy_budget_frac`, `add_max`, `new_max`; **bias** theo sector/ticker có TTL/decay; hỗ trợ `news_risk_tilt` (map sang budget/slots) và ghi audit JSONL/CSV trong `out/orders/`.
+
+### 4.3. Calibrators hiện diện trong codebase
+
+* **TTL minutes**: script `scripts/engine/calibrate_ttl_minutes.py` đọc VNINDEX σ (Garman‑Klass) → bucket {low, medium, high} và cập nhật `orders_ui.ttl_minutes` + metadata (`ttl_bucket_*`).
+* **Mean‑variance sizing**: module `scripts/engine/mean_variance_calibrator.py` hiệu chỉnh nhanh các tham số `risk_alpha`, `cov_reg`, `bl_alpha_scale` bằng walk‑forward trên cửa sổ lịch sử; dùng cùng bộ giải `compute_cov_matrix` / `compute_expected_returns` / `solve_mean_variance_weights` / `compute_risk_parity_weights` trong `portfolio_risk.py`.
+* **Cờ env CALIBRATE_***: trong test/luồng runtime có các biến môi trường để bật/tắt nhóm calibrations (ví dụ `CALIBRATE_MARKET_FILTER`, `CALIBRATE_LIQUIDITY`, `CALIBRATE_THRESHOLDS_TOPK`, `CALIBRATE_SIZING_TAU`, …).
+
+---
+
+## 5) Server API (tùy chọn)
+
+* Khởi chạy: `./broker.sh server` (mặc định `PORT=8787`).
+* Endpoint:
+
+  * `GET /health` → `{status: ok, ts: ...}`
+  * `POST /portfolio/reset` → xóa file trong `in/portfolio/` và reset phiên tải lên.
+  * `POST /portfolio/upload` (JSON `{name, content}`) → ghi file vào `in/portfolio/` **và** `runs/<stamp>/portfolio/`.
+  * `POST /done` → commit các CSV trong `runs/<stamp>/portfolio/` (git add/commit/push) rồi trả về danh sách đã commit cùng trạng thái **PolicyScheduler** (nếu bật).
+* **PolicyScheduler**: nếu `BROKER_POLICY_AUTORUN=1`, tiến trình nền lập lịch chạy `broker.sh policy` theo `BROKER_POLICY_TIMES` (chuỗi `HH:MM`), với `lead` phút trước slot và `BROKER_POLICY_TZ` (mặc định `Asia/Ho_Chi_Minh`).
+
+---
+
+## 6) Tham số & biến môi trường đáng chú ý
+
+* **BROKER_UNI_LIMIT**: giới hạn số mã trong universe khi phát triển/test.
+* **POLICY_FILE**: trỏ tới file policy để merge (nếu cần); mặc định dùng baseline+overrides.
+* **BROKER_COVERAGE**: bật coverage cho `./broker.sh tests`.
+* **BROKER_POLICY_* / BROKER_RUNS_TZ / BROKER_ARCHIVE_TZ**: cấu hình server/scheduler và timezone.
+* **CALIBRATE_***: bật/tắt nhóm calibrations khi chạy engine/tests.
+
+---
+
+## 7) Chỉ báo kỹ thuật & helper nội bộ
+
+* `scripts/indicators/`: MA, RSI(Wilder), MACD‑Hist, ATR(Wilder), Bollinger bands, Beta rolling.
+* `scripts/utils.py`: `hose_tick_size` (0.01/0.05/0.10 nghìn), `round_to_tick`, `clip_to_band`, `detect_session_phase_now_vn`.
+
+---
+
+## 8) Kiểm thử (tests)
+
+* Có tests mạng cho VNDirect (`test_network_fetch_ticker_data.py`, `test_network_collect_intraday.py`, `test_network_build_snapshot.py`).
+* Tests hành vi order engine: near‑ceiling guard, stop/take‑profit/trim, TTL overrides, file diagnostics (`orders_analysis.txt`, `regime_components.json`).
+* Tests sizing/risk: covariance (Ledoit‑Wolf + fallback), expected returns (CAPM + score view), risk‑parity solver.
+* Tests luồng sinh policy_overrides qua Codex CLI + guardrails (file‑flow, END/CONTINUE, audit/TTL/bounds).
+
+---
+
+## 9) Tóm tắt đầu vào/đầu ra chuẩn
+
+**Đầu vào**
+
+* `in/portfolio/*.csv` với schema tối thiểu `Ticker,Quantity,AvgCost` (AvgCost tính **nghìn VND/cp**).
+* `data/industry_map.csv` (bắt buộc để gán Sector & validate).
+* (tùy chọn) `data/fundamentals_vietstock.csv`, `config/price_overrides.csv`.
+
+**Đầu ra chính trong `out/`**
+
+* `prices_history.csv`, `intraday/latest.csv`, `snapshot.csv`, `metrics.csv`, `sector_strength.csv`, `precomputed_indicators.csv`, `presets_all.csv`, `session_summary.csv`.
+* `orders/orders_final.csv`, `orders_quality.csv`, `orders_reasoning.csv`, `orders_print.txt`, `orders_analysis.txt`, `regime_components.json`.
+* `portfolio_pnl_summary.csv`, `portfolio_pnl_by_sector.csv`.
+
+---
+
+## 10) Ghi chú về đơn vị/định dạng
+
+* Giá trị tiền **tính theo nghìn VND** trong phần lớn bảng (ví dụ `LimitPrice` trong orders_final.csv là **nghìn/cp**).
+* Bước giá HOSE và lô chẵn 100 được áp dụng trong tính toán tick & lượng.
+* TTL (phút) có thể được **calibrate** theo bucket vol thấp/vừa/cao và ghi vào `orders_ui.ttl_minutes` trong policy runtime.
+
+---
+
+*Hết.*
