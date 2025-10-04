@@ -1,14 +1,10 @@
 {
-  "buy_budget_frac": 0.074,
   "add_max": 4,
   "new_max": 2,
   "sector_bias": {
-    "Bất động sản": -0.1,
-    "Năng lượng": 0.06
+    "Bất động sản": -0.08,
+    "Dịch vụ tiện ích": 0.05,
+    "Hàng tiêu dùng thiết yếu": 0.04
   },
-  "ticker_bias": {
-    "FPT": -0.05,
-    "KBC": -0.06,
-    "GAS": 0.05
-  }
+  "buy_budget_frac": 0.094
 }
