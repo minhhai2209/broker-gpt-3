@@ -29,7 +29,7 @@ def _stamp_now() -> str:
     except Exception:
         tz = None
     now = datetime.now(tz) if tz else datetime.now()
-    return now.strftime('%Y%m%d_%H%M')  # e.g., 20251004_0930
+    return now.strftime('%Y%m%d_%H%M%S')  # e.g., 20251004_093015
 
 def _ensure_run_stamp() -> str:
     global _CURRENT_STAMP
