@@ -3720,362 +3720,65 @@ def run() -> None:
         raise SystemExit(f"Failed to set daily_band_pct into presets module: {_exc_set}") from _exc_set
     # Build fresh artifacts
     portfolio, prices_history, snapshot, metrics, sector_strength, presets, session_summary = ensure_pipeline_artifacts()
-    # Optional: calibrate parameters using fresh history; default to config-driven flags (no env)
+    # Runtime calibrations have been removed from the order generation flow. Calibrated
+    # policy overrides must be produced ahead of time via the scheduled GitHub Actions
+    # workflows. Guard against legacy toggles that would attempt to re-enable
+    # calibration during order runs so we fail fast with a clear remediation path.
     import os as _os
-    allow_calibrate = True
-    def _env_on(name: str, default: str = '1') -> bool:
-        try:
-            import os as __os
-            v = str(__os.getenv(name, default)).strip().lower()
-            return v not in ('', '0', 'false', 'no')
-        except Exception:
-            return True
-    # Config-driven calibration flags from runtime policy
-    cal_conf = dict(pol_obj.get('calibration', {}) or {})
-    def _cfg_on(key: str) -> bool:
-        try:
-            onrun = bool(int(cal_conf.get('on_run', 0))) if not isinstance(cal_conf.get('on_run', 0), bool) else bool(cal_conf.get('on_run', 0))
-        except Exception:
-            onrun = False
-        if not onrun:
-            return False
-        try:
-            val = cal_conf.get(key, 0)
-            return bool(int(val)) if not isinstance(val, bool) else bool(val)
-        except Exception:
-            return False
-    # Respect env toggles for calibrators to keep predictable offline/testing behavior
-    if allow_calibrate and (_cfg_on('regime_components') or _env_on('CALIBRATE_REGIME_COMPONENTS', '0')):
-        try:
-            print("[calibrate] Updating regime components mean/std before logistic calibration…")
-            from scripts.engine.calibrate_regime_components import calibrate as _cal_rc
-            names = _cal_rc(write=True)
-            msg = ["[calibrate] Regime components updated: " + (', '.join(names) if names else '(none)')]
-            for line in msg:
-                print(line)
-            try:
-                write_orders_analysis(msg, OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-        except Exception as _exc0:
-            warn_line0 = f"[warn] regime components calibration failed: {_exc0}"
-            print(warn_line0)
-            try:
-                write_orders_analysis([warn_line0], OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-    # Regime calibration (honor CALIBRATE_REGIME + CALIBRATE_H)
-    if allow_calibrate and (_cfg_on('regime') or _env_on('CALIBRATE_REGIME', '0')):
-        import os as _os2
-        horizon = str(_os2.getenv('CALIBRATE_H', '21')).strip() or '21'
-        try:
-            print(f"[calibrate] Running regime calibration (h={horizon}) before orders…")
-            from scripts.engine.calibrate_regime import calibrate as _calibrate
-            b, thr, n, pr, names = _calibrate(horizon=int(horizon), write=True)
-            msg = [
-                f"[calibrate] Components used: {', '.join(names) if names else '(none)'}",
-                f"[calibrate] Sample size={n}, positive rate={pr:.2f}",
-                f"[calibrate] Applied intercept={b:.4f}, threshold={thr:.3f}",
-                "[calibrate] Calibration done; updated out/orders/policy_overrides.json",
-            ]
-            for line in msg:
-                print(line)
-            try:
-                write_orders_analysis(msg, OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-        except Exception as _exc:
-            # Do not block orders; record warning for audit
-            warn_line = f"[warn] calibration failed: {_exc}"
-            print(warn_line)
-            try:
-                write_orders_analysis([warn_line], OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-    # Market filter calibration (honor CALIBRATE_MARKET_FILTER)
-    if allow_calibrate and (_cfg_on('market_filter') or _env_on('CALIBRATE_MARKET_FILTER', '0')):
-        try:
-            print("[calibrate] Running market_filter calibration before orders…")
-            from scripts.engine.calibrate_market_filter import calibrate as _cal_mf
-            vals = _cal_mf(write=True)
-            msg2 = ["[calibrate] market_filter updated:"] + [f"  - {k}={v}" for k, v in vals.items()]
-            for line in msg2:
-                print(line)
-            try:
-                write_orders_analysis(msg2, OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-        except Exception as _exc2:
-            warn_line2 = f"[warn] market_filter calibration failed: {_exc2}"
-            print(warn_line2)
-            try:
-                write_orders_analysis([warn_line2], OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-    # Breadth floor calibration (honor CALIBRATE_BREADTH_FLOOR)
-    if allow_calibrate and (_cfg_on('breadth_floor') or _env_on('CALIBRATE_BREADTH_FLOOR', '0')):
-        try:
-            print("[calibrate] Running breadth floor calibration…")
-            from scripts.engine.calibrate_breadth_floor import calibrate as _cal_bf
-            bf = _cal_bf(write=True)
-            msg_bf = [f"[calibrate] risk_off_breadth_floor={bf:.2f}"]
-            for line in msg_bf:
-                print(line)
-            try:
-                write_orders_analysis(msg_bf, OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-        except Exception as _exc_bf:
-            warn_line_bf = f"[warn] breadth floor calibration failed: {_exc_bf}"
-            print(warn_line_bf)
-            try:
-                write_orders_analysis([warn_line_bf], OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-    # Leader gates calibration (honor CALIBRATE_LEADER_GATES)
-    if allow_calibrate and (_cfg_on('leader_gates') or _env_on('CALIBRATE_LEADER_GATES', '0')):
-        try:
-            print("[calibrate] Running leader gates (RSI/Mom quantiles)…")
-            from scripts.engine.calibrate_leader_gates import calibrate as _cal_lead
-            rsi_th, mom_th = _cal_lead(write=True)
-            msg_lead = [f"[calibrate] leader_min_rsi={rsi_th:.2f}, leader_min_mom_norm={mom_th:.2f}"]
-            for line in msg_lead:
-                print(line)
-            try:
-                write_orders_analysis(msg_lead, OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-        except Exception as _exc_lead:
-            warn_line_lead = f"[warn] leader gates calibration failed: {_exc_lead}"
-            print(warn_line_lead)
-            try:
-                write_orders_analysis([warn_line_lead], OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-    # Liquidity calibration (honor CALIBRATE_LIQUIDITY)
-    if _cfg_on('liquidity') or _env_on('CALIBRATE_LIQUIDITY', '0'):
-        try:
-            print("[calibrate] Running liquidity calibration before orders…")
-            from scripts.engine.calibrate_liquidity import calibrate as _cal_liq
-            v = _cal_liq(write=True)
-            msg3 = [f"[calibrate] thresholds.min_liq_norm={v:.4f}"]
-            for line in msg3:
-                print(line)
-            try:
-                write_orders_analysis(msg3, OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-        except Exception as _exc3:
-            warn_line3 = f"[warn] liquidity calibration failed: {_exc3}"
-            print(warn_line3)
-            try:
-                write_orders_analysis([warn_line3], OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-    # Sizing (cov_reg) calibration (honor CALIBRATE_SIZING)
-    if _cfg_on('sizing') or _env_on('CALIBRATE_SIZING', '0'):
-        try:
-            print("[calibrate] Running sizing (cov_reg) calibration before orders…")
-            from scripts.engine.calibrate_sizing import calibrate as _cal_sz
-            v2 = _cal_sz(write=True)
-            msg4 = [f"[calibrate] sizing.cov_reg={v2:.6f}"]
-            for line in msg4:
-                print(line)
-            try:
-                write_orders_analysis(msg4, OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-        except Exception as _exc4:
-            warn_line4 = f"[warn] sizing calibration failed: {_exc4}"
-            print(warn_line4)
-            try:
-                write_orders_analysis([warn_line4], OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-    # Thresholds (top‑K) calibration (honor CALIBRATE_THRESHOLDS_TOPK)
-    if _cfg_on('thresholds_topk') or _env_on('CALIBRATE_THRESHOLDS_TOPK', '0'):
-        try:
-            print("[calibrate] Running thresholds (top‑K quantiles) calibration before orders…")
-            from scripts.engine.calibrate_thresholds import calibrate as _cal_th
-            q_add, q_new, n_add, n_new = _cal_th(write=True)
-            msg5 = [f"[calibrate] thresholds.q_add={q_add:.3f} (pool={n_add}), thresholds.q_new={q_new:.3f} (pool={n_new})"]
-            for line in msg5:
-                print(line)
-            try:
-                write_orders_analysis(msg5, OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-        except Exception as _exc5:
-            warn_line5 = f"[warn] thresholds(topK) calibration failed: {_exc5}"
-            print(warn_line5)
-            try:
-                write_orders_analysis([warn_line5], OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-    # Softmax_tau calibration (honor CALIBRATE_SIZING_TAU)
-    if _cfg_on('softmax_tau') or _env_on('CALIBRATE_SIZING_TAU', '0'):
-        try:
-            print("[calibrate] Running sizing (softmax_tau) calibration before orders…")
-            from scripts.engine.calibrate_softmax_tau import calibrate as _cal_tau
-            tau, n_add, enp_add, n_new, enp_new = _cal_tau(write=True)
-            msg6 = [f"[calibrate] sizing.softmax_tau={tau:.4f} (add_pool={n_add}/ENP={enp_add:.2f}; new_pool={n_new}/ENP={enp_new:.2f})"]
-            for line in msg6:
-                print(line)
-            try:
-                write_orders_analysis(msg6, OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-        except Exception as _exc6:
-            warn_line6 = f"[warn] sizing (softmax_tau) calibration failed: {_exc6}"
-            print(warn_line6)
-            try:
-                write_orders_analysis([warn_line6], OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-    # Risk limits (honor CALIBRATE_RISK_LIMITS)
-    if _cfg_on('risk_limits') or _env_on('CALIBRATE_RISK_LIMITS', '0'):
-        try:
-            print("[calibrate] Running risk limits (ATR multiples) calibration before orders…")
-            from scripts.engine.calibrate_risk_limits import calibrate as _cal_risk
-            tp_m, sl_m, atr_med = _cal_risk(write=True)
-            msg7 = [f"[calibrate] thresholds.tp_atr_mult={tp_m:.3f}, sl_atr_mult={sl_m:.3f} (median ATR={atr_med*100:.2f}%)"]
-            for line in msg7:
-                print(line)
-            try:
-                write_orders_analysis(msg7, OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-        except Exception as _exc7:
-            warn_line7 = f"[warn] risk limits calibration failed: {_exc7}"
-            print(warn_line7)
-            try:
-                write_orders_analysis([warn_line7], OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-    # Dynamic caps calibration (honor CALIBRATE_DYNAMIC_CAPS)
-    if _cfg_on('dynamic_caps') or _env_on('CALIBRATE_DYNAMIC_CAPS', '0'):
-        try:
-            print("[calibrate] Running dynamic caps calibration…")
-            from scripts.engine.calibrate_dynamic_caps import calibrate as _cal_dc
-            pmin, pmax, smin, smax = _cal_dc(write=True)
-            msg_dc = [f"[calibrate] dynamic_caps pos[{pmin:.3f},{pmax:.3f}] sector[{smin:.3f},{smax:.3f}]"
-            ]
-            for line in msg_dc:
-                print(line)
-            try:
-                write_orders_analysis(msg_dc, OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-        except Exception as _exc_dc:
-            warn_line_dc = f"[warn] dynamic caps calibration failed: {_exc_dc}"
-            print(warn_line_dc)
-            try:
-                write_orders_analysis([warn_line_dc], OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-    # --- P0 calibrators (optional, default OFF) ---
-    # Quantile gates for add/new
-    if _env_on('CALIBRATE_QUANTILE_GATES', '0'):
-        try:
-            print("[calibrate] Calibrating thresholds q_add/q_new…")
-            from scripts.engine.calibrate_quantile_gates import calibrate as _cal_qg
-            qadd, qnew, n_add, n_new = _cal_qg(write=True)
-            msg_qg = [f"[calibrate] thresholds.q_add={qadd:.3f} (pool={n_add}), q_new={qnew:.3f} (pool={n_new})"]
-            for line in msg_qg:
-                print(line)
-            try:
-                write_orders_analysis(msg_qg, OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-        except Exception as _exc_qg:
-            warn_line_qg = f"[warn] quantile gates calibration failed: {_exc_qg}"
-            print(warn_line_qg)
-            try:
-                write_orders_analysis([warn_line_qg], OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-    # Near-ceiling BUY gate
-    if _env_on('CALIBRATE_NEAR_CEILING', '0'):
-        try:
-            print("[calibrate] Calibrating thresholds.near_ceiling_pct…")
-            from scripts.engine.calibrate_near_ceiling import calibrate as _cal_nc
-            thr = _cal_nc(write=True)
-            msg_nc = [f"[calibrate] thresholds.near_ceiling_pct={thr:.3f}"]
-            for line in msg_nc:
-                print(line)
-            try:
-                write_orders_analysis(msg_nc, OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-        except Exception as _exc_nc:
-            warn_line_nc = f"[warn] near_ceiling calibration failed: {_exc_nc}"
-            print(warn_line_nc)
-            try:
-                write_orders_analysis([warn_line_nc], OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-    # Fill probability parameters
-    if _env_on('CALIBRATE_FILL_PROB', '0'):
-        try:
-            print("[calibrate] Calibrating pricing.fill_prob…")
-            from scripts.engine.calibrate_fill_prob import calibrate as _cal_fp
-            vals = _cal_fp(write=True)
-            msg_fp = ["[calibrate] fill_prob updated:"] + [f"  - {k}={v}" for k, v in vals.items()]
-            for line in msg_fp:
-                print(line)
-            try:
-                write_orders_analysis(msg_fp, OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-        except Exception as _exc_fp:
-            warn_line_fp = f"[warn] fill_prob calibration failed: {_exc_fp}"
-            print(warn_line_fp)
-            try:
-                write_orders_analysis([warn_line_fp], OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-    # TTL minutes by volatility
-    if _env_on('CALIBRATE_TTL_MINUTES', '0'):
-        try:
-            print("[calibrate] Calibrating orders_ui.ttl_minutes…")
-            from scripts.engine.calibrate_ttl_minutes import calibrate as _cal_ttl
-            base, soft, hard = _cal_ttl(write=True)
-            msg_ttl = [f"[calibrate] ttl_minutes base/soft/hard = {base}/{soft}/{hard}"]
-            for line in msg_ttl:
-                print(line)
-            try:
-                write_orders_analysis(msg_ttl, OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-        except Exception as _exc_ttl:
-            warn_line_ttl = f"[warn] ttl_minutes calibration failed: {_exc_ttl}"
-            print(warn_line_ttl)
-            try:
-                write_orders_analysis([warn_line_ttl], OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-    # Watchlist gating
-    if _env_on('CALIBRATE_WATCHLIST', '0'):
-        try:
-            print("[calibrate] Calibrating orders_ui.watchlist…")
-            from scripts.engine.calibrate_watchlist import calibrate as _cal_wl
-            prio, win = _cal_wl(write=True)
-            msg_wl = [f"[calibrate] watchlist.min_priority={prio:.3f}, micro_window={win}"]
-            for line in msg_wl:
-                print(line)
-            try:
-                write_orders_analysis(msg_wl, OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
-        except Exception as _exc_wl:
-            warn_line_wl = f"[warn] watchlist calibration failed: {_exc_wl}"
-            print(warn_line_wl)
-            try:
-                write_orders_analysis([warn_line_wl], OUT_ORDERS_DIR / "orders_analysis.txt")
-            except Exception:
-                pass
 
-    # Policy runtime copy already prepared and updated by calibrators above
+    def _truthy(value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return False
+        if isinstance(value, (int, float)):
+            return bool(value)
+        try:
+            text_val = str(value).strip().lower()
+        except Exception:
+            return False
+        return text_val not in ("", "0", "false", "no", "off", "none")
+
+    cal_conf = dict(pol_obj.get('calibration', {}) or {})
+    cfg_violations: list[str] = []
+    if _truthy(cal_conf.get('on_run')):
+        cfg_violations.append('calibration.on_run')
+        for _key in sorted(k for k in cal_conf.keys() if k != 'on_run'):
+            if _truthy(cal_conf.get(_key)):
+                cfg_violations.append(f'calibration.{_key}')
+
+    calibrate_envs = [
+        'CALIBRATE_REGIME_COMPONENTS',
+        'CALIBRATE_REGIME',
+        'CALIBRATE_MARKET_FILTER',
+        'CALIBRATE_BREADTH_FLOOR',
+        'CALIBRATE_LEADER_GATES',
+        'CALIBRATE_LIQUIDITY',
+        'CALIBRATE_SIZING',
+        'CALIBRATE_THRESHOLDS_TOPK',
+        'CALIBRATE_SIZING_TAU',
+        'CALIBRATE_RISK_LIMITS',
+        'CALIBRATE_DYNAMIC_CAPS',
+        'CALIBRATE_QUANTILE_GATES',
+        'CALIBRATE_NEAR_CEILING',
+        'CALIBRATE_FILL_PROB',
+        'CALIBRATE_TTL_MINUTES',
+        'CALIBRATE_WATCHLIST',
+    ]
+    env_violations = [name for name in calibrate_envs if _truthy(_os.getenv(name))]
+
+    if cfg_violations or env_violations:
+        lines = [
+            'Runtime calibration during order generation has been removed.',
+            'Run the GitHub Actions tuning workflows to refresh policy overrides before generating orders.',
+        ]
+        if cfg_violations:
+            lines.append('Disable the following config toggles: ' + ', '.join(cfg_violations))
+        if env_violations:
+            lines.append('Unset the following environment variables: ' + ', '.join(env_violations))
+        raise SystemExit('\n'.join(lines))
+
+    # Policy runtime copy should already be updated by the tuning workflows upstream
     session_now = detect_session_phase_now_vn()
     industry = pd.read_csv(DATA_DIR / "industry_map.csv") if (DATA_DIR / "industry_map.csv").exists() else pd.DataFrame(columns=['Ticker','Sector'])
     pnl_summary = pd.read_csv(OUT_DIR / "portfolio_pnl_summary.csv") if (OUT_DIR / "portfolio_pnl_summary.csv").exists() else pd.DataFrame(columns=['TotalCost','TotalMarket','TotalPnL','ReturnPct'])
