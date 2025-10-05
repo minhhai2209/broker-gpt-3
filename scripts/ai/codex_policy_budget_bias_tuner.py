@@ -226,7 +226,7 @@ def main() -> None:
                 continue
 
             if marker == 'END':
-                # Require generated file, then copy to config/policy_overrides.json
+                # Require generated file, then write to AI-specific overlay
                 if not output_file_path.exists():
                     # Fallback: if model printed inline JSON instead of file, surface raw output
                     debug_dir = OUT_DIR / 'debug'
@@ -236,7 +236,7 @@ def main() -> None:
                     raise SystemExit(f"Missing generated file {OUTPUT_FILENAME}. Raw output saved to {raw_path}")
                 raw_overrides = json.loads(output_file_path.read_text(encoding='utf-8'))
                 sanitized = apply_guardrails(raw_overrides)
-                target_path = CONFIG_DIR / 'policy_overrides.json'
+                target_path = CONFIG_DIR / 'policy_ai_overrides.json'
                 _write_overrides_merged(target_path, sanitized)
                 print(f"[codex] Completed in round {round_idx} (file written).")
                 return

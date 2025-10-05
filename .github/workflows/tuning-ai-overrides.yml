@@ -116,19 +116,19 @@ jobs:
           # Use the local generator which applies guardrails and writes config/policy_overrides.json
           python -m scripts.ai.codex_policy_budget_bias_tuner
 
-      - name: Persist generated overrides (commit and push)
+      - name: Persist generated AI overlays (commit and push)
         env:
           BRANCH_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          test -f config/policy_overrides.json || { echo '::error::generated config/policy_overrides.json missing'; exit 2; }
+          test -f config/policy_ai_overrides.json || { echo '::error::generated config/policy_ai_overrides.json missing'; exit 2; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # Ensure we are up-to-date before committing/pushing
           git fetch origin "$BRANCH_NAME"
           git rebase "origin/$BRANCH_NAME" || { echo 'Rebase failed, attempting to continue per fail-fast policy'; }
-          git add config/policy_overrides.json
-          git commit -m "chore(policy): update policy_overrides via tuning-ai" || echo "No changes to commit"
+          git add config/policy_ai_overrides.json
+          git commit -m "chore(policy): update policy_ai_overrides via tuning-ai" || echo "No changes to commit"
           # Push with small retry window in case of concurrent updates
           for i in 1 2 3; do
             if git push origin "$BRANCH_NAME"; then exit 0; fi

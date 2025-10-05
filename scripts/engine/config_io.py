@@ -63,9 +63,11 @@ def ensure_policy_override_file() -> Path:
     policy_path_env = os.environ.get("POLICY_FILE", "").strip()
 
     # 0) If a complete baseline exists (policy_default.json) and no POLICY_FILE override is provided,
-    # deep-merge it with config/policy_overrides.json (if present). The CLI guardrails are responsible
-    # for restricting AI-generated overrides; calibrators may write broader tuned sections which must
-    # be preserved here.
+    # deep‑merge it with zero or more overlay files (if present):
+    #   - config/policy_nightly_overrides.json (output of nightly calibrations)
+    #   - config/policy_ai_overrides.json (output of AI tuner)
+    #   - config/policy_overrides.json (legacy/compat)
+    # The CLI guardrails restrict AI‑generated content; calibrators may write broader tuned sections.
     default_baseline = BASE_DIR / "config" / "policy_default.json"
     if not policy_path_env and default_baseline.exists():
         import json
@@ -75,16 +77,21 @@ def ensure_policy_override_file() -> Path:
         except Exception as exc:
             raise SystemExit(f"Invalid JSON in baseline policy {default_baseline}: {exc}") from exc
 
-        if OVERRIDE_SRC.exists():
-            try:
-                ov_obj = json.loads(_strip_json_comments(OVERRIDE_SRC.read_text(encoding="utf-8")))
-            except Exception as exc:
-                raise SystemExit(f"Invalid JSON in overrides {OVERRIDE_SRC}: {exc}") from exc
-            merged = _deep_merge(ov_obj, default_obj)  # full overrides take precedence over baseline
-        else:
-            merged = default_obj
+        merged = default_obj
+        overlays = [
+            BASE_DIR / "config" / "policy_nightly_overrides.json",
+            BASE_DIR / "config" / "policy_ai_overrides.json",
+            OVERRIDE_SRC,  # legacy
+        ]
+        for path in overlays:
+            if path.exists():
+                try:
+                    ov_obj = json.loads(_strip_json_comments(path.read_text(encoding="utf-8")))
+                except Exception as exc:
+                    raise SystemExit(f"Invalid JSON in overlay {path}: {exc}") from exc
+                merged = _deep_merge(ov_obj, merged)  # later overlays take precedence
         dest.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"Prepared runtime policy by deep-merging baseline {default_baseline} with overrides {OVERRIDE_SRC if OVERRIDE_SRC.exists() else '<none>'} -> {dest}")
+        print(f"Prepared runtime policy by merging baseline + overlays -> {dest}")
         return dest
 
     # 1) Legacy path retained for backward compatibility and tests:

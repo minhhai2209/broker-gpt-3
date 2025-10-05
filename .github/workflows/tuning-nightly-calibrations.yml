@@ -77,22 +77,20 @@ jobs:
           python -m scripts.engine.calibrate_fill_prob
           python -m scripts.engine.calibrate_watchlist
 
-      - name: Persist tuned policy (commit and push)
+      - name: Persist tuned policy overlays (commit and push)
         env:
           BRANCH_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           test -f out/orders/policy_overrides.json || { echo '::error::runtime policy not found'; exit 2; }
-          # Deep-merge tuned snapshot into baseline defaults (selective, safe keys only)
-          python -m scripts.engine.merge_policy_baseline --tuned out/orders/policy_overrides.json --baseline config/policy_default.json
-          # Keep a full snapshot for inspection as overrides (artifact and optional commit)
-          cp -f out/orders/policy_overrides.json config/policy_overrides.json
+          # Write nightly overlays to a dedicated file; engine will merge overlays at runtime
+          cp -f out/orders/policy_overrides.json config/policy_nightly_overrides.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin "$BRANCH_NAME"
           git rebase "origin/$BRANCH_NAME" || { echo 'Rebase failed, trying to continue'; }
-          git add config/policy_default.json config/policy_overrides.json
-          git commit -m "chore(policy): update policy_overrides via tuning-nightly" || echo "No changes to commit"
+          git add config/policy_nightly_overrides.json
+          git commit -m "chore(policy): update policy_nightly_overrides via tuning-nightly" || echo "No changes to commit"
           for i in 1 2 3; do
             if git push origin "$BRANCH_NAME"; then exit 0; fi
             echo "Push failed, retry $i/3 after rebase"

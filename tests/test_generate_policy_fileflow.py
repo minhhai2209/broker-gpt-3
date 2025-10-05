@@ -65,7 +65,7 @@ class TestGeneratePolicyFileflow(unittest.TestCase):
                 budget_tuner.main()
 
             # Expect copied file exists with correct content
-            dest = base / 'config' / 'policy_overrides.json'
+                dest = base / 'config' / 'policy_ai_overrides.json'
             self.assertTrue(dest.exists())
             self.assertEqual(json.loads(dest.read_text(encoding='utf-8')), {"buy_budget_frac": 0.12})
 
