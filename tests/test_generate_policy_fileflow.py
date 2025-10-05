@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import scripts.ai.generate_policy_overrides as gpo
+import scripts.ai.codex_policy_budget_bias_tuner as budget_tuner
 import scripts.ai.guardrails as guardrails
 
 
@@ -43,9 +43,9 @@ class TestGeneratePolicyFileflow(unittest.TestCase):
             base = Path(tmp)
             self._seed_base(base)
             # Patch module paths
-            gpo.BASE_DIR = base
-            gpo.CONFIG_DIR = base / 'config'
-            gpo.OUT_DIR = base / 'out'
+            budget_tuner.BASE_DIR = base
+            budget_tuner.CONFIG_DIR = base / 'config'
+            budget_tuner.OUT_DIR = base / 'out'
             guardrails.BASE_DIR = base
             guardrails.CONFIG_DIR = base / 'config'
             guardrails.OUT_DIR = base / 'out'
@@ -55,14 +55,14 @@ class TestGeneratePolicyFileflow(unittest.TestCase):
 
             def fake_run(cmd, input=None, stdout=None, stderr=None, check=None, cwd=None):
                 # Simulate model writing analysis and output JSON file in cwd
-                Path(cwd, gpo.ANALYSIS_FILENAME).write_text('round analysis', encoding='utf-8')
-                gen_path = Path(cwd, gpo.OUTPUT_FILENAME)
+                Path(cwd, budget_tuner.ANALYSIS_FILENAME).write_text('round analysis', encoding='utf-8')
+                gen_path = Path(cwd, budget_tuner.OUTPUT_FILENAME)
                 gen_path.write_text('{"buy_budget_frac": 0.12}', encoding='utf-8')
                 # STDOUT contains END marker
                 return SimpleNamespace(stdout=b"END\n")
 
             with patch('subprocess.run', fake_run), patch.dict(os.environ, {'BROKER_CX_GEN_ROUNDS': '1'}, clear=False):
-                gpo.main()
+                budget_tuner.main()
 
             # Expect copied file exists with correct content
             dest = base / 'config' / 'policy_overrides.json'
@@ -73,9 +73,9 @@ class TestGeneratePolicyFileflow(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             base = Path(tmp)
             self._seed_base(base)
-            gpo.BASE_DIR = base
-            gpo.CONFIG_DIR = base / 'config'
-            gpo.OUT_DIR = base / 'out'
+            budget_tuner.BASE_DIR = base
+            budget_tuner.CONFIG_DIR = base / 'config'
+            budget_tuner.OUT_DIR = base / 'out'
             guardrails.BASE_DIR = base
             guardrails.CONFIG_DIR = base / 'config'
             guardrails.OUT_DIR = base / 'out'
@@ -84,12 +84,12 @@ class TestGeneratePolicyFileflow(unittest.TestCase):
             guardrails.METRICS_PATH = guardrails.OUT_DIR / 'metrics.csv'
 
             def fake_run(cmd, input=None, stdout=None, stderr=None, check=None, cwd=None):
-                Path(cwd, gpo.ANALYSIS_FILENAME).write_text('some analysis', encoding='utf-8')
+                Path(cwd, budget_tuner.ANALYSIS_FILENAME).write_text('some analysis', encoding='utf-8')
                 # Do NOT write output file here
                 return SimpleNamespace(stdout=b"END\n")
 
             with patch('subprocess.run', fake_run), self.assertRaises(SystemExit) as ctx:
-                gpo.main()
+                budget_tuner.main()
             self.assertIn('Missing generated file', str(ctx.exception))
             # Raw output should be saved for inspection
             files = list((base / 'out' / 'debug').glob('codex_policy_raw_END_*.txt'))
@@ -99,9 +99,9 @@ class TestGeneratePolicyFileflow(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             base = Path(tmp)
             self._seed_base(base)
-            gpo.BASE_DIR = base
-            gpo.CONFIG_DIR = base / 'config'
-            gpo.OUT_DIR = base / 'out'
+            budget_tuner.BASE_DIR = base
+            budget_tuner.CONFIG_DIR = base / 'config'
+            budget_tuner.OUT_DIR = base / 'out'
             guardrails.BASE_DIR = base
             guardrails.CONFIG_DIR = base / 'config'
             guardrails.OUT_DIR = base / 'out'
@@ -110,12 +110,12 @@ class TestGeneratePolicyFileflow(unittest.TestCase):
             guardrails.METRICS_PATH = guardrails.OUT_DIR / 'metrics.csv'
 
             def fake_run(cmd, input=None, stdout=None, stderr=None, check=None, cwd=None):
-                Path(cwd, gpo.ANALYSIS_FILENAME).write_text('first round analysis', encoding='utf-8')
+                Path(cwd, budget_tuner.ANALYSIS_FILENAME).write_text('first round analysis', encoding='utf-8')
                 return SimpleNamespace(stdout=b"CONTINUE\n")
 
             with patch('subprocess.run', fake_run), patch.dict(os.environ, {'BROKER_CX_GEN_ROUNDS': '1'}, clear=False):
                 with self.assertRaises(SystemExit) as ctx:
-                    gpo.main()
+                    budget_tuner.main()
             self.assertIn('Exceeded maximum analysis rounds', str(ctx.exception))
             latest = base / 'out' / 'debug' / 'codex_analysis_latest.txt'
             self.assertTrue(latest.exists())

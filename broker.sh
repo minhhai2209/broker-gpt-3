@@ -151,7 +151,7 @@ run_policy() {
   echo "[git] Pulling latest changes"
   git pull
   # Unbuffered Python for streaming logs into server
-  "$PY_BIN" -u scripts/ai/generate_policy_overrides.py
+  "$PY_BIN" -u scripts/ai/codex_policy_budget_bias_tuner.py
   commit_and_push_policy
 }
 

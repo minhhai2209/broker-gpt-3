@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-import scripts.ai.generate_policy_overrides as gpo
+import scripts.ai.codex_policy_budget_bias_tuner as budget_tuner
 import scripts.ai.guardrails as guardrails
 import scripts.engine.config_io as config_io
 import scripts.engine.pipeline as pipeline
@@ -55,7 +55,7 @@ class TestIntegrationTuneAndOrders(unittest.TestCase):
             def fake_run(cmd, input=None, stdout=None, stderr=None, check=None, cwd=None):  # type: ignore[override]
                 cmd_calls.append(cmd)
                 self.assertIn('reasoning_effort=low', cmd)
-                Path(cwd, gpo.ANALYSIS_FILENAME).write_text('analysis', encoding='utf-8')
+                Path(cwd, budget_tuner.ANALYSIS_FILENAME).write_text('analysis', encoding='utf-8')
                 gen_payload = {
                     'buy_budget_frac': 0.12,
                     'add_max': 3,
@@ -64,7 +64,7 @@ class TestIntegrationTuneAndOrders(unittest.TestCase):
                     'ticker_bias': {},
                     'rationale': 'integration test',
                 }
-                Path(cwd, gpo.OUTPUT_FILENAME).write_text(json.dumps(gen_payload), encoding='utf-8')
+                Path(cwd, budget_tuner.OUTPUT_FILENAME).write_text(json.dumps(gen_payload), encoding='utf-8')
                 return SimpleNamespace(stdout=b'END\n')
 
             def fake_pipeline():
@@ -112,9 +112,9 @@ class TestIntegrationTuneAndOrders(unittest.TestCase):
             with ExitStack() as stack:
                 stack.enter_context(patch.dict(os.environ, {'BROKER_TEST_MODE': '1'}, clear=False))
                 stack.enter_context(change_cwd(base))
-                stack.enter_context(patch.object(gpo, 'BASE_DIR', base))
-                stack.enter_context(patch.object(gpo, 'CONFIG_DIR', base / 'config'))
-                stack.enter_context(patch.object(gpo, 'OUT_DIR', base / 'out'))
+                stack.enter_context(patch.object(budget_tuner, 'BASE_DIR', base))
+                stack.enter_context(patch.object(budget_tuner, 'CONFIG_DIR', base / 'config'))
+                stack.enter_context(patch.object(budget_tuner, 'OUT_DIR', base / 'out'))
                 stack.enter_context(patch.object(guardrails, 'BASE_DIR', base))
                 stack.enter_context(patch.object(guardrails, 'CONFIG_DIR', base / 'config'))
                 stack.enter_context(patch.object(guardrails, 'OUT_DIR', base / 'out'))
@@ -139,7 +139,7 @@ class TestIntegrationTuneAndOrders(unittest.TestCase):
                 stack.enter_context(patch('scripts.order_engine.decide_actions', fake_decide_actions))
                 stack.enter_context(patch('scripts.order_engine.build_orders', fake_build_orders))
 
-                gpo.main()
+                budget_tuner.main()
                 oe.run()
 
             self.assertTrue(cmd_calls, 'Codex CLI should be invoked')

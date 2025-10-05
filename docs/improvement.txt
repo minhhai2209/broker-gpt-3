@@ -6,7 +6,7 @@ Ngày: 2025-10-02
 ====================================
 - Phân loại tham số thành 3 nhóm theo nguyên tắc:
   (1) Tune bằng công thức (calibrator): các tham số có thể nội suy từ dữ liệu định lượng.
-  (2) Tune hàng ngày bằng AI/script (generate_policy_overrides.py): chỉ giữ các nút thực sự cần phản ứng với tin tức/tâm lý.
+  (2) Tune hàng ngày bằng AI/script (codex_policy_budget_bias_tuner.py): chỉ giữ các nút thực sự cần phản ứng với tin tức/tâm lý.
   (3) Đặt cố định: hằng số chiến lược, thông số thị trường, hoặc thứ chỉ nên đổi sau backtest dài hạn.
 - Tối giản các khóa do AI điều khiển để giảm chồng chéo, tăng tính ổn định, dễ audit.
 - Áp dụng guardrails: biên, tốc độ thay đổi/ngày, TTL, decay, rationale bắt buộc, kill-switch theo chế độ thị trường.
@@ -129,7 +129,7 @@ Ngày: 2025-10-02
 ====================================
 4) CHECKLIST TRIỂN KHAI
 ====================================
-- Thu gọn allowed_keys của generate_policy_overrides.py theo bộ tối giản: 
+- Thu gọn allowed_keys của codex_policy_budget_bias_tuner.py theo bộ tối giản: 
   {buy_budget_frac, add_max, new_max, sector_bias, ticker_bias, (tùy chọn) news_risk_tilt}.
 - Áp bounds, rate-limit, TTL, decay, rationale, expiry ngay trong script trước khi ghi file overrides.
 - Di chuyển logic base_add/base_new/trim_th sang quantile/ATR/R-based công thức.

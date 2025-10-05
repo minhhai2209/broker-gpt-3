@@ -456,7 +456,7 @@ def _build_audit_row(
         'news_risk_tilt': float(news_tilt) if isinstance(news_tilt, (int, float)) else None,
         'rationale': rationale,
         'kill_switch': bool((state_before or {}).get('kill_switch', False)),
-        'source': 'generate_policy_overrides',
+        'source': 'codex_policy_budget_bias_tuner',
     }
     return row
 

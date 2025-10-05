@@ -14,7 +14,7 @@ def _read(path: Path) -> str:
 
 
 def _strip_json_comments(s: str) -> str:
-    # keep in sync with scripts/ai/generate_policy_overrides.py
+    # keep in sync with scripts/ai/codex_policy_budget_bias_tuner.py
     s = re.sub(r"/\*.*?\*/", "", s, flags=re.S)
     s = re.sub(r"(^|\s)//.*$", "", s, flags=re.M)
     s = re.sub(r"(^|\s)#.*$", "", s, flags=re.M)
