@@ -1,0 +1,69 @@
+name: Full Pipeline Orchestration
+
+on:
+  workflow_dispatch:
+    inputs:
+      ai-rounds:
+        description: "Codex override tuning rounds"
+        required: false
+        default: "1"
+      ai-python-version:
+        description: "Python version for AI overrides"
+        required: false
+        default: "3.11"
+      ai-node-version:
+        description: "Node.js version for AI overrides"
+        required: false
+        default: "20"
+      nightly-python-version:
+        description: "Python version for nightly calibrations"
+        required: false
+        default: "3.11"
+      run-stamp:
+        description: "Specific run stamp to process (leave empty for selection mode)"
+        required: false
+        default: ""
+      orders-selection:
+        description: "Pending run selection mode for orders (all|latest)"
+        required: false
+        default: "latest"
+
+permissions:
+  contents: write
+
+jobs:
+  tests:
+    name: Invoke broker test workflow
+    uses: ./.github/workflows/tests.yml
+
+  tuning_ai_overrides:
+    name: Invoke AI overrides tuning workflow
+    needs: tests
+    uses: ./.github/workflows/tuning-ai-overrides.yml
+    with:
+      rounds: ${{ inputs.ai-rounds }}
+      python-version: ${{ inputs.ai-python-version }}
+      node-version: ${{ inputs.ai-node-version }}
+    secrets: inherit
+
+  tuning_nightly:
+    name: Invoke nightly calibration workflow
+    needs:
+      - tests
+      - tuning_ai_overrides
+    uses: ./.github/workflows/tuning-nightly-calibrations.yml
+    with:
+      python-version: ${{ inputs.nightly-python-version }}
+    secrets: inherit
+
+  orders:
+    name: Invoke orders workflow
+    needs:
+      - tests
+      - tuning_ai_overrides
+      - tuning_nightly
+    uses: ./.github/workflows/runs-orders.yml
+    with:
+      run_stamp: ${{ inputs.run-stamp }}
+      selection: ${{ inputs.orders-selection }}
+    secrets: inherit

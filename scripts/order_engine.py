@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -3715,7 +3715,7 @@ def build_orders(
     # IO moved to scripts.orders_io
 
 
-def run() -> None:
+def run(simulate: bool = False, *, context: Optional[Dict[str, Any]] = None, flags: Optional[Dict[str, Any]] = None):
     OUT_ORDERS_DIR.mkdir(parents=True, exist_ok=True)
     # Ensure we have a runtime copy of the policy first; then derive static knobs (e.g., band)
     ensure_policy_override_file()
@@ -3825,6 +3825,15 @@ def run() -> None:
     orders, notes, regime = build_orders(
         actions, portfolio, snapshot, metrics, presets, pnl_summary, scores, regime, prices_history
     )
+    if simulate or (flags and bool(flags.get("simulate"))):
+        return {
+            "orders": orders,
+            "notes": notes,
+            "regime": regime,
+            "snapshot": snapshot,
+            "metrics": metrics,
+            "presets": presets,
+        }
     if _test_mode_enabled():
         print("[test] BROKER_TEST_MODE=1: Skipping order persistence (test mode).")
         return

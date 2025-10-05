@@ -2,6 +2,17 @@ name: Orders Run (timestamped)
 
 on:
   push:
+  workflow_call:
+    inputs:
+      run_stamp:
+        description: "Specific run stamp to process"
+        required: false
+        type: string
+      selection:
+        description: "Which pending runs to process (all|latest)"
+        required: false
+        type: string
+        default: "all"
 
 concurrency:
   group: runs-orders-${{ github.ref }}
@@ -14,6 +25,9 @@ jobs:
   run-orders:
     name: Run orders for pending timestamps
     runs-on: ubuntu-latest
+    env:
+      RUN_ORDERS_INPUT_STAMP: ${{ inputs.run_stamp || '' }}
+      RUN_ORDERS_SELECTION: ${{ inputs.selection || 'all' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,26 +39,54 @@ jobs:
           set -euo pipefail
           if [ ! -d runs ]; then
             echo "::error::Missing runs directory"; exit 2; fi
+          selection="${RUN_ORDERS_SELECTION:-all}"
+          requested="${RUN_ORDERS_INPUT_STAMP:-}"
           mapfile -t run_dirs < <(find runs -mindepth 1 -maxdepth 1 -type d -print | sort)
           if [ ${#run_dirs[@]} -eq 0 ]; then
             echo "::error::No runs stamps found"; exit 2; fi
           pending=()
-          for dir in "${run_dirs[@]}"; do
-            stamp=$(basename "$dir")
+          if [ -n "$requested" ]; then
+            dir="runs/$requested"
+            if [ ! -d "$dir" ]; then
+              echo "::error::Requested run stamp $requested not found"
+              exit 2
+            fi
             if [ ! -d "$dir/portfolio" ]; then
-              echo "Skipping $stamp (missing portfolio directory)"
-              continue
+              echo "::error::Requested run $requested missing portfolio directory"
+              exit 2
             fi
             if ! compgen -G "$dir/portfolio/*.csv" > /dev/null; then
-              echo "Skipping $stamp (no portfolio CSV files)"
-              continue
+              echo "::error::Requested run $requested has no portfolio CSV files"
+              exit 2
             fi
             if compgen -G "$dir/orders_final.csv" > /dev/null; then
-              echo "Skipping $stamp (orders already present)"
-              continue
+              echo "Requested run $requested already has orders; nothing to do"
+            else
+              pending+=("$requested")
             fi
-            pending+=("$stamp")
-          done
+          else
+            for dir in "${run_dirs[@]}"; do
+              stamp=$(basename "$dir")
+              if [ ! -d "$dir/portfolio" ]; then
+                echo "Skipping $stamp (missing portfolio directory)"
+                continue
+              fi
+              if ! compgen -G "$dir/portfolio/*.csv" > /dev/null; then
+                echo "Skipping $stamp (no portfolio CSV files)"
+                continue
+              fi
+              if compgen -G "$dir/orders_final.csv" > /dev/null; then
+                echo "Skipping $stamp (orders already present)"
+                continue
+              fi
+              pending+=("$stamp")
+            done
+            if [ "$selection" = "latest" ] && [ ${#pending[@]} -gt 1 ]; then
+              latest="${pending[${#pending[@]}-1]}"
+              echo "Selecting only latest pending run: $latest"
+              pending=("$latest")
+            fi
+          fi
           if [ ${#pending[@]} -eq 0 ]; then
             echo "No pending run stamps detected"
             echo "pending_count=0" >> "$GITHUB_OUTPUT"

@@ -8,6 +8,7 @@ on:
       - 'feature/**'
       - 'bugfix/**'
   pull_request:
+  workflow_call:
 
 jobs:
   tests:
@@ -31,3 +32,13 @@ jobs:
 
       - name: Run broker test suite
         run: ./broker.sh tests
+
+      - name: Run backtest tuning smoke test
+        run: |
+          python -m backtest.tune \
+            --grid configs/tune_grid_ci.yaml \
+            --base-config configs/replay_ci.yaml \
+            --train-start 2024-01-01 --train-end 2024-01-04 \
+            --val-start 2024-01-05 --val-end 2024-01-07 \
+            --out backtest_out/ci_smoke \
+            --top-k 1

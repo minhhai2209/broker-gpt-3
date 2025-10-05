@@ -1,0 +1,17 @@
+watchlist.min_priority:
+  - 0.50
+  - 0.60
+buy_budget_frac:
+  - 0.08
+  - 0.10
+entry_price_offset_ticks:
+  - 0
+  - 1
+limit_safety_spread_ticks:
+  - 1
+ttl_days:
+  - 2
+new_max:
+  - 2
+add_max:
+  - 1

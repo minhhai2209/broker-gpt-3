@@ -22,3 +22,4 @@ beautifulsoup4>=4.13
 # (Playwright binary download handled via `playwright install` when needed)
 
 # (news/read_url removed in refactor)
+PyYAML>=6.0
