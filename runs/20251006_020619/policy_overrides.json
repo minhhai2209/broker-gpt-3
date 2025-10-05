@@ -1,0 +1,366 @@
+{
+  "buy_budget_frac": 0.1,
+  "buy_budget_by_regime": {
+    "risk_on": 0.12,
+    "neutral": 0.06,
+    "risk_off": 0.0
+  },
+  "add_max": 6,
+  "new_max": 3,
+  "weights": {
+    "w_trend": 0.35,
+    "w_momo": 0.25,
+    "w_mom_ret": 0.15,
+    "w_liq": 0.2,
+    "w_vol_guard": -0.1,
+    "w_beta": -0.1,
+    "w_sector": 0.2,
+    "w_sector_sent": 0.1,
+    "w_ticker_sent": 0.1,
+    "w_roe": 0.15,
+    "w_earnings_yield": 0.15,
+    "w_rs": 0.15,
+    "fund_scale": 1.0
+  },
+  "thresholds": {
+    "base_add": 0.35,
+    "base_new": 0.4,
+    "trim_th": -0.05,
+    "q_add": 0.7,
+    "q_new": 0.8,
+    "min_liq_norm": 0.3,
+    "near_ceiling_pct": 0.98,
+    "tp_pct": 0.0,
+    "sl_pct": 0.0,
+    "tp_atr_mult": 1.35,
+    "sl_atr_mult": 1.7,
+    "tp_floor_pct": 0.03,
+    "tp_cap_pct": 0.1,
+    "sl_floor_pct": 0.02,
+    "sl_cap_pct": 0.08,
+    "tp_trim_frac": 0.4,
+    "tp_rule": "dynamic_only",
+    "sl_rule": "dynamic_only",
+    "tp_sl_mode": "atr_per_ticker",
+    "tp1_frac": 0.4,
+    "tp1_hh_lookback": 10,
+    "trail_hh_lookback": 22,
+    "trail_atr_mult": 2.5,
+    "be_buffer_pct": 0.0,
+    "sl_trim_step_1_trigger": 0.5,
+    "sl_trim_step_1_frac": 0.25,
+    "sl_trim_step_2_trigger": 0.8,
+    "sl_trim_step_2_frac": 0.35,
+    "exit_on_ma_break": 1,
+    "cooldown_days": 3,
+    "exit_ma_break_rsi": 45.0,
+    "trim_rsi_below_ma20": 45.0,
+    "trim_rsi_macdh_neg": 40.0,
+    "exit_ma_break_score_gate": 0.35,
+    "tilt_exit_downgrade_min": 0.05,
+    "exit_downgrade_min_r": 1.0,
+    "tc_gate_scale": 0.0,
+    "exit_ma_break_min_phase": "afternoon",
+    "quantile_pool": "subset"
+  },
+  "neutral_adaptive": {
+    "neutral_enable": 1,
+    "neutral_risk_on_prob_low": 0.35,
+    "neutral_risk_on_prob_high": 0.65,
+    "neutral_index_atr_soft_cap": null,
+    "neutral_breadth_band": 0.05,
+    "neutral_breadth_center": null,
+    "neutral_base_new_scale": 0.9,
+    "neutral_base_new_floor": 0.8,
+    "neutral_base_add_scale": 0.9,
+    "neutral_base_add_floor": 0.8,
+    "partial_threshold_ratio": 0.75,
+    "partial_entry_frac": 0.3,
+    "partial_allow_leftover": 0,
+    "min_new_per_day": 1,
+    "max_new_overrides_per_day": 1,
+    "add_max_neutral_cap": 1
+  },
+  "regime_model": {
+    "intercept": -0.15,
+    "threshold": 0.55,
+    "components": {
+      "trend": {
+        "mean": 0.48,
+        "std": 0.18,
+        "weight": 1.55
+      },
+      "momentum": {
+        "mean": 0.52,
+        "std": 0.22,
+        "weight": 1.25
+      },
+      "breadth": {
+        "mean": 0.45,
+        "std": 0.2,
+        "weight": 1.2
+      },
+      "drawdown": {
+        "mean": 0.62,
+        "std": 0.24,
+        "weight": 0.95
+      },
+      "volatility": {
+        "mean": 0.56,
+        "std": 0.21,
+        "weight": 1.05
+      },
+      "index_return": {
+        "mean": 0.0,
+        "std": 0.65,
+        "weight": 0.8
+      },
+      "turnover": {
+        "mean": 0.5,
+        "std": 0.2,
+        "weight": 0.8
+      },
+      "mcclellan": {
+        "mean": 0.5,
+        "std": 0.25,
+        "weight": 0.6
+      },
+      "nhnl": {
+        "mean": 0.5,
+        "std": 0.25,
+        "weight": 0.6
+      }
+    }
+  },
+  "sector_bias": {},
+  "ticker_bias": {},
+  "calibration": {
+    "on_run": 0,
+    "regime_components": 0,
+    "regime": 0,
+    "market_filter": 0,
+    "breadth_floor": 0,
+    "leader_gates": 0,
+    "liquidity": 0,
+    "sizing": 0,
+    "softmax_tau": 0,
+    "thresholds_topk": 0,
+    "risk_limits": 0,
+    "dynamic_caps": 0
+  },
+  "market_filter": {
+    "risk_off_index_drop_pct": 0.03,
+    "risk_off_trend_floor": 0.0,
+    "risk_off_breadth_floor": 0.4,
+    "risk_off_drawdown_floor": 0.03765736205513479,
+    "market_score_soft_floor": 0.6,
+    "market_score_hard_floor": 0.3,
+    "leader_min_rsi": 55.0,
+    "leader_min_mom_norm": 0.6,
+    "leader_require_ma20": 1,
+    "leader_require_ma50": 1,
+    "leader_max": 2,
+    "index_atr_soft_pct": 0.80041928721174,
+    "index_atr_hard_pct": 0.950104821802935,
+    "guard_new_scale_cap": 0.4,
+    "atr_soft_scale_cap": 0.5,
+    "severe_drop_mult": 1.5,
+    "idx_chg_smoothed_hard_drop": 0.025,
+    "trend_norm_hard_floor": -0.36045671543390645,
+    "vol_ann_hard_ceiling": 0.4,
+    "us_epu_soft_pct": null,
+    "us_epu_hard_pct": null,
+    "dxy_soft_pct": null,
+    "dxy_hard_pct": null,
+    "spx_drawdown_hard_pct": null
+  },
+  "pricing": {
+    "risk_on_buy": [
+      "Aggr",
+      "Bal",
+      "Cons",
+      "MR",
+      "Break"
+    ],
+    "risk_on_sell": [
+      "Cons",
+      "Bal",
+      "Break",
+      "MR",
+      "Aggr"
+    ],
+    "risk_off_buy": [
+      "Cons",
+      "MR",
+      "Bal",
+      "Aggr",
+      "Break"
+    ],
+    "risk_off_sell": [
+      "MR",
+      "Cons",
+      "Bal",
+      "Aggr",
+      "Break"
+    ],
+    "atr_fallback_buy_mult": 0.25,
+    "atr_fallback_sell_mult": 0.25,
+    "tc_sell_tax_frac": 0.001,
+    "tc_roundtrip_frac": 0.0,
+    "fill_prob": {
+      "base": 0.3,
+      "cross": 0.9,
+      "near_ceiling": 0.05,
+      "min": 0.05,
+      "decay_scale_min_ticks": 5.0,
+      "partial_fill_kappa": 0.65,
+      "min_fill_notional_vnd": 5000000.0
+    },
+    "slippage_model": {
+      "alpha_bps": 5.0,
+      "beta_dist_per_tick": 1.0,
+      "beta_size": 45.0,
+      "beta_vol": 8.0,
+      "mae_bps": 12.0,
+      "last_fit_date": null
+    }
+  },
+  "execution": {
+    "stop_ttl_min": 3,
+    "slip_pct_min": 0.002,
+    "slip_atr_mult": 0.5,
+    "slip_ticks_min": 1,
+    "flash_k_atr": 1.5
+  },
+  "regime_scales": {
+    "vol_ann_unit": 0.45,
+    "trend_unit": 0.05,
+    "idx_smoothed_unit": 1.5,
+    "drawdown_unit": 0.2,
+    "momentum_unit": 0.12
+  },
+  "sizing": {
+    "softmax_tau": 0.6,
+    "add_share": 0.5,
+    "new_share": 0.5,
+    "min_lot": 100,
+    "risk_weighting": "risk_parity",
+    "risk_alpha": 5.0,
+    "max_pos_frac": 0.1,
+    "max_sector_frac": 0.25,
+    "reuse_sell_proceeds_frac": 0.0,
+    "risk_blend": 1.0,
+    "leftover_redistribute": 1,
+    "min_ticket_k": 0.0,
+    "cov_lookback_days": 250,
+    "cov_reg": 0.0003,
+    "risk_parity_floor": 0.2,
+    "dynamic_caps": {
+      "enable": 0,
+      "pos_min": 0.1,
+      "pos_max": 0.16,
+      "sector_min": 0.28,
+      "sector_max": 0.4,
+      "blend": 1.0,
+      "override_static": 0
+    },
+    "allocation_model": "mean_variance",
+    "bl_rf_annual": 0.05,
+    "bl_mkt_prem_annual": 0.08,
+    "bl_alpha_scale": 0.025,
+    "risk_blend_eta": 0.3,
+    "min_names_target": 10,
+    "market_index_symbol": "VNINDEX",
+    "risk_per_trade_frac": 0.005,
+    "default_stop_atr_mult": 2.15,
+    "tranche_frac": 0.25,
+    "mean_variance_calibration": {
+      "enable": 1,
+      "risk_alpha": [
+        4.0,
+        5.0,
+        6.0
+      ],
+      "cov_reg": [
+        0.0002,
+        0.0003,
+        0.0004
+      ],
+      "bl_alpha_scale": [
+        0.02,
+        0.025,
+        0.03
+      ],
+      "lookback_days": 250,
+      "test_horizon_days": 60,
+      "min_history_days": 320
+    }
+  },
+  "orders_ui": {
+    "ttl_minutes": {
+      "base": 12,
+      "soft": 9,
+      "hard": 7
+    },
+    "ttl_bucket_minutes": {
+      "low": {
+        "base": 14,
+        "soft": 11,
+        "hard": 8
+      },
+      "medium": {
+        "base": 11,
+        "soft": 9,
+        "hard": 7
+      },
+      "high": {
+        "base": 8,
+        "soft": 6,
+        "hard": 5
+      }
+    },
+    "watchlist": {
+      "enable": 1,
+      "min_priority": 0.3,
+      "micro_window": 3
+    },
+    "suggestions_top_n": 3
+  },
+  "market": {
+    "microstructure": {
+      "daily_band_pct": 0.07
+    }
+  },
+  "evaluation": {
+    "days_to_liq_frac": 0.2
+  },
+  "features": {
+    "normalization_robust": 0
+  },
+  "calibration_targets": {
+    "market_filter": {
+      "idx_drop_q": 0.1,
+      "vol_ann_q": 0.95,
+      "trend_floor_q": 0.1,
+      "atr_soft_q": 0.8,
+      "atr_hard_q": 0.95,
+      "ms_soft_q": 0.6,
+      "ms_hard_q": 0.35,
+      "dd_floor_q": 0.8,
+      "breadth_floor_q": 0.4,
+      "leader_rsi_q": 0.75,
+      "leader_mom_q": 0.75
+    },
+    "liquidity": {
+      "adtv_multiple": 20.0
+    },
+    "sizing": {
+      "enp_target_add": 4.0,
+      "enp_target_new": 3.0
+    },
+    "dynamic_caps": {
+      "enp_total_target": 9,
+      "sector_limit_target": 0.35
+    }
+  }
+}
