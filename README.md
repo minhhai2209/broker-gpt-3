@@ -51,10 +51,8 @@ Backtest & tuning (MVP)
 - `python -m backtest.tune --train-start YYYY-MM-DD --train-end YYYY-MM-DD --val-start YYYY-MM-DD --val-end YYYY-MM-DD --grid configs/tune_grid.yaml --base-config configs/replay.yaml` để chạy grid search đơn giản; tham số walk-forward cũng có sẵn qua các flag `--wf-*` theo spec.
 - GitHub Actions mặc định chỉ chạy `./broker.sh tests` (xem `.github/workflows/tests.yml`). Khi cần chuỗi đầy đủ (tests → tuning AI overrides → nightly calibrations → tạo lệnh từ danh mục cuối cùng), kích hoạt workflow thủ công **Full Pipeline Orchestration** và chọn `orders-selection=latest` để dùng danh mục mới nhất.
 
-Calibrate TTL (Time-To-Live)
-- TTL mặc định trong policy là `base/soft/hard = 12/9/7` phút. Khi có dữ liệu VNINDEX mới, sử dụng biến động Garman–Klass để co giãn TTL nhằm phản ánh trạng thái thị trường hiện tại.
-- Script hỗ trợ: `python scripts/engine/calibrate_ttl_minutes.py`. Script đọc `out/prices_history.csv` + `out/orders/policy_overrides.json`, tính bucket biến động (low/medium/high) và cập nhật `orders_ui.ttl_minutes` cùng metadata (`ttl_bucket_minutes`, `ttl_bucket_thresholds`, `ttl_bucket_state`).
-- Bucket → TTL: low → 14/11/8 phút, medium → 11/9/7 phút, high → 8/6/5 phút. TTL viết lại vào `policy_overrides.json`; lần chạy kế tiếp của Order Engine sẽ sử dụng TTL mới.
+Diagnostics & calibrations
+- Chi tiết về mô hình chi phí giao dịch, slippage, xác suất khớp (FillProb/FillRateExp), LimitLock, và cơ chế hiệu chỉnh TTL theo biến động thị trường được tài liệu hóa tại `SYSTEM_DESIGN.md` (mục Calibrations & Execution Diagnostics).
 
 API server (tùy chọn)
 - Chạy: `./broker.sh server` → http://localhost:8787
@@ -70,11 +68,6 @@ Policy & cấu hình
 - Overrides cho phiên/ngày: `config/policy_overrides.json` — chỉ cho phép các khoá whitelisted (xem chi tiết và guardrails trong SYSTEM_DESIGN.md).
 - Nếu không có overrides, engine dùng nguyên baseline.
 
-Execution diagnostics & chi phí giao dịch
-- Engine ước lượng xác suất khớp và tỷ lệ khớp kỳ vọng dựa trên thanh khoản (ADTV) để tránh giả định “touch là khớp”. Các giá trị này xuất hiện ở `orders_quality.csv` (`FillProb`, `FillRateExp`).
-- Slippage và chi phí giao dịch được nội suy qua `pricing.tc_roundtrip_frac` và mô hình trượt giá tuyến tính; kết quả thể hiện dưới `SlipBps`, `SlipPct` và được phản ánh trong `ExpR` (Expected Return sau phí).
-- `orders_quality.csv` bổ sung cờ `LimitLock` nhằm cảnh báo các phiên trần/sàn (lock-limit day) mà BUY/SELL khó khớp.
-
 Tài liệu chi tiết
 - Kiến trúc, pipeline, nhận diện market regime, thuật toán quyết định lệnh, calibrations, guardrails I/O: xem `SYSTEM_DESIGN.md`.
 
@@ -85,4 +78,3 @@ FAQ nhanh / khắc phục sự cố
 
 Góp ý & đóng góp
 - Mở issue/PR nếu phát hiện lỗi tài liệu/UX; nội dung chuyên sâu xin bổ sung vào `SYSTEM_DESIGN.md` để tránh lặp lại trong README.
-

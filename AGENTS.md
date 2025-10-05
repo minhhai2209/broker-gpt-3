@@ -13,3 +13,12 @@
 - Mặc định ổn định — không dùng env để tắt/bật; hành vi cố định bằng defaults hợp lý và policy.
 - Schema & test đi cùng thay đổi: khi chỉnh schema/policy, cập nhật baseline, whitelist overrides liên quan và test/fixtures tương ứng (giữ tests xanh).
 - Test/coverage trước bàn giao: chạy `./broker.sh tests` (có thể bật coverage) sau mỗi thay đổi quan trọng.
+
+## Phân chia tài liệu (Docs structure)
+- `README.md`: chỉ tập trung vào cách sử dụng (install, chạy nhanh, I/O, lệnh tiện ích, server usage cơ bản, FAQ). Không chứa chi tiết kỹ thuật/thuật toán; nếu cần, đặt link trỏ sang SYSTEM_DESIGN.md.
+- `SYSTEM_DESIGN.md`: kiến trúc, pipeline, thuật toán/quy tắc ra quyết định, calibrations, execution diagnostics, policy/guardrails, lộ trình tích hợp (API, async runner). Đây là nơi chứa toàn bộ chi tiết kỹ thuật.
+- `AGENTS.md`: Way of Work, tiêu chuẩn CI/Fail‑fast, quy tắc dữ liệu & contract, convention khi đóng góp. Đồng thời duy trì quy ước phân chia tài liệu này.
+
+Policy biên tập:
+- Khi thêm chi tiết kỹ thuật mới, cập nhật `SYSTEM_DESIGN.md` và chỉ bổ sung gạch đầu dòng/link tối thiểu ở `README.md` nếu ảnh hưởng tới cách dùng.
+- Nếu `README.md` bị “phình” bởi nội dung kỹ thuật, tách/chuyển sang `SYSTEM_DESIGN.md` và rút gọn còn phần hướng dẫn sử dụng.

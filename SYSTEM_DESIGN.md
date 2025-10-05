@@ -337,3 +337,24 @@ Kết Luận
 Tài liệu kiến trúc hệ thống (SYSTEM_DESIGN) này mô tả các thành phần và luồng hoạt động của Broker GPT theo trạng thái codebase hiện tại. Hệ thống gồm engine phân tích & ra quyết định giao dịch theo pipeline dữ liệu và policy, stateless với khả năng audit cao qua các file đầu ra. Cấu trúc modular (pipeline, tính điểm, quyết định lệnh, quản lý trạng thái) tương tác qua data frame và config. Bên ngoài, hệ thống tích hợp API server và cơ chế async qua GitHub Actions để phục vụ trải nghiệm người dùng qua extension/ứng dụng.
 
 Từ danh mục đầu vào, Broker GPT tự động thu thập dữ liệu, đánh giá thị trường, lên chiến lược và đề xuất danh sách lệnh giao dịch, đồng thời vẫn duy trì tính linh hoạt (nhờ AI) và an toàn (guardrails kiểm soát rủi ro) trong mọi điều kiện thị trường.
+Calibrations & Execution Diagnostics
+
+Mục này tổng hợp các cơ chế hiệu chỉnh (calibration) và chẩn đoán thực thi (execution diagnostics) được engine sử dụng. Đây là các thành phần kỹ thuật nhằm phản ánh thực trạng thị trường vào tham số vận hành và giúp người dùng hiểu chất lượng lệnh.
+
+- Chi phí giao dịch & slippage
+  - Tham số `pricing.tc_roundtrip_frac` biểu diễn chi phí khứ hồi (mua+bán) ở dạng tỷ lệ. Slippage được mô hình hóa tuyến tính theo quy mô lệnh và thanh khoản; các ước lượng được phản ánh trong `orders_quality.csv` qua cột `SlipBps` và `SlipPct`, đồng thời được khấu trừ vào `ExpR` (expected return sau phí).
+  - Mục tiêu: tránh giả định “touch là khớp” và không đánh giá quá lạc quan lợi nhuận kỳ vọng khi khối lượng lệnh lớn so với thanh khoản.
+
+- Xác suất khớp & FillRate kỳ vọng
+  - Engine ước lượng `FillProb` và `FillRateExp` dựa trên quy mô lệnh tương đối so với thanh khoản (ví dụ ADTV) và các ràng buộc thực thi. Hai chỉ số này hiển thị trong `orders_quality.csv` và dùng để ưu tiên/thả vào watchlist khi khả năng khớp thấp.
+  - Khi mã rơi vào trạng thái biên độ khóa (limit‑up/limit‑down), engine gắn cờ `LimitLock` nhằm cảnh báo BUY/SELL khó khớp; các lệnh liên quan có thể bị chuyển vào watchlist.
+
+- TTL cho lệnh và hiệu chỉnh theo biến động thị trường
+  - TTL mặc định trong policy: `orders_ui.ttl_minutes.base/soft/hard = 12/9/7` phút. TTL có thể co giãn theo mức biến động thị trường đo bằng ước lượng Garman–Klass trên VNINDEX (cửa sổ gần nhất), nhằm phản ánh trạng thái “bình thường ↔ nhiễu động cao”.
+  - Script hỗ trợ: `python scripts/engine/calibrate_ttl_minutes.py`.
+    - Input: `out/prices_history.csv` (để tính GK) và `out/orders/policy_overrides.json` hiện tại.
+    - Cơ chế: ánh xạ biến động vào 3 bucket `low/medium/high` (ngưỡng có thể cấu hình/ghi trong metadata), sau đó cập nhật `orders_ui.ttl_minutes` theo bucket.
+    - Mapping hiện hành: `low → 14/11/8`, `medium → 11/9/7`, `high → 8/6/5` (lần lượt `base/soft/hard`, tính bằng phút).
+    - Output: ghi đè vào `config/policy_overrides.json` (hoặc `out/orders/policy_overrides.json` runtime) các khóa liên quan TTL và metadata: `ttl_bucket_minutes`, `ttl_bucket_thresholds`, `ttl_bucket_state`. Lần chạy Order Engine kế tiếp sẽ sử dụng TTL mới.
+
+Lưu ý: Các calibration và diagnostics trên phải được kiểm định bằng dữ liệu khách quan. Khi thay đổi mô hình/slopes/ngưỡng, cập nhật policy, baseline và tests kèm theo để đảm bảo CI xanh và hành vi nhất quán.
