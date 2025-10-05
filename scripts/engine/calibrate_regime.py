@@ -56,9 +56,11 @@ def _load_history(min_days: int = 500) -> pd.DataFrame:
                 vn2 = vn2.dropna(subset=['Date']).sort_values('Date')
                 if len(vn2) >= min_days:
                     return vn2
-        except Exception:
-            # Keep fail-fast behavior below
-            pass
+        except Exception as exc:
+            raise SystemExit(
+                'Failed to refill VNINDEX history via ensure_and_load_history_df; '
+                'fix data pipeline or rerun fetch before calibration'
+            ) from exc
     return vn
 
 
@@ -400,9 +402,10 @@ def calibrate(horizon: int = 21, write: bool = False) -> tuple[float, float, int
             out_path = ORDERS_DIR / 'regime_calibration_report.json'
             import json as _json
             out_path.write_text(_json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
-    except Exception:
-        # Diagnostics are best-effort and should not block calibration
-        pass
+    except Exception as exc:
+        raise SystemExit(
+            'Failed to generate or write regime calibration diagnostics; check logs for root cause'
+        ) from exc
 
     pos_rate = float(y.mean()) if len(y) else 0.0
     if write:
