@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 from scripts.build_metrics import build_metrics_df
-from scripts.build_presets_all import build_presets_all_df
+from scripts.build_presets_all import build_presets_all_df, _infer_in_session
 from scripts.build_snapshot import build_snapshot_df
 from scripts.collect_intraday import ensure_intraday_latest
 from scripts.compute_sector_strength import compute_sector_strength_df
@@ -141,9 +141,34 @@ class MarketRegime:
 
 
 def get_market_regime(session_summary: pd.DataFrame, sector_strength: pd.DataFrame, tuning: Dict) -> MarketRegime:
-    phase = str(session_summary.loc[0, "SessionPhase"]) if not session_summary.empty else "pre"
-    in_session = bool(int(session_summary.loc[0, "InVNSession"])) if (not session_summary.empty and "InVNSession" in session_summary.columns and not pd.isna(session_summary.loc[0, "InVNSession"])) else False
-    idx_chg = to_float(session_summary.loc[0, "IndexChangePct"]) if (not session_summary.empty and "IndexChangePct" in session_summary.columns) else 0.0
+    if session_summary is None:
+        raise ValueError("session_summary is required to infer the market regime")
+    if not isinstance(session_summary, pd.DataFrame):
+        raise TypeError(
+            "session_summary must be a pandas DataFrame with session metadata"
+        )
+    if session_summary.empty:
+        raise ValueError("session_summary is empty; unable to infer market regime")
+    required_cols = {"SessionPhase", "InVNSession", "IndexChangePct"}
+    missing = required_cols - set(session_summary.columns)
+    if missing:
+        missing_cols = ", ".join(sorted(missing))
+        raise KeyError(
+            f"session_summary is missing required columns: {missing_cols}"
+        )
+    phase_raw = session_summary.iloc[0].get("SessionPhase")
+    if phase_raw is None or (isinstance(phase_raw, str) and not phase_raw.strip()):
+        raise ValueError(
+            "session_summary['SessionPhase'] is null or empty; cannot infer market phase"
+        )
+    phase = str(phase_raw)
+    in_session = _infer_in_session(session_summary_df=session_summary)
+    idx_chg_raw = session_summary.iloc[0].get("IndexChangePct")
+    idx_chg = to_float(idx_chg_raw)
+    if idx_chg is None:
+        raise ValueError(
+            "session_summary['IndexChangePct'] must be a finite numeric value"
+        )
     breadth_session_value = None
     if not session_summary.empty and "BreadthPct" in session_summary.columns:
         breadth_raw = to_float(session_summary.loc[0, "BreadthPct"])

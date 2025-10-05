@@ -12,7 +12,7 @@ import re
 import pandas as pd
 
 from scripts.build_metrics import build_metrics_df
-from scripts.build_presets_all import build_presets_all_df
+from scripts.build_presets_all import build_presets_all_df, _infer_in_session
 from scripts.build_snapshot import build_snapshot_df
 from scripts.collect_intraday import ensure_intraday_latest
 from scripts.compute_sector_strength import compute_sector_strength_df
@@ -75,20 +75,7 @@ def ensure_pipeline_artifacts() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFram
     precomp_df.to_csv(OUT_DIR / 'precomputed_indicators.csv', index=False)
     # 7b) Optional global factors features (best-effort; non-fatal)
     ensure_global_factors(OUT_DIR)
-    session_in_progress = False
-    if not session_summary_df.empty and 'InVNSession' in session_summary_df.columns:
-        raw = session_summary_df.iloc[0].get('InVNSession')
-        if raw is not None and not pd.isna(raw):
-            try:
-                session_in_progress = bool(int(raw))
-            except Exception as _exc:
-                # Avoid silent fallback; emit a clear warning for audit
-                print(f"[warn] Invalid InVNSession value '{raw}' in session_summary.csv; defaulting to not-in-session: {_exc}")
-                session_in_progress = False
-    else:
-        from scripts.utils import detect_session_phase_now_vn
-        phase = detect_session_phase_now_vn().lower()
-        session_in_progress = phase not in ('pre', 'post')
+    session_in_progress = _infer_in_session(session_summary_df=session_summary_df)
     presets_df = build_presets_all_df(
         precomp_df,
         snapshot_df,

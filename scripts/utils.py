@@ -7,20 +7,23 @@ import importlib.util
 import pandas as pd
 
 _ZONEINFO_AVAILABLE = importlib.util.find_spec("zoneinfo") is not None
-if _ZONEINFO_AVAILABLE:
-    from zoneinfo import ZoneInfo, available_timezones  # type: ignore
-else:  # pragma: no cover - fallback for limited environments
-    ZoneInfo = None  # type: ignore
-    def available_timezones():  # type: ignore
-        return set()
+if not _ZONEINFO_AVAILABLE:  # pragma: no cover - environment contract violation
+    raise ModuleNotFoundError(
+        "The standard 'zoneinfo' module is required but not available. "
+        "Install tzdata/backports.zoneinfo or upgrade Python to provide full timezone support."
+    )
+
+from zoneinfo import ZoneInfo, available_timezones  # type: ignore
 
 
 def detect_session_phase_now_vn() -> str:
-    if _ZONEINFO_AVAILABLE and "Asia/Ho_Chi_Minh" in available_timezones():
-        tz = ZoneInfo("Asia/Ho_Chi_Minh")  # type: ignore[arg-type]
-        now = datetime.now(tz).time()
-    else:
-        now = datetime.now().time()
+    if "Asia/Ho_Chi_Minh" not in available_timezones():
+        raise RuntimeError(
+            "Timezone 'Asia/Ho_Chi_Minh' is unavailable in the current environment. "
+            "Install tzdata to ensure deterministic session phase detection."
+        )
+    tz = ZoneInfo("Asia/Ho_Chi_Minh")  # type: ignore[arg-type]
+    now = datetime.now(tz).time()
     if now < time(9, 0):
         return "pre"
     if time(9, 0) <= now < time(11, 30):
