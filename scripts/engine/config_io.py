@@ -44,10 +44,11 @@ def _deep_merge(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]
 # Only these keys from config/policy_overrides.json will override policy_default.json.
 # Represented as tuples of nested keys, e.g., ("thresholds", "base_add").
 ALLOWED_OVERRIDE_PATHS: set[Tuple[str, ...]] = {
-    # Minimal knobs exposed to the AI generator.
+    # Minimal knobs exposed to the AI generator/runtime.
+    # Note: direct slot overrides (add_max/new_max) are no longer accepted
+    # from policy_overrides.json; slot adjustments, if any, should be
+    # derived by guardrails from 'news_risk_tilt' and not written here.
     ("buy_budget_frac",),
-    ("add_max",),
-    ("new_max",),
     ("sector_bias",),
     ("ticker_bias",),
 }

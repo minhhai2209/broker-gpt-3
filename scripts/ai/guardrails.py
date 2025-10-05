@@ -256,10 +256,11 @@ def enforce_guardrails(
     # overridden by the AI generator. Silently drop any unexpected keys so
     # guardrails remain forward-compatible while ensuring runtime policy stays
     # within the documented contract.
+    # Reduce AI-tunable surface: disallow direct slot overrides.
+    # Guardrails may still derive slots from 'news_risk_tilt' internally,
+    # but raw overrides cannot set 'add_max'/'new_max'.
     allowed_runtime_keys = {
         'buy_budget_frac',
-        'add_max',
-        'new_max',
         'sector_bias',
         'ticker_bias',
         'news_risk_tilt',

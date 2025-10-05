@@ -47,13 +47,14 @@ def build_prompt(sample_json: str, analysis_so_far: str, round_idx: int, max_rou
     # to reduce overlap with calibrators and improve stability/auditability.
     # Calibrators compute quantiles, ATR-based thresholds, market filters, sizing, etc.
     # Daily AI/script may only touch the following knobs:
+    # Minimize tunable surface: no direct slot overrides from AI.
+    # Slots may still be derived internally from 'news_risk_tilt' by guardrails,
+    # but the generator must not set 'add_max' or 'new_max' explicitly.
     allowed_keys = [
         'buy_budget_frac',      # risk-on/off budget tilt
-        'add_max',              # slots for adds
-        'new_max',              # slots for new positions
         'sector_bias',          # sector‑level tilts in [-0.20..0.20]
         'ticker_bias',          # ticker‑level tilts in [-0.20..0.20]
-        'news_risk_tilt',       # optional helper input in [-1..+1]; mapped to budget/slots, not persisted
+        'news_risk_tilt',       # optional helper input in [-1..+1]; mapped by guardrails
         'rationale',            # required: brief natural‑language justification for changes
     ]
     allowed_list = "\n".join([f"- {k}" for k in allowed_keys])
