@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import math
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -50,6 +51,11 @@ DATA_DIR = BASE_DIR / "data"
 """Order Engine — stateless flow.
 Non-core helpers are split into scripts/engine/* for readability.
 """
+
+
+def _test_mode_enabled() -> bool:
+    val = os.getenv('BROKER_TEST_MODE', '').strip().lower()
+    return val not in {'', '0', 'false', 'no', 'off'}
 
 
 # ensure_policy_override_file moved to scripts.engine.config_io
@@ -4091,6 +4097,9 @@ def run() -> None:
     orders, notes, regime = build_orders(
         actions, portfolio, snapshot, metrics, presets, pnl_summary, scores, regime, prices_history
     )
+    if _test_mode_enabled():
+        print("[test] BROKER_TEST_MODE=1: Skipping order persistence (test mode).")
+        return
     # Entry gating: move low-probability/weak micro-tape BUYs to watchlist (configurable via orders_ui)
     ou_conf = {}
     try:
