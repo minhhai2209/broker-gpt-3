@@ -14,6 +14,12 @@
 - Schema & test đi cùng thay đổi: khi chỉnh schema/policy, cập nhật baseline, whitelist overrides liên quan và test/fixtures tương ứng (giữ tests xanh).
 - Test/coverage trước bàn giao: chạy `./broker.sh tests` (có thể bật coverage) sau mỗi thay đổi quan trọng.
 
+Overlay policy (baseline bất biến)
+- Baseline: `config/policy_default.json` không bị workflow ghi đè.
+- Nightly overlay: `config/policy_nightly_overrides.json` do calibrators sinh; commit riêng.
+- AI overlay: `config/policy_ai_overrides.json` do tuner sinh; guardrails giới hạn bề mặt.
+- Runtime merge: engine hợp nhất baseline → nightly → ai → legacy (nếu có) thành `out/orders/policy_overrides.json` và dùng cho phiên chạy.
+
 ## Phân chia tài liệu (Docs structure)
 - `README.md`: chỉ tập trung vào cách sử dụng (install, chạy nhanh, I/O, lệnh tiện ích, server usage cơ bản, FAQ). Không chứa chi tiết kỹ thuật/thuật toán; nếu cần, đặt link trỏ sang SYSTEM_DESIGN.md.
 - `SYSTEM_DESIGN.md`: kiến trúc, pipeline, thuật toán/quy tắc ra quyết định, calibrations, execution diagnostics, policy/guardrails, lộ trình tích hợp (API, async runner). Đây là nơi chứa toàn bộ chi tiết kỹ thuật.

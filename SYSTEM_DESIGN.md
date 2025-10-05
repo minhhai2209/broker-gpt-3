@@ -40,6 +40,17 @@ Hoàn thành các bước trên, pipeline đảm bảo mọi dữ liệu cần t
 
 Cấu Hình Chiến Lược (Policy) và Điều Chỉnh Tham Số
 
+Ghi chú cập nhật (2025-10): baseline + overlays (không ghi đè baseline)
+
+- Baseline: `config/policy_default.json` là nguồn sự thật, ổn định.
+- Overlays (không ghi đè baseline):
+  - `config/policy_nightly_overrides.json`: kết quả từ nightly calibrations.
+  - `config/policy_ai_overrides.json`: kết quả từ AI tuner (được giới hạn bề mặt qua guardrails).
+  - (Legacy) `config/policy_overrides.json`: engine vẫn merge nếu còn tồn tại để tương thích.
+- Runtime merge: hàm `ensure_policy_override_file()` hợp nhất tuần tự baseline → nightly → ai → legacy và ghi kết quả runtime vào `out/orders/policy_overrides.json`.
+- Engine KHÔNG còn lọc/whitelist keys khi merge; việc giới hạn bề mặt cho AI do `scripts/ai/guardrails.py` đảm nhiệm. Calibrators có thể ghi các khóa rộng hơn (thresholds/sizing/market_filter…).
+
+
 Policy của Broker GPT là tập hợp các tham số chiến lược chi phối cách engine đánh giá tín hiệu và quản trị rủi ro. Hệ thống tổ chức cấu hình này thành hai tầng: mặc định (baseline) và điều chỉnh hằng ngày (overrides). Mục đích là giữ ổn định chiến lược lõi nhưng vẫn cho phép tinh chỉnh linh hoạt theo diễn biến thị trường ngắn hạn. 
 
 - Policy mặc định: Được định nghĩa trong file config/policy_default.json. Đây là nguồn sự thật chứa toàn bộ tham số chiến lược cơ bản, kết tinh từ nghiên cứu dài hạn. Ví dụ, trong policy mặc định có: trọng số mô hình điểm cho các yếu tố (xu hướng, động lượng, thanh khoản, beta, v.v.), các ngưỡng kỹ thuật như base_add, base_new (điểm tối thiểu để mua bổ sung/mua mới), ngưỡng trim_th để cắt giảm vị thế khi điểm yếu, các ngưỡng chốt lời (tp_pct) và cắt lỗ (sl_pct), tham số vi mô về khớp lệnh (bước giá HOSE, lô 100, phí giao dịch), giới hạn rủi ro (tỷ trọng tối đa cho một mã, một ngành), v.v. Hầu hết các giá trị trong policy_default là cố định, chỉ thay đổi khi điều chỉnh chiến lược lớn hoặc sau quá trình backtest dài hạn【28†L32-L40】.

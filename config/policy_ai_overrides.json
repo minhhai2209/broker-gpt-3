@@ -1,0 +1,14 @@
+{
+  "buy_budget_frac": 0.078,
+  "sector_bias": {
+    "Bất động sản": 0.02,
+    "Công nghiệp": -0.05,
+    "Dịch vụ tiện ích": 0.02,
+    "Hàng tiêu dùng không thiết yếu": -0.06,
+    "Hàng tiêu dùng thiết yếu": 0.02,
+    "Nguyên vật liệu": -0.03,
+    "Năng lượng": -0.04,
+    "Tài chính": 0.04,
+    "Y tế": 0.02
+  }
+}

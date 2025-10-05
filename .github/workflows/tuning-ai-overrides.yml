@@ -109,12 +109,11 @@ jobs:
           cp -f .codex/config.toml "$HOME/.codex/config.toml"
           chmod 600 "$HOME/.codex/config.toml"
 
-      - name: Generate policy_overrides via Codex
+      - name: Generate AI overlays via broker.sh
         run: |
           set -euo pipefail
           echo "Running rounds=$BROKER_CX_GEN_ROUNDS"
-          # Use the local generator which applies guardrails and writes config/policy_overrides.json
-          python -m scripts.ai.codex_policy_budget_bias_tuner
+          ./broker.sh tune-ai
 
       - name: Persist generated AI overlays (commit and push)
         env:

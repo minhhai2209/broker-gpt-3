@@ -43,7 +43,8 @@ Kết quả chính (out/)
 Lệnh tiện ích
 - `./broker.sh orders` — chạy Order Engine (mặc định).
 - `./broker.sh tests` — chạy test; bật coverage: `BROKER_COVERAGE=1 ./broker.sh tests`.
-- `./broker.sh policy` — sinh `config/policy_overrides.json` (guardrails + commit/push) để dùng cùng `config/policy_default.json`.
+- `./broker.sh tune-ai` — sinh overlay AI tại `config/policy_ai_overrides.json` (áp guardrails); không push.
+- `./broker.sh tune-nightly` — chạy toàn bộ calibrators và ghi overlay nightly tại `config/policy_nightly_overrides.json`; không push.
 - `./broker.sh server` — chạy API server cục bộ (Flask) phục vụ extension/ứng dụng (mặc định `PORT=8787`).
 
   
@@ -62,8 +63,11 @@ API server (tùy chọn)
 
 Policy & cấu hình
 - Baseline: `config/policy_default.json` (nguồn sự thật, có chú thích đầy đủ).
-- Overrides cho phiên/ngày: `config/policy_overrides.json` — nếu được sinh bởi CLI thì chỉ chứa các khoá runtime đã được guardrails whitelisted; mọi giá trị đã tune/calibrate (ghi vào overrides) sẽ được deep‑merge đầy đủ với baseline khi runtime. Xem chi tiết và guardrails trong SYSTEM_DESIGN.md.
-- Nếu không có overrides, engine dùng nguyên baseline.
+- Overlays (không ghi đè baseline):
+  - `config/policy_nightly_overrides.json` — do nightly calibrations sinh ra.
+  - `config/policy_ai_overrides.json` — do AI tuner sinh ra (bị giới hạn bề mặt qua guardrails).
+  - (Legacy) `config/policy_overrides.json` — vẫn được engine đọc nếu tồn tại, để tương thích đường cũ.
+- Runtime: engine hợp nhất theo thứ tự ưu tiên tăng dần: baseline → nightly → ai → legacy. Không có bước deep‑merge vào baseline; baseline luôn ổn định. Chi tiết trong SYSTEM_DESIGN.md.
 
 Tài liệu chi tiết
 - Kiến trúc, pipeline, nhận diện market regime, thuật toán quyết định lệnh, calibrations, guardrails I/O: xem `SYSTEM_DESIGN.md`.
