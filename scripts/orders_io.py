@@ -2,14 +2,33 @@ from __future__ import annotations
 
 import csv
 import math
+import os
+from contextlib import contextmanager
+from io import StringIO
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Iterator
 
 import pandas as pd
 
 from scripts.utils import to_float, hose_tick_size
 
 LOT_SIZE = 100
+
+
+def _test_mode_enabled() -> bool:
+    val = os.getenv('BROKER_TEST_MODE', '').strip().lower()
+    return val not in {'', '0', 'false', 'no', 'off'}
+
+
+@contextmanager
+def _open_for_write(path: Path, mode: str = 'w', *, newline: str | None = None) -> Iterator[StringIO | object]:
+    if _test_mode_enabled():
+        buffer = StringIO()
+        yield buffer
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open(mode, newline=newline, encoding='utf-8') as handle:
+            yield handle
 
 
 def _as_series(df: pd.DataFrame, ticker: str) -> pd.Series | None:
@@ -183,7 +202,6 @@ def write_orders_csv(
     (Ticker,Side,Quantity,LimitPrice). If context is provided, append useful
     execution/profitability fields to help operator prioritize input.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
     enrich = snapshot is not None and presets is not None and feats_all is not None and scores is not None
     snap = snapshot.set_index("Ticker") if (enrich and not snapshot.empty) else pd.DataFrame()
     pre = presets.set_index("Ticker") if (enrich and not presets.empty) else pd.DataFrame()
@@ -193,7 +211,7 @@ def write_orders_csv(
             th = dict(getattr(regime, 'thresholds', {}) or {})
         except Exception:
             th = {}
-    with path.open("w", newline="") as f:
+    with _open_for_write(path, "w", newline="") as f:
         w = csv.writer(f)
         # New behavior: always write a minimal, stable schema to avoid mis-entry.
         # Columns: Ticker, Side, Quantity, LimitPrice
@@ -246,8 +264,7 @@ def write_orders_csv(
 
 
 def write_orders_reasoning(actions: dict, scores: dict, feats_all: dict, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="") as f:
+    with _open_for_write(path, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["Ticker", "Action", "Score", "above_ma20", "above_ma50", "rsi", "macdh_pos", "liq_norm", "atr_pct", "pnl_pct"])
         for t, a in actions.items():
@@ -411,6 +428,9 @@ def write_orders_quality(orders, snapshot: pd.DataFrame, presets: pd.DataFrame, 
         df.drop(columns=['__side_key'], inplace=True)
     except Exception:
         pass
+    if _test_mode_enabled():
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(path, index=False)
 
 
@@ -430,7 +450,6 @@ def write_orders_csv_enriched(
     """Write enriched orders CSV with execution/profitability fields."""
     if snapshot is None or presets is None or feats_all is None or scores is None:
         raise SystemExit("write_orders_csv_enriched requires market context (snapshot/presets/feats/scores)")
-    path.parent.mkdir(parents=True, exist_ok=True)
     snap = snapshot.set_index("Ticker") if not snapshot.empty else pd.DataFrame()
     pre = presets.set_index("Ticker") if not presets.empty else pd.DataFrame()
     try:
@@ -462,7 +481,7 @@ def write_orders_csv_enriched(
     if not {'base','soft','hard'}.issubset(ttl_conf):
         raise SystemExit("Missing orders_ui.ttl_minutes.{base,soft,hard} in policy")
     ttl_base = int(ttl_conf['base']); ttl_soft = int(ttl_conf['soft']); ttl_hard = int(ttl_conf['hard'])
-    with path.open("w", newline="") as f:
+    with _open_for_write(path, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow([
             "Ticker", "Side", "Quantity", "LimitPrice", "MarketPrice",
@@ -569,8 +588,8 @@ def write_orders_csv_enriched(
 
 
 def write_orders_analysis(lines: list[str], path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines), encoding="utf-8")
+    with _open_for_write(path, "w") as handle:
+        handle.write("\n".join(lines))
 
 
 def write_text_lines(lines: list[str], path: Path) -> None:
@@ -582,5 +601,5 @@ def write_text_lines(lines: list[str], path: Path) -> None:
     for i, line in enumerate(lines):
         if not isinstance(line, str):
             raise ValueError(f"lines[{i}] must be str")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines), encoding="utf-8")
+    with _open_for_write(path, "w") as handle:
+        handle.write("\n".join(lines))

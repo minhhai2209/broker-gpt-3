@@ -44,19 +44,12 @@ def _deep_merge(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]
 # Only these keys from config/policy_overrides.json will override policy_default.json.
 # Represented as tuples of nested keys, e.g., ("thresholds", "base_add").
 ALLOWED_OVERRIDE_PATHS: set[Tuple[str, ...]] = {
-    # Minimal knobs (AI generator)
+    # Minimal knobs exposed to the AI generator.
     ("buy_budget_frac",),
     ("add_max",),
     ("new_max",),
     ("sector_bias",),
     ("ticker_bias",),
-    # Calibrator surfaces (persist tuned values between runs)
-    ("thresholds",),           # q_add, q_new, min_liq_norm, near_ceiling_pct, tp/sl multiples, etc.
-    ("sizing",),               # cov_reg, dynamic_caps.*, default_stop_atr_mult
-    ("pricing",),              # fill_prob.*
-    ("orders_ui",),            # ttl_minutes.*, watchlist.*
-    ("market_filter",),        # calibrated market guards
-    ("regime_model",),         # intercept/threshold and components mean/std
 }
 
 
