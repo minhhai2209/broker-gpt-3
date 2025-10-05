@@ -122,11 +122,8 @@ def calibrate(write: bool = False) -> tuple[float, float]:
 
 
 def main():
-    from argparse import ArgumentParser
-    ap = ArgumentParser()
-    ap.add_argument('--write', action='store_true')
-    args = ap.parse_args()
-    rsi, mom = calibrate(write=args.write)
+    # Always write tuned leader gates to runtime overrides
+    rsi, mom = calibrate(write=True)
     print(f"[calibrate.leaders] leader_min_rsi={rsi:.2f}, leader_min_mom_norm={mom:.2f}")
 
 

@@ -65,7 +65,7 @@ API server (tùy chọn)
 
 Policy & cấu hình
 - Baseline: `config/policy_default.json` (nguồn sự thật, có chú thích đầy đủ).
-- Overrides cho phiên/ngày: `config/policy_overrides.json` — chỉ cho phép các khoá whitelisted (xem chi tiết và guardrails trong SYSTEM_DESIGN.md).
+- Overrides cho phiên/ngày: `config/policy_overrides.json` — nếu được sinh bởi CLI thì chỉ chứa các khoá runtime đã được guardrails whitelisted; mọi giá trị đã tune/calibrate (ghi vào overrides) sẽ được deep‑merge đầy đủ với baseline khi runtime. Xem chi tiết và guardrails trong SYSTEM_DESIGN.md.
 - Nếu không có overrides, engine dùng nguyên baseline.
 
 Tài liệu chi tiết

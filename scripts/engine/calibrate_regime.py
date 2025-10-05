@@ -428,15 +428,13 @@ def calibrate(horizon: int = 21, write: bool = False) -> tuple[float, float, int
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--horizon', type=int, default=21, help='forward-return horizon (sessions) for labeling')
-    ap.add_argument('--write', action='store_true', help='write calibrated intercept/threshold back to policy_overrides.json')
     args = ap.parse_args()
 
-    b, thr, n, pos_rate, names = calibrate(horizon=args.horizon, write=args.write)
+    b, thr, n, pos_rate, names = calibrate(horizon=args.horizon, write=True)
     print('[calibrate] Components used:', ', '.join(names) if names else '(none)')
     print(f"[calibrate] Sample size={n}, positive rate={pos_rate:.2f}")
     print(f"[calibrate] Suggested intercept={b:.4f}, threshold={thr:.3f}")
-    if args.write:
-        print(f"[calibrate] Wrote intercept/threshold -> {CONFIG_PATH}")
+    print(f"[calibrate] Wrote intercept/threshold -> {CONFIG_PATH}")
 
 
 if __name__ == '__main__':

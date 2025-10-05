@@ -116,24 +116,8 @@ def calibrate(write: bool = False) -> float:
 
 
 def main():
-    from argparse import ArgumentParser
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--write', action='store_true')
-    ap.add_argument('--write-defaults', action='store_true')
-    args = ap.parse_args()
-    if args.write_defaults:
-        v = calibrate(write=False)
-        # Write to defaults
-        raw = DEFAULTS_PATH.read_text(encoding='utf-8')
-        raw = _strip(raw)
-        obj = json.loads(raw)
-        mf = dict(obj.get('market_filter', {}) or {})
-        mf['risk_off_breadth_floor'] = float(v)
-        obj['market_filter'] = mf
-        DEFAULTS_PATH.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf-8')
-        print(f"[calibrate.breadth] (defaults) risk_off_breadth_floor={v:.2f} -> {DEFAULTS_PATH}")
-        return
-    v = calibrate(write=args.write)
+    # Always write tuned value to runtime overrides; baseline is updated by nightly merge
+    v = calibrate(write=True)
     print(f"[calibrate.breadth] risk_off_breadth_floor={v:.2f}")
 
 

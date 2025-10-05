@@ -205,11 +205,8 @@ def calibrate(write: bool = False) -> Tuple[float, int, float, int, float]:
 
 
 def main():
-    from argparse import ArgumentParser
-    ap = ArgumentParser()
-    ap.add_argument('--write', action='store_true')
-    args = ap.parse_args()
-    tau, n_add, enp_add, n_new, enp_new = calibrate(write=args.write)
+    # Always write tuned softmax_tau to runtime overrides
+    tau, n_add, enp_add, n_new, enp_new = calibrate(write=True)
     print(f"[calibrate.tau] softmax_tau={tau:.4f} (add_pool={n_add}, target_enp_add={enp_add:.2f}; new_pool={n_new}, target_enp_new={enp_new:.2f})")
 
 

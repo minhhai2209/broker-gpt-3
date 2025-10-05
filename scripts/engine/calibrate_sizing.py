@@ -136,11 +136,8 @@ def calibrate(write: bool = False) -> float:
 
 
 def main():
-    from argparse import ArgumentParser
-    ap = ArgumentParser()
-    ap.add_argument('--write', action='store_true')
-    args = ap.parse_args()
-    v = calibrate(write=args.write)
+    # Always write tuned value to runtime policy_overrides.json
+    v = calibrate(write=True)
     print(f"[calibrate.sizing] cov_reg = {v:.6f}")
 
 

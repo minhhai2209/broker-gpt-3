@@ -135,11 +135,8 @@ def calibrate(write: bool = False) -> float:
 
 
 def main():
-    from argparse import ArgumentParser
-    ap = ArgumentParser()
-    ap.add_argument('--write', action='store_true')
-    args = ap.parse_args()
-    val = calibrate(write=args.write)
+    # Always write tuned liquidity threshold to runtime overrides
+    val = calibrate(write=True)
     print(f"[calibrate.liq] min_liq_norm = {val:.4f}")
 
 

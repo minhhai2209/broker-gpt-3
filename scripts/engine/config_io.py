@@ -6,7 +6,7 @@ Implementation details are separated to keep order_engine.py focused.
 
 from pathlib import Path
 import os
-from typing import Dict, Any, Iterable, Tuple
+from typing import Dict, Any, Iterable
 
 import pandas as pd
 from .schema import PolicyOverrides
@@ -40,52 +40,10 @@ def _deep_merge(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]
     return out
 
 
-# Whitelisted override paths that Codex may tune at runtime.
-# Only these keys from config/policy_overrides.json will override policy_default.json.
-# Represented as tuples of nested keys, e.g., ("thresholds", "base_add").
-ALLOWED_OVERRIDE_PATHS: set[Tuple[str, ...]] = {
-    # Minimal knobs exposed to the AI generator/runtime.
-    # Note: direct slot overrides (add_max/new_max) are no longer accepted
-    # from policy_overrides.json; slot adjustments, if any, should be
-    # derived by guardrails from 'news_risk_tilt' and not written here.
-    ("buy_budget_frac",),
-    ("sector_bias",),
-    ("ticker_bias",),
-}
-
-
-def _filter_overrides(ov: Dict[str, Any]) -> Dict[str, Any]:
-    """Filter an overrides dict to only allowed tunable keys.
-    - Entire maps allowed for sector_bias/ticker_bias.
-    - For nested keys, copy only whitelisted fields.
-    """
-    out: Dict[str, Any] = {}
-    for path in ALLOWED_OVERRIDE_PATHS:
-        node = ov
-        ok = True
-        for key in path:
-            if not isinstance(node, dict) or key not in node:
-                ok = False
-                break
-            if key is path[-1]:
-                # Leaf: copy value
-                pass
-            node = node[key]
-        if not ok:
-            continue
-        # Construct into output
-        cur = out
-        for idx, key in enumerate(path):
-            is_leaf = (idx == len(path) - 1)
-            if is_leaf:
-                # Assign whole map if path length is 1 and value is dict and key denotes bias map
-                src_parent = ov
-                for k2 in path[:-1]:
-                    src_parent = src_parent[k2]
-                cur[key] = src_parent[key]
-            else:
-                cur = cur.setdefault(key, {})  # type: ignore[assignment]
-    return out
+# Note on overrides surface
+# Runtime key filtering for AI-generated overrides is enforced in scripts/ai/guardrails.py.
+# Here we intentionally deep-merge the ENTIRE overrides object with the baseline,
+# so that any tuned/calibrated keys written by engine calibrators are preserved.
 
 
 def ensure_policy_override_file() -> Path:
@@ -105,8 +63,9 @@ def ensure_policy_override_file() -> Path:
     policy_path_env = os.environ.get("POLICY_FILE", "").strip()
 
     # 0) If a complete baseline exists (policy_default.json) and no POLICY_FILE override is provided,
-    # merge it with a restricted subset of config/policy_overrides.json. If overrides are absent,
-    # write the baseline as-is. This is the preferred modern path.
+    # deep-merge it with config/policy_overrides.json (if present). The CLI guardrails are responsible
+    # for restricting AI-generated overrides; calibrators may write broader tuned sections which must
+    # be preserved here.
     default_baseline = BASE_DIR / "config" / "policy_default.json"
     if not policy_path_env and default_baseline.exists():
         import json
@@ -121,12 +80,11 @@ def ensure_policy_override_file() -> Path:
                 ov_obj = json.loads(_strip_json_comments(OVERRIDE_SRC.read_text(encoding="utf-8")))
             except Exception as exc:
                 raise SystemExit(f"Invalid JSON in overrides {OVERRIDE_SRC}: {exc}") from exc
-            ov_filtered = _filter_overrides(ov_obj)
-            merged = _deep_merge(ov_filtered, default_obj)  # ov overrides default for allowed fields
+            merged = _deep_merge(ov_obj, default_obj)  # full overrides take precedence over baseline
         else:
             merged = default_obj
         dest.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"Prepared runtime policy from baseline {default_baseline} with restricted overrides from {OVERRIDE_SRC if OVERRIDE_SRC.exists() else '<none>'} -> {dest}")
+        print(f"Prepared runtime policy by deep-merging baseline {default_baseline} with overrides {OVERRIDE_SRC if OVERRIDE_SRC.exists() else '<none>'} -> {dest}")
         return dest
 
     # 1) Legacy path retained for backward compatibility and tests:

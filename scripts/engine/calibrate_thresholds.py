@@ -211,11 +211,8 @@ def calibrate(write: bool = False) -> Tuple[float, float, int, int]:
 
 
 def main():
-    from argparse import ArgumentParser
-    ap = ArgumentParser()
-    ap.add_argument('--write', action='store_true')
-    args = ap.parse_args()
-    q_add, q_new, n_add, n_new = calibrate(write=args.write)
+    # Always write tuned quantile gates to runtime overrides
+    q_add, q_new, n_add, n_new = calibrate(write=True)
     print(f"[calibrate.topk] q_add={q_add:.3f} (pool={n_add}), q_new={q_new:.3f} (pool={n_new})")
 
 

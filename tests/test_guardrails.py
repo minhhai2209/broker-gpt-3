@@ -145,7 +145,7 @@ class TestAllowedOverridePaths(unittest.TestCase):
             json.dumps(default_obj, ensure_ascii=False, indent=2), encoding='utf-8'
         )
 
-    def test_only_minimal_allowed_keys_override(self):
+    def test_runtime_deep_merge_overrides(self):
         base = Path(config_io.BASE_DIR)
         # Provide an override that includes disallowed fields
         override_obj = {
@@ -161,13 +161,13 @@ class TestAllowedOverridePaths(unittest.TestCase):
 
         dest = config_io.ensure_policy_override_file()
         merged = json.loads(dest.read_text(encoding='utf-8'))
-        # Allowed keys applied
+        # All overrides are applied at runtime (deep-merge). CLI guardrails limit keys upstream.
         self.assertEqual(merged['buy_budget_frac'], 0.12)
         self.assertEqual(merged['sector_bias'], {'Energy': 0.1})
         self.assertEqual(merged['ticker_bias'], {'AAA': 0.05})
-        # Disallowed keys ignored -> baseline stays
-        self.assertEqual(merged['thresholds']['base_add'], 0.35)
-        self.assertEqual(merged['sizing']['add_share'], 0.5)
+        # Calibrator-style fields in thresholds/sizing are also honored at runtime
+        self.assertEqual(merged['thresholds']['base_add'], 0.99)
+        self.assertEqual(merged['sizing']['add_share'], 0.9)
 
 
 if __name__ == '__main__':

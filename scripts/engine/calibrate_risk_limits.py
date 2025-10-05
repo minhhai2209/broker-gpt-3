@@ -102,34 +102,8 @@ def calibrate(write: bool = False) -> tuple[float, float, float]:
 
 
 def main():
-    from argparse import ArgumentParser
-    ap = ArgumentParser()
-    ap.add_argument('--write', action='store_true', help='write to runtime policy_overrides.json (default behavior)')
-    ap.add_argument('--write-defaults', action='store_true', help='write to baseline config/policy_default.json')
-    args = ap.parse_args()
-    # If user wants baseline update, compute without side effects then write to defaults explicitly
-    if args.write_defaults:
-        tp_m, sl_m, atr_med = calibrate(write=False)
-        # Update defaults file directly (source of truth)
-        raw = DEFAULTS_PATH.read_text(encoding='utf-8')
-        import re, json as _json
-        raw = re.sub(r"/\*.*?\*/", "", raw, flags=re.S)
-        raw = re.sub(r"(^|\s)//.*$", "", raw, flags=re.M)
-        raw = re.sub(r"(^|\s)#.*$", "", raw, flags=re.M)
-        obj = _json.loads(raw)
-        th = dict(obj.get('thresholds', {}) or {})
-        th['tp_atr_mult'] = float(tp_m)
-        th['sl_atr_mult'] = float(sl_m)
-        obj['thresholds'] = th
-        # Align default stop multiple
-        sz = dict(obj.get('sizing', {}) or {})
-        sz['default_stop_atr_mult'] = float(sl_m)
-        obj['sizing'] = sz
-        DEFAULTS_PATH.write_text(_json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf-8')
-        print(f"[calibrate.risk] (defaults) tp_atr_mult={tp_m:.3f}, sl_atr_mult={sl_m:.3f} (median ATR={atr_med*100:.2f}%) -> {DEFAULTS_PATH}")
-        return
-    # Otherwise use legacy behavior (runtime overrides)
-    tp_m, sl_m, atr_med = calibrate(write=args.write)
+    # Always write to runtime overrides; baseline updated via nightly merge
+    tp_m, sl_m, atr_med = calibrate(write=True)
     print(f"[calibrate.risk] tp_atr_mult={tp_m:.3f}, sl_atr_mult={sl_m:.3f} (median ATR={atr_med*100:.2f}%)")
 
 

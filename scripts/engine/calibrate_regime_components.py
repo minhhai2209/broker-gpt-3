@@ -194,11 +194,8 @@ def calibrate(write: bool = False) -> List[str]:
 
 
 def main():
-    from argparse import ArgumentParser
-    ap = ArgumentParser()
-    ap.add_argument('--write', action='store_true')
-    args = ap.parse_args()
-    names = calibrate(write=args.write)
+    # Always write tuned component stats to runtime overrides
+    names = calibrate(write=True)
     print('[calibrate.regime_components] updated:', ', '.join(names) if names else '(none)')
 
 

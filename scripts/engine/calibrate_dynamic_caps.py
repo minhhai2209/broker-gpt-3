@@ -107,11 +107,8 @@ def calibrate(write: bool = False) -> tuple[float, float, float, float]:
 
 
 def main():
-    from argparse import ArgumentParser
-    ap = ArgumentParser()
-    ap.add_argument('--write', action='store_true')
-    args = ap.parse_args()
-    pmin, pmax, smin, smax = calibrate(write=args.write)
+    # Always write tuned dynamic caps to runtime overrides
+    pmin, pmax, smin, smax = calibrate(write=True)
     print(f"[calibrate.dyncaps] pos_min={pmin:.3f}, pos_max={pmax:.3f}, sector_min={smin:.3f}, sector_max={smax:.3f}")
 
 

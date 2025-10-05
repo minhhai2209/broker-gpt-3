@@ -301,40 +301,8 @@ def calibrate(write: bool = False) -> Dict[str, float]:
 
 
 def main():
-    from argparse import ArgumentParser
-    import json as _json, re
-    ap = ArgumentParser()
-    ap.add_argument('--write', action='store_true', help='write calibrated thresholds back to config/policy_overrides.json')
-    ap.add_argument('--write-defaults', action='store_true', help='write calibrated thresholds to baseline config/policy_default.json')
-    args = ap.parse_args()
-    if args.write_defaults:
-        vals = calibrate(write=False)
-        raw = DEFAULTS_PATH.read_text(encoding='utf-8')
-        raw = re.sub(r"/\*.*?\*/", "", raw, flags=re.S)
-        raw = re.sub(r"(^|\s)//.*$", "", raw, flags=re.M)
-        raw = re.sub(r"(^|\s)#.*$", "", raw, flags=re.M)
-        obj = _json.loads(raw)
-        mf = dict(obj.get('market_filter', {}) or {})
-        mf.update({
-            'risk_off_index_drop_pct': float(vals.get('risk_off_index_drop_pct', mf.get('risk_off_index_drop_pct', 0.5)) or 0.5),
-            'idx_chg_smoothed_hard_drop': float(vals.get('idx_chg_smoothed_hard_drop', mf.get('idx_chg_smoothed_hard_drop', 0.5)) or 0.5),
-            'vol_ann_hard_ceiling': float(vals.get('vol_ann_hard_ceiling', mf.get('vol_ann_hard_ceiling', 0.6)) or 0.6),
-            'trend_norm_hard_floor': float(vals.get('trend_norm_hard_floor', mf.get('trend_norm_hard_floor', -0.25)) or -0.25),
-            'index_atr_soft_pct': float(vals.get('index_atr_soft_pct', mf.get('index_atr_soft_pct', 0.8)) or 0.8),
-            'index_atr_hard_pct': float(vals.get('index_atr_hard_pct', mf.get('index_atr_hard_pct', 0.95)) or 0.95),
-        })
-        # Optional floors if present
-        if 'market_score_soft_floor' in vals:
-            mf['market_score_soft_floor'] = float(vals['market_score_soft_floor'])
-        if 'market_score_hard_floor' in vals:
-            mf['market_score_hard_floor'] = float(vals['market_score_hard_floor'])
-        if 'risk_off_drawdown_floor' in vals:
-            mf['risk_off_drawdown_floor'] = float(vals['risk_off_drawdown_floor'])
-        obj['market_filter'] = mf
-        DEFAULTS_PATH.write_text(_json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf-8')
-        print(f"[calibrate.mf] (defaults) wrote market_filter -> {DEFAULTS_PATH}")
-        return
-    vals = calibrate(write=args.write)
+    # Always write tuned thresholds to runtime overrides; baseline updated via nightly merge
+    vals = calibrate(write=True)
     for k, v in vals.items():
         print(f"[calibrate.mf] {k} = {v}")
 
