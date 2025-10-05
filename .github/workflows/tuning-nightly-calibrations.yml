@@ -1,9 +1,9 @@
-name: Tuning Liquidity, Near-Ceiling, Dynamic Caps
+name: Tuning Nightly Calibrations
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '10 8 * * 1-5'  # 15:10 ICT, Mon–Fri (aligned with daily)
+    - cron: '10 8 * * 1-5'  # 15:10 ICT, Mon–Fri (after market close)
 
 concurrency:
   group: tuning-nightly-${{ github.ref }}
@@ -13,13 +13,10 @@ permissions:
   contents: write
 
 jobs:
-  liquidity_near_ceiling_dyncaps:
-    name: Calibrate Liquidity, Near-Ceiling, Dynamic Caps
+  nightly_calibrations:
+    name: Calibrate policy inputs overnight
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
       - name: Setup common environment
         uses: ./.github/actions/tuning-common
         with:
@@ -27,9 +24,22 @@ jobs:
 
       - name: Run nightly calibrations
         run: |
+          set -euo pipefail
+          python -m scripts.engine.calibrate_regime_components --write
+          python -m scripts.engine.calibrate_regime --horizon 63 --write
+          python -m scripts.engine.calibrate_market_filter --write
+          python -m scripts.engine.calibrate_breadth_floor --write
+          python -m scripts.engine.calibrate_leader_gates --write
+          python -m scripts.engine.calibrate_risk_limits --write
+          python -m scripts.engine.calibrate_sizing --write
+          python -m scripts.engine.calibrate_thresholds --write
+          python -m scripts.engine.calibrate_softmax_tau --write
           python -m scripts.engine.calibrate_near_ceiling --write
           python -m scripts.engine.calibrate_liquidity --write
           python -m scripts.engine.calibrate_dynamic_caps --write
+          python -m scripts.engine.calibrate_ttl_minutes --write
+          python -m scripts.engine.calibrate_fill_prob --write
+          python -m scripts.engine.calibrate_watchlist --write
 
       - name: Persist tuned policy (commit and push)
         env:
