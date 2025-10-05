@@ -144,10 +144,17 @@ def _write_overrides_merged(target_path: Path, sanitized: Dict[str, object]) -> 
                 out[k] = v
         return out
 
-    merged = _deep_merge(preserved, sanitized or {})
+    # Replace mode for bias dicts; deep-merge for the rest
+    sanitized = sanitized or {}
+    non_bias = {k: v for k, v in sanitized.items() if k not in {"sector_bias", "ticker_bias"}}
+    merged = _deep_merge(preserved, non_bias)
+    if "sector_bias" in sanitized:
+        merged["sector_bias"] = sanitized["sector_bias"]  # replace entirely
+    if "ticker_bias" in sanitized:
+        merged["ticker_bias"] = sanitized["ticker_bias"]  # replace entirely
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding='utf-8')
-    print(f"Guardrails applied: deep-merged runtime overrides into {target_path} (preserved {len(preserved)} non-runtime keys)")
+    print(f"Guardrails applied: deep-merge + replace(bias) into {target_path} (preserved {len(preserved)} non-runtime keys)")
 
 
 def main() -> None:
