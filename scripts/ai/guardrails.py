@@ -251,6 +251,25 @@ def enforce_guardrails(
         return {}, dict(state or {})
 
     raw_overrides = deepcopy(overrides) if overrides else {}
+    # Restrict surface to minimal runtime knobs. Calibrators own broader
+    # sections (thresholds, sizing, pricing, etc.) and should never be
+    # overridden by the AI generator. Silently drop any unexpected keys so
+    # guardrails remain forward-compatible while ensuring runtime policy stays
+    # within the documented contract.
+    allowed_runtime_keys = {
+        'buy_budget_frac',
+        'add_max',
+        'new_max',
+        'sector_bias',
+        'ticker_bias',
+        'news_risk_tilt',
+        'rationale',
+    }
+    raw_overrides = {
+        key: value
+        for key, value in raw_overrides.items()
+        if key in allowed_runtime_keys
+    }
     # Extract rationale for audit; not persisted to policy file
     rationale_text = str(raw_overrides.pop('rationale', '') or '').strip()
     # Apply optional news tilt mapping into working copy
@@ -263,10 +282,6 @@ def enforce_guardrails(
 
     sanitized = deepcopy(working)
     next_state = deepcopy(state) if state else {}
-
-    # Ensure nested dicts exist in sanitized copy
-    if 'sizing' not in sanitized and 'sizing' in overrides:
-        sanitized['sizing'] = deepcopy(overrides['sizing'])
 
     baseline_slots_cap = _max_slots_bound(metrics_count)
 

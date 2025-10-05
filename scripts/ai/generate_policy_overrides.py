@@ -22,6 +22,18 @@ if str(BASE_DIR) not in _sys.path:
 from scripts.ai.guardrails import apply_guardrails
 
 
+def _test_mode_enabled() -> bool:
+    val = os.getenv('BROKER_TEST_MODE', '').strip().lower()
+    return val not in {'', '0', 'false', 'no', 'off'}
+
+
+def _resolve_reasoning_effort() -> str:
+    override = os.getenv('BROKER_CX_REASONING', '').strip()
+    if override:
+        return override
+    return 'low' if _test_mode_enabled() else 'high'
+
+
 def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8") if path.exists() else ""
 
@@ -113,7 +125,7 @@ def main() -> None:
             '--full-auto',
             '--model', 'gpt-5',
             '-c', 'tools.web_search=true',
-            '-c', f'reasoning_effort=high',
+            '-c', f'reasoning_effort={_resolve_reasoning_effort()}',
             '-',
         ]
         analysis_file_text: str = ""
