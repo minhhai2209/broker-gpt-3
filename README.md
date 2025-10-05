@@ -46,10 +46,7 @@ Lệnh tiện ích
 - `./broker.sh policy` — sinh `config/policy_overrides.json` (guardrails + commit/push) để dùng cùng `config/policy_default.json`.
 - `./broker.sh server` — chạy API server cục bộ (Flask) phục vụ extension/ứng dụng (mặc định `PORT=8787`).
 
-Backtest & tuning (MVP)
-- `python -m backtest.runner --start YYYY-MM-DD --end YYYY-MM-DD --config configs/replay.yaml --out backtest_out/<run_id>` để replay một cửa sổ lịch sử và sinh CSV/NDJSON phục vụ audit.
-- `python -m backtest.tune --train-start YYYY-MM-DD --train-end YYYY-MM-DD --val-start YYYY-MM-DD --val-end YYYY-MM-DD --grid configs/tune_grid.yaml --base-config configs/replay.yaml` để chạy grid search đơn giản; tham số walk-forward cũng có sẵn qua các flag `--wf-*` theo spec.
-- GitHub Actions mặc định chỉ chạy `./broker.sh tests` (xem `.github/workflows/tests.yml`). Khi cần chuỗi đầy đủ (tests → tuning AI overrides → nightly calibrations → tạo lệnh từ danh mục cuối cùng), kích hoạt workflow thủ công **Full Pipeline Orchestration** và chọn `orders-selection=latest` để dùng danh mục mới nhất.
+  
 
 Diagnostics & calibrations
 - Chi tiết về mô hình chi phí giao dịch, slippage, xác suất khớp (FillProb/FillRateExp), LimitLock, và cơ chế hiệu chỉnh TTL theo biến động thị trường được tài liệu hóa tại `SYSTEM_DESIGN.md` (mục Calibrations & Execution Diagnostics).
