@@ -134,10 +134,20 @@ def _write_overrides_merged(target_path: Path, sanitized: Dict[str, object]) -> 
             raise SystemExit(f'Invalid JSON in existing overrides: {target_path}')
 
     preserved = {k: v for k, v in (existing or {}).items() if k not in runtime_keys}
-    merged = {**preserved, **(sanitized or {})}
+
+    def _deep_merge(dst: Dict[str, object], src: Dict[str, object]) -> Dict[str, object]:
+        out = dict(dst)
+        for k, v in (src or {}).items():
+            if isinstance(v, dict) and isinstance(out.get(k), dict):
+                out[k] = _deep_merge(out[k], v)  # type: ignore[arg-type]
+            else:
+                out[k] = v
+        return out
+
+    merged = _deep_merge(preserved, sanitized or {})
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding='utf-8')
-    print(f"Guardrails applied: merged runtime overrides into {target_path} (preserved {len(preserved)} non-runtime keys)")
+    print(f"Guardrails applied: deep-merged runtime overrides into {target_path} (preserved {len(preserved)} non-runtime keys)")
 
 
 def main() -> None:
