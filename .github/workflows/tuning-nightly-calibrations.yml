@@ -61,21 +61,21 @@ jobs:
       - name: Run nightly calibrations
         run: |
           set -euo pipefail
-          python -m scripts.engine.calibrate_regime_components --write
-          python -m scripts.engine.calibrate_regime --horizon 63 --write
-          python -m scripts.engine.calibrate_market_filter --write
-          python -m scripts.engine.calibrate_breadth_floor --write
-          python -m scripts.engine.calibrate_leader_gates --write
-          python -m scripts.engine.calibrate_risk_limits --write
-          python -m scripts.engine.calibrate_sizing --write
-          python -m scripts.engine.calibrate_thresholds --write
-          python -m scripts.engine.calibrate_softmax_tau --write
-          python -m scripts.engine.calibrate_near_ceiling --write
-          python -m scripts.engine.calibrate_liquidity --write
-          python -m scripts.engine.calibrate_dynamic_caps --write
-          python -m scripts.engine.calibrate_ttl_minutes --write
-          python -m scripts.engine.calibrate_fill_prob --write
-          python -m scripts.engine.calibrate_watchlist --write
+          python -m scripts.engine.calibrate_regime_components
+          python -m scripts.engine.calibrate_regime --horizon 63
+          python -m scripts.engine.calibrate_market_filter
+          python -m scripts.engine.calibrate_breadth_floor
+          python -m scripts.engine.calibrate_leader_gates
+          python -m scripts.engine.calibrate_risk_limits
+          python -m scripts.engine.calibrate_sizing
+          python -m scripts.engine.calibrate_thresholds
+          python -m scripts.engine.calibrate_softmax_tau
+          python -m scripts.engine.calibrate_near_ceiling
+          python -m scripts.engine.calibrate_liquidity
+          python -m scripts.engine.calibrate_dynamic_caps
+          python -m scripts.engine.calibrate_ttl_minutes
+          python -m scripts.engine.calibrate_fill_prob
+          python -m scripts.engine.calibrate_watchlist
 
       - name: Persist tuned policy (commit and push)
         env:
