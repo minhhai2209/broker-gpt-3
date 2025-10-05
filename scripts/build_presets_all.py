@@ -176,16 +176,26 @@ def _build_row(t: str, px: float, ref_px: float, ma10: float, ma20: float, ma50:
     return row
 
 
-def _infer_in_session(session_in_progress: Optional[bool] = None, session_summary_df: Optional[pd.DataFrame] = None) -> bool:
+def _infer_in_session(
+    session_in_progress: Optional[bool] = None,
+    session_summary_df: Optional[pd.DataFrame] = None,
+) -> bool:
     if session_in_progress is not None:
         return bool(session_in_progress)
-    if session_summary_df is not None and not session_summary_df.empty and 'InVNSession' in session_summary_df.columns:
+    if session_summary_df is not None:
+        if session_summary_df.empty:
+            raise ValueError("session_summary_df provided but empty; unable to infer session status")
+        if 'InVNSession' not in session_summary_df.columns:
+            raise KeyError("session_summary_df must contain an 'InVNSession' column")
         raw = session_summary_df.iloc[0].get('InVNSession')
-        if raw is not None and not pd.isna(raw):
-            try:
-                return bool(int(raw))
-            except Exception as _exc:
-                print(f"[warn] Invalid InVNSession value '{raw}' in session_summary; fallback to clock-based inference: {_exc}")
+        if raw is None or pd.isna(raw):
+            raise ValueError("session_summary_df['InVNSession'] is null; cannot infer session status")
+        try:
+            return bool(int(raw))
+        except Exception as exc:
+            raise ValueError(
+                f"Invalid InVNSession value '{raw}' in session_summary_df; expected 0/1."
+            ) from exc
     phase = detect_session_phase_now_vn().lower()
     return phase not in ('pre', 'post')
 
@@ -242,10 +252,7 @@ def build_presets_all(precomputed_path: str = 'out/precomputed_indicators.csv',
     session_df = None
     session_p = Path(session_summary_path)
     if session_p.exists():
-        try:
-            session_df = pd.read_csv(session_p)
-        except Exception:
-            session_df = None
+        session_df = pd.read_csv(session_p)
     session_open = _infer_in_session(session_summary_df=session_df)
 
     ref_price_map: Dict[str, float] = {}
