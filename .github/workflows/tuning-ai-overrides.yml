@@ -113,7 +113,8 @@ jobs:
         run: |
           set -euo pipefail
           echo "Running rounds=$BROKER_CX_GEN_ROUNDS"
-          python -m scripts.ai.generate_policy_overrides
+          # Use the local generator which applies guardrails and writes config/policy_overrides.json
+          python -m scripts.ai.codex_policy_budget_bias_tuner
 
       - name: Persist generated overrides (commit and push)
         env:
