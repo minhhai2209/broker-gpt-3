@@ -104,6 +104,42 @@ def _write_analysis_dump(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def _write_overrides_merged(target_path: Path, sanitized: Dict[str, object]) -> None:
+    """Write sanitized runtime overrides while preserving non-runtime keys.
+
+    Rationale:
+    - Runtime deep-merge happens inside the engine (baseline + overrides -> out/orders/policy_overrides.json).
+    - The generator should not blow away calibrations/metadata (e.g., TTL buckets) that may co-exist
+      in config/policy_overrides.json. We therefore remove only the runtime knobs the generator owns
+      and replace them with the sanitized values.
+    """
+    import json
+    # Keys owned by the generator/guardrails at the top level
+    runtime_keys = {
+        'buy_budget_frac',
+        'add_max',
+        'new_max',
+        'sector_bias',
+        'ticker_bias',
+        # Ephemeral inputs that should never persist if present
+        'news_risk_tilt',
+        'rationale',
+    }
+    existing: Dict[str, object] = {}
+    if target_path.exists():
+        try:
+            existing = json.loads(target_path.read_text(encoding='utf-8'))
+        except Exception:
+            # Fail-fast: if file is corrupt, do not try to merge silently
+            raise SystemExit(f'Invalid JSON in existing overrides: {target_path}')
+
+    preserved = {k: v for k, v in (existing or {}).items() if k not in runtime_keys}
+    merged = {**preserved, **(sanitized or {})}
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding='utf-8')
+    print(f"Guardrails applied: merged runtime overrides into {target_path} (preserved {len(preserved)} non-runtime keys)")
+
+
 def main() -> None:
     # Prefer a complete default policy if present; fallback to sample schema
     default_path = CONFIG_DIR / 'policy_default.json'
@@ -184,8 +220,7 @@ def main() -> None:
                 raw_overrides = json.loads(output_file_path.read_text(encoding='utf-8'))
                 sanitized = apply_guardrails(raw_overrides)
                 target_path = CONFIG_DIR / 'policy_overrides.json'
-                target_path.write_text(json.dumps(sanitized, ensure_ascii=False, indent=2), encoding='utf-8')
-                print(f"Guardrails applied: wrote sanitized overrides to {target_path}")
+                _write_overrides_merged(target_path, sanitized)
                 print(f"[codex] Completed in round {round_idx} (file written).")
                 return
 
