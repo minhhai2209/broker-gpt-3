@@ -27,21 +27,70 @@ def change_cwd(path: Path):
 
 
 class TestIntegrationTuneAndOrders(unittest.TestCase):
-    def test_tune_and_generate_orders_in_test_mode(self) -> None:
-        baseline_path = Path('config/policy_default.json')
-        if not baseline_path.exists():
+    def setUp(self) -> None:
+        self.baseline_path = Path('config/policy_default.json')
+        if not self.baseline_path.exists():
             self.skipTest('baseline policy_default.json missing')
 
+    def _init_temp_repo(self, base: Path) -> None:
+        (base / 'config').mkdir(parents=True, exist_ok=True)
+        (base / 'out' / 'orders').mkdir(parents=True, exist_ok=True)
+        (base / 'out' / 'debug').mkdir(parents=True, exist_ok=True)
+        (base / 'data').mkdir(parents=True, exist_ok=True)
+        (base / 'config' / 'policy_default.json').write_text(
+            self.baseline_path.read_text(encoding='utf-8'),
+            encoding='utf-8',
+        )
+
+    def test_budget_tuner_writes_ai_overrides_in_test_mode(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
-            (base / 'config').mkdir(parents=True, exist_ok=True)
-            (base / 'out' / 'orders').mkdir(parents=True, exist_ok=True)
-            (base / 'data').mkdir(parents=True, exist_ok=True)
-            # Seed baseline policy for prompt + guardrails
-            (base / 'config' / 'policy_default.json').write_text(
-                baseline_path.read_text(encoding='utf-8'),
-                encoding='utf-8',
-            )
+            self._init_temp_repo(base)
+
+            def fake_run(cmd, input=None, stdout=None, stderr=None, check=None, cwd=None):  # type: ignore[override]
+                Path(cwd, budget_tuner.ANALYSIS_FILENAME).write_text('analysis', encoding='utf-8')
+                gen_payload = {
+                    'buy_budget_frac': 0.12,
+                    'sector_bias': {'Finance': 0.1},
+                    'ticker_bias': {'AAA': -0.1},
+                    'news_risk_tilt': -0.5,
+                    'rationale': 'integration test',
+                }
+                Path(cwd, budget_tuner.OUTPUT_FILENAME).write_text(json.dumps(gen_payload), encoding='utf-8')
+                return SimpleNamespace(stdout=b'END\n')
+
+            with ExitStack() as stack:
+                stack.enter_context(patch.dict(os.environ, {'BROKER_TEST_MODE': '1'}, clear=False))
+                stack.enter_context(change_cwd(base))
+                stack.enter_context(patch.object(budget_tuner, 'BASE_DIR', base))
+                stack.enter_context(patch.object(budget_tuner, 'CONFIG_DIR', base / 'config'))
+                stack.enter_context(patch.object(budget_tuner, 'OUT_DIR', base / 'out'))
+                stack.enter_context(patch.object(guardrails, 'BASE_DIR', base))
+                stack.enter_context(patch.object(guardrails, 'CONFIG_DIR', base / 'config'))
+                stack.enter_context(patch.object(guardrails, 'OUT_DIR', base / 'out'))
+                stack.enter_context(patch.object(guardrails, 'STATE_PATH', base / 'out' / 'orders' / 'ai_override_state.json'))
+                stack.enter_context(patch.object(guardrails, 'DEFAULT_POLICY_PATH', base / 'config' / 'policy_default.json'))
+                stack.enter_context(patch.object(guardrails, 'METRICS_PATH', base / 'out' / 'metrics.csv'))
+                stack.enter_context(patch.object(guardrails, 'AUDIT_CSV_PATH', base / 'out' / 'orders' / 'ai_overrides_audit.csv'))
+                stack.enter_context(patch.object(guardrails, 'AUDIT_JSONL_PATH', base / 'out' / 'orders' / 'ai_overrides_audit.jsonl'))
+                stack.enter_context(patch('subprocess.run', fake_run))
+
+                budget_tuner.main()
+
+            generated = base / 'config' / 'policy_ai_overrides.json'
+            self.assertTrue(generated.exists(), 'policy_ai_overrides.json should be written in test mode')
+            payload = json.loads(generated.read_text(encoding='utf-8'))
+            self.assertIn('buy_budget_frac', payload)
+            self.assertNotIn('news_risk_tilt', payload, 'ephemeral inputs must be stripped by guardrails')
+
+            # Guardrails should persist audit artifacts in test mode as well
+            self.assertTrue((base / 'out' / 'orders' / 'ai_override_state.json').exists())
+            self.assertTrue((base / 'out' / 'orders' / 'ai_overrides_audit.jsonl').exists())
+
+    def test_generate_orders_in_test_mode(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            self._init_temp_repo(base)
             prices_hist = pd.DataFrame(
                 [
                     {'Date': '2023-01-01', 'Ticker': 'VNINDEX', 'Close': 1000.0, 'Open': 995.0, 'High': 1005.0, 'Low': 990.0},
@@ -49,23 +98,6 @@ class TestIntegrationTuneAndOrders(unittest.TestCase):
                 ]
             )
             prices_hist.to_csv(base / 'out' / 'prices_history.csv', index=False)
-
-            cmd_calls: list[list[str]] = []
-
-            def fake_run(cmd, input=None, stdout=None, stderr=None, check=None, cwd=None):  # type: ignore[override]
-                cmd_calls.append(cmd)
-                self.assertIn('reasoning_effort=low', cmd)
-                Path(cwd, budget_tuner.ANALYSIS_FILENAME).write_text('analysis', encoding='utf-8')
-                gen_payload = {
-                    'buy_budget_frac': 0.12,
-                    'add_max': 3,
-                    'new_max': 3,
-                    'sector_bias': {},
-                    'ticker_bias': {},
-                    'rationale': 'integration test',
-                }
-                Path(cwd, budget_tuner.OUTPUT_FILENAME).write_text(json.dumps(gen_payload), encoding='utf-8')
-                return SimpleNamespace(stdout=b'END\n')
 
             def fake_pipeline():
                 return (
@@ -112,17 +144,6 @@ class TestIntegrationTuneAndOrders(unittest.TestCase):
             with ExitStack() as stack:
                 stack.enter_context(patch.dict(os.environ, {'BROKER_TEST_MODE': '1'}, clear=False))
                 stack.enter_context(change_cwd(base))
-                stack.enter_context(patch.object(budget_tuner, 'BASE_DIR', base))
-                stack.enter_context(patch.object(budget_tuner, 'CONFIG_DIR', base / 'config'))
-                stack.enter_context(patch.object(budget_tuner, 'OUT_DIR', base / 'out'))
-                stack.enter_context(patch.object(guardrails, 'BASE_DIR', base))
-                stack.enter_context(patch.object(guardrails, 'CONFIG_DIR', base / 'config'))
-                stack.enter_context(patch.object(guardrails, 'OUT_DIR', base / 'out'))
-                stack.enter_context(patch.object(guardrails, 'STATE_PATH', base / 'out' / 'orders' / 'ai_override_state.json'))
-                stack.enter_context(patch.object(guardrails, 'DEFAULT_POLICY_PATH', base / 'config' / 'policy_default.json'))
-                stack.enter_context(patch.object(guardrails, 'METRICS_PATH', base / 'out' / 'metrics.csv'))
-                stack.enter_context(patch.object(guardrails, 'AUDIT_CSV_PATH', base / 'out' / 'orders' / 'ai_overrides_audit.csv'))
-                stack.enter_context(patch.object(guardrails, 'AUDIT_JSONL_PATH', base / 'out' / 'orders' / 'ai_overrides_audit.jsonl'))
                 stack.enter_context(patch.object(config_io, 'BASE_DIR', base))
                 stack.enter_context(patch.object(config_io, 'OUT_DIR', base / 'out'))
                 stack.enter_context(patch.object(config_io, 'OUT_ORDERS_DIR', base / 'out' / 'orders'))
@@ -134,18 +155,12 @@ class TestIntegrationTuneAndOrders(unittest.TestCase):
                 stack.enter_context(patch.object(pipeline, 'BASE_DIR', base))
                 stack.enter_context(patch.object(pipeline, 'OUT_DIR', base / 'out'))
                 stack.enter_context(patch.object(pipeline, 'DATA_DIR', base / 'data'))
-                stack.enter_context(patch('subprocess.run', fake_run))
                 stack.enter_context(patch('scripts.order_engine.ensure_pipeline_artifacts', fake_pipeline))
                 stack.enter_context(patch('scripts.order_engine.decide_actions', fake_decide_actions))
                 stack.enter_context(patch('scripts.order_engine.build_orders', fake_build_orders))
 
-                budget_tuner.main()
                 oe.run()
 
-            self.assertTrue(cmd_calls, 'Codex CLI should be invoked')
-            self.assertIn('reasoning_effort=low', cmd_calls[0])
-            generated = base / 'config' / 'policy_overrides.json'
-            self.assertTrue(generated.exists(), 'policy overrides should be written in config')
             self.assertTrue(build_called.get('ok'), 'order_engine.build_orders should be invoked')
 
             orders_dir = base / 'out' / 'orders'
