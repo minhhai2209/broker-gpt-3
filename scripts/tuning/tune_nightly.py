@@ -16,7 +16,10 @@ import re
 import shutil
 
 
-BASE_DIR = Path(__file__).resolve().parents[3]
+# Use the repository root. For scripts/tuning/, parents[2] points to the repo root.
+# An off‑by‑one here would resolve to the parent of the repo and break paths
+# like out/ and config/ (observed as missing out/orders/policy_overrides.json).
+BASE_DIR = Path(__file__).resolve().parents[2]
 OUT_DIR = BASE_DIR / "out"
 CFG_DIR = BASE_DIR / "config"
 
@@ -97,4 +100,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
