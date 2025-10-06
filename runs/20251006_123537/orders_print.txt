@@ -1,0 +1,19 @@
+HAG — LO — 3700 — Giá đặt: 16.15 (nghìn) — Giá thị trường: 16.50 (nghìn) — Mua mới
+LPB — LO — 700 — Giá đặt: 49.40 (nghìn) — Giá thị trường: 51.70 (nghìn) — Mua mới
+ANV — LO — 300 — Giá đặt: 31.20 (nghìn) — Giá thị trường: 31.50 (nghìn) — Chốt lời (Take Profit) | TP1_ATR
+GMD — LO — 100 — Giá đặt: 67.70 (nghìn) — Giá thị trường: 67.10 (nghìn) — Chốt lời (Take Profit) | TP1_ATR
+IMP — LO — 200 — Giá đặt: 54.60 (nghìn) — Giá thị trường: 52.70 (nghìn) — Giảm - Bán bớt (MA-break downgrade) | SL_STEP2
+MBB — LO — 1000 — Giá đặt: 27.10 (nghìn) — Giá thị trường: 27.00 (nghìn) — Chốt lời (Take Profit) | TP1_ATR
+MSN — LO — 100 — Giá đặt: 82.90 (nghìn) — Giá thị trường: 82.30 (nghìn) — Giảm - Bán bớt | SL_STEP2
+PNJ — LO — 300 — Giá đặt: 83.00 (nghìn) — Giá thị trường: 83.70 (nghìn) — Bán toàn bộ (Exit) | STOP_FINAL | HARD_SL @ 84.31
+PVT — LO — 5400 — Giá đặt: 17.80 (nghìn) — Giá thị trường: 18.00 (nghìn) — Bán toàn bộ (Exit) | STOP_FINAL | HARD_SL @ 18.16
+STB — LO — 100 — Giá đặt: 58.60 (nghìn) — Giá thị trường: 57.50 (nghìn) — Chốt lời (Take Profit) | TP1_ATR
+TCB — LO — 800 — Giá đặt: 38.80 (nghìn) — Giá thị trường: 38.80 (nghìn) — Chốt lời (Take Profit) | TP1_ATR
+VCG — LO — 800 — Giá đặt: 28.55 (nghìn) — Giá thị trường: 27.75 (nghìn) — Chốt lời (Take Profit) | TP1_ATR
+VIC — LO — 100 — Giá đặt: 183.30 (nghìn) — Giá thị trường: 178.60 (nghìn) — Chốt lời (Take Profit) | TP1_ATR
+
+BẢNG TỔNG HỢP TIỀN:
+• Tổng mua: 94335 (nghìn)
+• Tổng bán: 261530 (nghìn)
+• Net (mua − bán): -167195 (nghìn)
+• Gợi ý: nếu cần xem bằng VND, nhân 1.000 ngoài phạm vi prompt.
