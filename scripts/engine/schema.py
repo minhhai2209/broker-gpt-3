@@ -42,6 +42,20 @@ class Thresholds(BaseModel):
     exit_on_ma_break: Union[int, bool]
     cooldown_days: int
     tp_sl_mode: Literal['legacy', 'atr_per_ticker'] = 'atr_per_ticker'
+    # Multi-target ATR scaling parameters (optional)
+    tp1_atr_mult: Optional[float] = Field(default=None, ge=0.8, le=1.3)
+    tp2_atr_mult: Optional[float] = Field(default=None, ge=1.5, le=2.5)
+    trailing_atr_mult: Optional[float] = Field(default=None, ge=1.1, le=2.0)
+    trim_frac_tp1: Optional[float] = Field(default=None, ge=0.2, le=0.7)
+    trim_frac_tp2: Optional[float] = Field(default=None, ge=0.2, le=0.6)
+    breakeven_after_tp1: Optional[Union[int, bool]] = None
+    time_stop_days: Optional[int] = Field(default=None, ge=3, le=7)
+    trim_rsi_gate: Optional[float] = Field(default=None, ge=0.0, le=100.0)
+    cooldown_days_after_exit: Optional[int] = Field(default=None, ge=1, le=5)
+    partial_entry_enabled: Union[int, bool] = 0
+    partial_entry_frac: Optional[float] = Field(default=None, ge=0.1, le=0.5)
+    partial_entry_floor_lot: int = Field(default=1, ge=1)
+    new_partial_buffer: float = Field(default=0.05, ge=0.02, le=0.08)
     # New: parameterize RSI thresholds used in trim/exit heuristics
     exit_ma_break_rsi: float = Field(ge=0.0, le=100.0, default=45.0)
     trim_rsi_below_ma20: float = Field(ge=0.0, le=100.0, default=45.0)
@@ -138,6 +152,27 @@ class Thresholds(BaseModel):
                 raise ValueError(f"thresholds.{name} must be in 0..1")
         if str(self.tp_sl_mode).strip().lower() not in {"legacy", "atr_per_ticker"}:
             raise ValueError("thresholds.tp_sl_mode must be 'legacy' or 'atr_per_ticker'")
+        # Additional optional multi-target controls
+        if self.tp1_atr_mult is not None and not (0.8 <= float(self.tp1_atr_mult) <= 1.3):
+            raise ValueError("thresholds.tp1_atr_mult must be in 0.8..1.3")
+        if self.tp2_atr_mult is not None and not (1.5 <= float(self.tp2_atr_mult) <= 2.5):
+            raise ValueError("thresholds.tp2_atr_mult must be in 1.5..2.5")
+        if self.trailing_atr_mult is not None and not (1.1 <= float(self.trailing_atr_mult) <= 2.0):
+            raise ValueError("thresholds.trailing_atr_mult must be in 1.1..2.0")
+        if self.trim_frac_tp1 is not None and not (0.2 <= float(self.trim_frac_tp1) <= 0.7):
+            raise ValueError("thresholds.trim_frac_tp1 must be in 0.2..0.7")
+        if self.trim_frac_tp2 is not None and not (0.2 <= float(self.trim_frac_tp2) <= 0.6):
+            raise ValueError("thresholds.trim_frac_tp2 must be in 0.2..0.6")
+        if self.time_stop_days is not None and not (3 <= int(self.time_stop_days) <= 7):
+            raise ValueError("thresholds.time_stop_days must be between 3 and 7")
+        if self.trim_rsi_gate is not None and not (0.0 <= float(self.trim_rsi_gate) <= 100.0):
+            raise ValueError("thresholds.trim_rsi_gate must be in 0..100")
+        if self.cooldown_days_after_exit is not None and not (1 <= int(self.cooldown_days_after_exit) <= 5):
+            raise ValueError("thresholds.cooldown_days_after_exit must be between 1 and 5")
+        if self.partial_entry_frac is not None and not (0.1 <= float(self.partial_entry_frac) <= 0.5):
+            raise ValueError("thresholds.partial_entry_frac must be in 0.1..0.5")
+        if not (0.02 <= float(self.new_partial_buffer) <= 0.08):
+            raise ValueError("thresholds.new_partial_buffer must be in 0.02..0.08")
         return self
 
 
@@ -212,7 +247,7 @@ class Pricing(BaseModel):
         beta_dist_per_tick: float = Field(default=1.0)
         beta_size: float = Field(default=50.0)
         beta_vol: float = Field(default=10.0)
-        mae_bps: float = Field(default=10.0, ge=0.0)
+        mae_bps: float = Field(default=10.0, ge=5.0, le=40.0)
         last_fit_date: Optional[str] = None
 
     slippage_model: Optional[SlippageModel] = None
@@ -385,6 +420,8 @@ class Sizing(BaseModel):
     risk_per_trade_frac: float = 0.0
     default_stop_atr_mult: float = 0.0
     tranche_frac: float = Field(default=0.25, ge=0.0, le=1.0)
+    qty_min_lot: int = Field(default=100, ge=100)
+    min_notional_per_order: float = Field(default=2_000_000.0, ge=1_000_000.0)
     mean_variance_calibration: Optional[MeanVarianceCalibration] = None
 
     @model_validator(mode="after")
@@ -411,6 +448,10 @@ class Sizing(BaseModel):
             raise ValueError("sizing.default_stop_atr_mult must be >= 0")
         if not (0.0 <= float(self.tranche_frac) <= 1.0):
             raise ValueError("sizing.tranche_frac must be in 0..1")
+        if int(self.qty_min_lot) < 100:
+            raise ValueError("sizing.qty_min_lot must be >= 100")
+        if float(self.min_notional_per_order) < 1_000_000.0:
+            raise ValueError("sizing.min_notional_per_order must be >= 1_000_000 VND")
         if not str(self.market_index_symbol).strip():
             raise ValueError("sizing.market_index_symbol must be non-empty")
         return self
@@ -435,6 +476,20 @@ class TickerOverride(BaseModel):
     trim_rsi_below_ma20: Optional[float] = Field(default=None, ge=0.0, le=100.0)
     trim_rsi_macdh_neg: Optional[float] = Field(default=None, ge=0.0, le=100.0)
     tp_sl_mode: Optional[Literal['legacy', 'atr_per_ticker']] = None
+    tp1_atr_mult: Optional[float] = Field(default=None, ge=0.8, le=1.3)
+    tp2_atr_mult: Optional[float] = Field(default=None, ge=1.5, le=2.5)
+    trailing_atr_mult: Optional[float] = Field(default=None, ge=1.1, le=2.0)
+    trim_frac_tp1: Optional[float] = Field(default=None, ge=0.2, le=0.7)
+    trim_frac_tp2: Optional[float] = Field(default=None, ge=0.2, le=0.6)
+    breakeven_after_tp1: Optional[Union[int, bool]] = None
+    time_stop_days: Optional[int] = Field(default=None, ge=0)
+    trim_rsi_gate: Optional[float] = Field(default=None, ge=0.0, le=100.0)
+    cooldown_days_after_exit: Optional[int] = Field(default=None, ge=0)
+    partial_entry_enabled: Optional[Union[int, bool]] = None
+    partial_entry_frac: Optional[float] = Field(default=None, ge=0.1, le=0.5)
+    partial_entry_floor_lot: Optional[int] = Field(default=None, ge=1)
+    new_partial_buffer: Optional[float] = Field(default=None, ge=0.02, le=0.08)
+    mae_bps: Optional[float] = Field(default=None, ge=5.0, le=40.0)
     # Optional per-ticker sizing overrides
     risk_per_trade_frac: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     default_stop_atr_mult: Optional[float] = Field(default=None, ge=0.0)
