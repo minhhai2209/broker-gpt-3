@@ -44,7 +44,7 @@ run_orders() {
   cleanup_out_dir
   ensure_venv
   echo "[orders] Using: $PY_BIN"
-  "$PY_BIN" -u scripts/generate_orders.py
+  "$PY_BIN" -u scripts/orders/generate_orders.py
   echo
   echo "[done] Outputs (if generated):"
   [[ -f out/orders/orders_final.csv ]] && echo " - out/orders/orders_final.csv"
@@ -151,7 +151,7 @@ run_policy() {
   echo "[git] Pulling latest changes"
   git pull
   # Unbuffered Python for streaming logs into server
-  "$PY_BIN" -u scripts/ai/codex_policy_budget_bias_tuner.py
+  "$PY_BIN" -u scripts/tuning/codex_policy_budget_bias_tuner.py
   commit_and_push_policy
 }
 
@@ -165,7 +165,7 @@ run_tune_ai() {
     cp -f .codex/config.toml "$HOME/.codex/config.toml"
     chmod 600 "$HOME/.codex/config.toml" || true
   fi
-  "$PY_BIN" -u scripts/ai/codex_policy_budget_bias_tuner.py
+  "$PY_BIN" -u scripts/tuning/codex_policy_budget_bias_tuner.py
   if [[ -f config/policy_ai_overrides.json ]]; then
     echo "[tune-ai] Wrote: config/policy_ai_overrides.json"
   else
@@ -178,14 +178,14 @@ run_tune_ai() {
 run_tune_nightly() {
   ensure_venv
   echo "[tune-nightly] Using: $PY_BIN"
-  "$PY_BIN" -u -m scripts.tune_nightly
+  "$PY_BIN" -u -m scripts.tuning.tune_nightly
 }
 
 run_fundamentals() {
   ensure_venv
   ensure_playwright_browser
   echo "[fundamentals] Using: $PY_BIN"
-  "$PY_BIN" scripts/collect_vietstock_fundamentals.py "$@"
+  "$PY_BIN" scripts/data_fetching/collect_vietstock_fundamentals.py "$@"
 }
 
 main() {

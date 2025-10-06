@@ -5,7 +5,7 @@ import unittest
 
 import pandas as pd
 
-import scripts.engine.calibrate_sizing as cs
+from scripts.tuning.calibrators import calibrate_sizing as cs
 
 
 class TestCalibrateSizing(unittest.TestCase):

@@ -41,9 +41,9 @@ def _deep_merge(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]
 
 
 # Note on overrides surface
-# Runtime key filtering for AI-generated overrides is enforced in scripts/ai/guardrails.py.
-# Here we intentionally deep-merge the ENTIRE overrides object with the baseline,
-# so that any tuned/calibrated keys written by engine calibrators are preserved.
+# AI-generated overlays are now written verbatim by the tuners. The runtime merge
+# keeps the behaviour simple: baseline defaults are layered with any available
+# overlays without additional filtering in this module.
 
 
 def ensure_policy_override_file() -> Path:
@@ -67,7 +67,7 @@ def ensure_policy_override_file() -> Path:
     #   - config/policy_nightly_overrides.json (output of nightly calibrations)
     #   - config/policy_ai_overrides.json (output of AI tuner)
     #   - config/policy_overrides.json (legacy/compat)
-    # The CLI guardrails restrict AI‑generated content; calibrators may write broader tuned sections.
+    # AI-generated overlays are written verbatim; calibrators may also write broader tuned sections.
     default_baseline = BASE_DIR / "config" / "policy_default.json"
     if not policy_path_env and default_baseline.exists():
         import json

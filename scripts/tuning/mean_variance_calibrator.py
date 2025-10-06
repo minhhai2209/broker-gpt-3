@@ -14,7 +14,7 @@ from typing import Iterable, Mapping, Optional, Sequence, Tuple, Dict, Any
 import numpy as np
 import pandas as pd
 
-from .portfolio_risk import (
+from scripts.portfolio.portfolio_risk import (
     ExpectedReturnInputs,
     compute_cov_matrix,
     compute_expected_returns,

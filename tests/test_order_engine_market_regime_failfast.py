@@ -2,7 +2,7 @@ import unittest
 
 import pandas as pd
 
-from scripts.order_engine import get_market_regime
+from scripts.orders.order_engine import get_market_regime
 
 
 class TestMarketRegimeFailFast(unittest.TestCase):

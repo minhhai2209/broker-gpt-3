@@ -26,7 +26,7 @@ import pandas as pd
 
 from scripts.engine.volatility import garman_klass_sigma, percentile_thresholds
 
-BASE_DIR = Path(__file__).resolve().parents[2]
+BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / 'out'
 ORDERS_DIR = OUT_DIR / 'orders'
 

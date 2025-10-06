@@ -60,7 +60,7 @@
     "time_stop_days": 5,
     "trim_rsi_gate": 70.0,
     "cooldown_days_after_exit": 2,
-    "partial_entry_enabled": 0,
+    "partial_entry_enabled": 1,
     "partial_entry_frac": 0.3,
     "partial_entry_floor_lot": 1,
     "new_partial_buffer": 0.05,

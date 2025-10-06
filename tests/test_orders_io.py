@@ -1,8 +1,8 @@
 import unittest
 import pandas as pd
 
-from scripts.order_engine import Order
-from scripts.orders_io import print_orders
+from scripts.orders.order_engine import Order
+from scripts.orders.orders_io import print_orders
 
 
 class TestOrdersIO(unittest.TestCase):

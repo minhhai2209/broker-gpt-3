@@ -7,8 +7,8 @@ import pandas as pd
 import numpy as np
 
 
-# Resolve repo root (this file lives under repo_root/scripts)
-ROOT_DIR = Path(__file__).resolve().parents[1]
+# Resolve repo root (this file lives under repo_root/scripts/data_fetching)
+ROOT_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT_DIR / 'data'
 OUT_DIR = ROOT_DIR / 'out'
 

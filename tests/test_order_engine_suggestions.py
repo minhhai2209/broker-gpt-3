@@ -1,6 +1,6 @@
 import unittest
 
-from scripts.order_engine import MarketRegime, build_trade_suggestions
+from scripts.orders.order_engine import MarketRegime, build_trade_suggestions
 
 
 def make_regime(**overrides):

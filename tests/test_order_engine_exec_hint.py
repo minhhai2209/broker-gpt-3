@@ -1,7 +1,7 @@
 import unittest
 import pandas as pd
 
-from scripts.order_engine import MarketRegime, _suggest_execution_window
+from scripts.orders.order_engine import MarketRegime, _suggest_execution_window
 
 
 def make_regime(**overrides):

@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from scripts.engine.mean_variance_calibrator import calibrate_mean_variance_params
+from scripts.tuning.mean_variance_calibrator import calibrate_mean_variance_params
 
 
 class TestMeanVarianceCalibrator(unittest.TestCase):

@@ -31,7 +31,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 
-from scripts.order_engine import (
+from scripts.orders.order_engine import (
     get_market_regime,
     compute_features,
     conviction_score,
@@ -39,7 +39,7 @@ from scripts.order_engine import (
 )
 
 
-BASE_DIR = Path(__file__).resolve().parents[2]
+BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / 'out'
 DATA_DIR = BASE_DIR / 'data'
 ORDERS_PATH = OUT_DIR / 'orders' / 'policy_overrides.json'

@@ -1,6 +1,6 @@
 import unittest
 
-from scripts.collect_intraday import fetch_intraday_series
+from scripts.data_fetching.collect_intraday import fetch_intraday_series
 
 
 class TestNetworkCollectIntraday(unittest.TestCase):

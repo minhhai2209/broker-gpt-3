@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 
 import pandas as pd
 
-import scripts.engine.calibrate_market_filter as cmf
+from scripts.tuning.calibrators import calibrate_market_filter as cmf
 from scripts.engine.schema import MarketFilter
 
 

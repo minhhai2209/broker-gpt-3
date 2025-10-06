@@ -31,7 +31,7 @@ from typing import Dict, Tuple, List
 
 import pandas as pd
 
-BASE_DIR = Path(__file__).resolve().parents[2]
+BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / 'out'
 ORDERS_DIR = OUT_DIR / 'orders'
 
@@ -65,7 +65,7 @@ def _industry_df(metrics: pd.DataFrame) -> pd.DataFrame:
 
 
 def _candidate_scores(policy: Dict, portfolio: pd.DataFrame, snapshot: pd.DataFrame, metrics: pd.DataFrame, presets: pd.DataFrame, sector_strength: pd.DataFrame, session_summary: pd.DataFrame, industry: pd.DataFrame) -> Tuple[List[float], List[float]]:
-    from scripts.order_engine import get_market_regime, compute_features, conviction_score, classify_action
+    from scripts.orders.order_engine import get_market_regime, compute_features, conviction_score, classify_action
     regime = get_market_regime(session_summary, sector_strength, policy)
     snap = snapshot.set_index('Ticker')
     met = metrics.set_index('Ticker')

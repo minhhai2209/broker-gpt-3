@@ -3,7 +3,7 @@ import tempfile
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
-from scripts.fetch_ticker_data import fetch_history, ensure_and_load_history_df, VN_TZ
+from scripts.data_fetching.fetch_ticker_data import fetch_history, ensure_and_load_history_df, VN_TZ
 
 
 class TestNetworkFetchTickerData(unittest.TestCase):

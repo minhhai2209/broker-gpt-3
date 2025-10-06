@@ -13,7 +13,7 @@ Approach
 - Pick threshold by maximizing Youden's J statistic (TPR-FPR) on the calibration set.
 
 Usage
-  python -m scripts.engine.calibrate_regime --horizon 21 --write
+  python -m scripts.tuning.calibrators.calibrate_regime --horizon 21 --write
   # Without --write: dry-run, prints suggested intercept/threshold.
 """
 
@@ -25,7 +25,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 
-BASE_DIR = Path(__file__).resolve().parents[2]
+BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / 'out'
 ORDERS_DIR = OUT_DIR / 'orders'
 CONFIG_PATH = BASE_DIR / 'config' / 'policy_overrides.json'
@@ -36,7 +36,7 @@ def _load_history(min_days: int = 500) -> pd.DataFrame:
     if path.exists():
         ph = pd.read_csv(path)
     else:
-        from scripts.fetch_ticker_data import ensure_and_load_history_df
+        from scripts.data_fetching.fetch_ticker_data import ensure_and_load_history_df
         ph = ensure_and_load_history_df(['VNINDEX'], outdir=str(OUT_DIR / 'data'), min_days=min_days, resolution='D')
     ph['Ticker'] = ph['Ticker'].astype(str).str.upper()
     vn = ph[ph['Ticker'] == 'VNINDEX'].copy()
@@ -47,7 +47,7 @@ def _load_history(min_days: int = 500) -> pd.DataFrame:
     # If history exists but is too short, try a one-shot refill of VNINDEX cache
     if len(vn) < min_days:
         try:
-            from scripts.fetch_ticker_data import ensure_and_load_history_df as _ensure_hist
+            from scripts.data_fetching.fetch_ticker_data import ensure_and_load_history_df as _ensure_hist
             refill = _ensure_hist(['VNINDEX'], outdir=str(OUT_DIR / 'data'), min_days=max(min_days, 700), resolution='D')
             if not refill.empty:
                 refill['Ticker'] = refill['Ticker'].astype(str).str.upper()

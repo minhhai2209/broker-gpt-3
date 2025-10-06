@@ -6,7 +6,7 @@ import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from scripts.order_engine import decide_actions, build_orders
+from scripts.orders.order_engine import decide_actions, build_orders
 
 
 class TestNeutralAdaptiveEntry(unittest.TestCase):

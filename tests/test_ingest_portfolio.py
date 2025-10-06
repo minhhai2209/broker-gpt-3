@@ -3,7 +3,7 @@ import csv
 import tempfile
 import unittest
 
-from scripts.ingest_portfolio_auto import ingest_portfolio_df
+from scripts.portfolio.ingest_auto import ingest_portfolio_df
 
 
 def write_csv(path: Path, rows):

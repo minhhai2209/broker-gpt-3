@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from scripts.order_engine import build_orders, decide_actions, run
+from scripts.orders.order_engine import build_orders, decide_actions, run
 
 
 class TestDiagnosticsAndOutputs(unittest.TestCase):
@@ -292,10 +292,10 @@ class TestDiagnosticsAndOutputs(unittest.TestCase):
             'CALIBRATE_DYNAMIC_CAPS': '0',
         })
         try:
-            with patch('scripts.order_engine.ensure_pipeline_artifacts', side_effect=fake_pipeline), \
+            with patch('scripts.orders.order_engine.ensure_pipeline_artifacts', side_effect=fake_pipeline), \
                  patch('scripts.engine.config_io.ensure_policy_override_file', return_value=None), \
                  patch('scripts.engine.config_io.suggest_tuning', return_value=tuning), \
-                 patch('scripts.order_engine.suggest_tuning', return_value=tuning):
+                 patch('scripts.orders.order_engine.suggest_tuning', return_value=tuning):
                 run()
         finally:
             for key, val in env_vars.items():
