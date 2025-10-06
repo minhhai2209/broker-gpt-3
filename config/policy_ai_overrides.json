@@ -1,11 +1,18 @@
 {
-  "buy_budget_frac": 0.103,
+  "buy_budget_frac": 0.123,
   "sector_bias": {
-    "Công nghiệp": 0.08,
-    "Tài chính": 0.1,
-    "Bất động sản": 0.06,
-    "Công nghệ thông tin": 0.05,
-    "Nguyên vật liệu": 0.03,
-    "Năng lượng": -0.04
+    "Nguyên vật liệu": 0.08,
+    "Công nghiệp": 0.06,
+    "Hàng tiêu dùng không thiết yếu": 0.05,
+    "Tài chính": 0.05,
+    "Bất động sản": 0.03,
+    "Năng lượng": -0.02
+  },
+  "ticker_bias": {
+    "HPG": 0.08,
+    "MWG": 0.06,
+    "VCB": 0.05,
+    "FPT": -0.03,
+    "KBC": 0.05
   }
 }
