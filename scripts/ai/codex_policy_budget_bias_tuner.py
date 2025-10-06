@@ -21,6 +21,19 @@ if str(BASE_DIR) not in _sys.path:
 
 from scripts.ai.guardrails import apply_guardrails
 
+# Single source of truth for AI-adjustable runtime override keys.
+# This list drives both:
+# - The prompt whitelist shown to the model (allowed_keys)
+# - The set of keys considered "owned" by the AI when we merge
+#   sanitized overrides into the persistent overlay (runtime_keys).
+# Keep this surface intentionally small for auditability.
+ALLOWED_RUNTIME_KEYS: List[str] = [
+    'sector_bias',          # sector‑level tilts in [-0.20..0.20]
+    'ticker_bias',          # ticker‑level tilts in [-0.20..0.20]
+    'news_risk_tilt',       # optional helper input in [-1..+1]; mapped by guardrails
+    'rationale',            # required: brief natural‑language justification for changes
+]
+
 
 def _test_mode_enabled() -> bool:
     val = os.getenv('BROKER_TEST_MODE', '').strip().lower()
@@ -50,14 +63,7 @@ def build_prompt(sample_json: str, analysis_so_far: str, round_idx: int, max_rou
     # Minimize tunable surface: no direct slot overrides from AI.
     # Slots may still be derived internally from 'news_risk_tilt' by guardrails,
     # but the generator must not set 'add_max' or 'new_max' explicitly.
-    allowed_keys = [
-        'buy_budget_frac',      # risk-on/off budget tilt
-        'sector_bias',          # sector‑level tilts in [-0.20..0.20]
-        'ticker_bias',          # ticker‑level tilts in [-0.20..0.20]
-        'news_risk_tilt',       # optional helper input in [-1..+1]; mapped by guardrails
-        'rationale',            # required: brief natural‑language justification for changes
-    ]
-    allowed_list = "\n".join([f"- {k}" for k in allowed_keys])
+    allowed_list = "\n".join([f"- {k}" for k in ALLOWED_RUNTIME_KEYS])
     prompt = f"""
 Bạn là chuyên gia cấu hình hệ thống giao dịch.
 
@@ -115,16 +121,8 @@ def _write_overrides_merged(target_path: Path, sanitized: Dict[str, object]) -> 
     """
     import json
     # Keys owned by the generator/guardrails at the top level
-    runtime_keys = {
-        'buy_budget_frac',
-        'add_max',
-        'new_max',
-        'sector_bias',
-        'ticker_bias',
-        # Ephemeral inputs that should never persist if present
-        'news_risk_tilt',
-        'rationale',
-    }
+    # Use the same whitelist as the prompt to avoid drift.
+    runtime_keys = set(ALLOWED_RUNTIME_KEYS)
     existing: Dict[str, object] = {}
     if target_path.exists():
         try:
