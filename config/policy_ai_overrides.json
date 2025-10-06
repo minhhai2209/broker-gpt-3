@@ -1,19 +1,16 @@
 {
-  "buy_budget_frac": 0.1024,
+  "buy_budget_frac": 0.112,
   "sector_bias": {
-    "Công nghệ thông tin": 0.08,
-    "Tài chính": 0.06,
-    "Hàng tiêu dùng thiết yếu": 0.05,
-    "Bất động sản": 0.04,
-    "Năng lượng": -0.04
+    "Năng lượng": 0.08,
+    "Dịch vụ tiện ích": 0.06,
+    "Tài chính": 0.04,
+    "Bất động sản": -0.05,
+    "Công nghệ thông tin": 0.03
   },
   "ticker_bias": {
-    "FPT": 0.08,
-    "VCB": 0.06,
-    "VNM": 0.06,
-    "MWG": 0.05,
-    "VHM": 0.05,
-    "HPG": 0.03,
-    "GAS": -0.03
+    "GAS": 0.08,
+    "POW": 0.07,
+    "VNM": 0.05,
+    "FPT": 0.03
   }
 }
