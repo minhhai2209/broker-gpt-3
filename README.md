@@ -11,12 +11,19 @@ Mục tiêu README
 Yêu cầu hệ thống
 - Python 3.10+ (khuyến nghị 3.11)
 - macOS/Linux/WSL (terminal)
+- (Chỉ cho lệnh `tune-ai`/`policy`) Node.js 18+ với npm để cài Codex CLI
 
 Cài đặt
 ```bash
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 ```
+
+Ghi chú Codex CLI (cho `tune-ai`/`policy`)
+- Repo khai báo `@openai/codex` và có script `postinstall` cài global: `npm install -g @openai/codex`. Nhờ Automatic setup, Codex Cloud/CI sẽ tự chạy `npm install` và thực thi bước này.
+- Nếu môi trường không cho phép cài global, script sẽ thử lại với user prefix `~/.npm-global` và hướng dẫn thêm `PATH` tương ứng.
+- Trình tuner yêu cầu `codex` là binary global trên PATH; nếu thiếu sẽ fail‑fast kèm hướng dẫn cài đặt.
+- Nếu chạy cục bộ mà thiếu Node/npm, nhiệm vụ cần Codex sẽ fail‑fast kèm hướng dẫn cài Node.js (>=18).
 
 Chuẩn bị danh mục (inputs)
 - Thư mục: `in/portfolio/`
@@ -45,7 +52,7 @@ Lệnh tiện ích
 - `./broker.sh tests` — chạy test; bật coverage: `BROKER_COVERAGE=1 ./broker.sh tests`.
 - `./broker.sh tune-ai` — sinh overlay AI tại `config/policy_ai_overrides.json`; không push. Workflow GitHub Actions tự động chạy lệnh này mỗi 2 giờ.
 - `./broker.sh tune-nightly` — chạy toàn bộ calibrators và ghi overlay nightly tại `config/policy_nightly_overrides.json`; không push. Workflow tương ứng sẽ kích hoạt mỗi khi có commit mới.
-- `./broker.sh server` — chạy API server cục bộ (Flask) phục vụ extension/ứng dụng (mặc định `PORT=8787`).
+- `./broker.sh server` — chạy API server cục bộ (Flask) phục vụ extension/ứng dụng (mặc định `PORT=8787`). Lưu ý: lệnh này tắt PolicyScheduler tự động (không tự chạy tuning/policy). Muốn bật lại, hãy chạy trực tiếp `scripts/api/server.py` với `BROKER_POLICY_AUTORUN=1` (không khuyến nghị cho môi trường cục bộ).
 
   
 
@@ -59,7 +66,7 @@ API server (tùy chọn)
   - `POST /portfolio/reset` — xoá các CSV trong `in/portfolio/`.
   - `POST /portfolio/upload` — nạp 1 CSV (JSON body: `{name, content}`).
   - `POST /done` — bỏ qua policy và chỉ chạy Order Engine; trả về đường dẫn các file lệnh trong `out/orders/`.
-- Ghi chú: `/done` hiện luôn bỏ qua bước policy; policy có thể được cập nhật riêng qua `./broker.sh policy` hoặc bởi PolicyScheduler nếu bật.
+- Ghi chú: `/done` luôn bỏ qua bước policy; policy có thể được cập nhật riêng qua `./broker.sh policy`. Khi chạy qua `./broker.sh server`, PolicyScheduler đã bị tắt theo mặc định.
 
 Policy & cấu hình
 - Baseline: `config/policy_default.json` (nguồn sự thật, có chú thích đầy đủ).
