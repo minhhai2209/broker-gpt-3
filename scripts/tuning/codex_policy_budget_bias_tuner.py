@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List
 
-BASE_DIR = Path(__file__).resolve().parents[3]
+BASE_DIR = Path(__file__).resolve().parents[2]
 CONFIG_DIR = BASE_DIR / "config"
 OUT_DIR = BASE_DIR / "out"
 ANALYSIS_FILENAME = "analysis_round.txt"
@@ -25,9 +25,6 @@ if str(BASE_DIR) not in _sys.path:
 ALLOWED_RUNTIME_KEYS: List[str] = [
     'sector_bias',          # sector‑level tilts in [-0.20..0.20]
     'ticker_bias',          # ticker‑level tilts in [-0.20..0.20]
-    'buy_budget_frac',      # portfolio budget fraction for new buys
-    'add_max',              # max concurrent add slots
-    'new_max',              # max concurrent new positions
     'rationale',            # required: brief natural‑language justification for changes
 ]
 
@@ -112,9 +109,7 @@ def _write_overrides_raw(target_path: Path, overrides: Dict[str, object]) -> Non
 
 def main() -> None:
     # Prefer a complete default policy if present; fallback to sample schema
-    default_path = CONFIG_DIR / 'policy_default.json'
-    sample_path = CONFIG_DIR / 'policy_overrides.sample.json'
-    base_schema_path = default_path if default_path.exists() else sample_path
+    base_schema_path = CONFIG_DIR / 'policy_default.json'
     if not base_schema_path.exists():
         raise SystemExit(f'Missing {base_schema_path}')
     sample = _read_text(base_schema_path)

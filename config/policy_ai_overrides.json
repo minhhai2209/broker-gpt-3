@@ -1,26 +1,28 @@
 {
-  "buy_budget_frac": 0.102,
   "sector_bias": {
-    "Tài chính": 0.12,
-    "Bất động sản": -0.08,
-    "Hàng tiêu dùng không thiết yếu": -0.12,
-    "Nguyên vật liệu": 0.06,
-    "Công nghệ thông tin": 0.06,
-    "Công nghiệp": 0.05
+    "Tài chính": 0.06,
+    "Bất động sản": 0.07,
+    "Nguyên vật liệu": 0.05,
+    "Năng lượng": -0.04,
+    "Hàng tiêu dùng không thiết yếu": -0.06,
+    "Công nghệ thông tin": -0.03
   },
   "ticker_bias": {
-    "VCB": 0.08,
-    "TCB": 0.08,
-    "VPB": 0.07,
-    "SSI": 0.07,
-    "DGC": 0.1,
-    "FPT": 0.08,
-    "VJC": 0.05,
-    "TCM": -0.12,
-    "MSH": -0.12,
-    "TNG": -0.12,
-    "VGT": -0.1,
-    "NVL": -0.08,
-    "PDR": -0.08
-  }
+    "HPG": 0.06,
+    "VHM": 0.06,
+    "KBC": 0.05,
+    "SSI": 0.05,
+    "VND": 0.05,
+    "MBB": 0.04,
+    "VCB": 0.03,
+    "GEX": 0.04,
+    "VIC": 0.03,
+    "GAS": -0.03,
+    "PVD": -0.05,
+    "FPT": -0.03,
+    "TCM": -0.06,
+    "TNG": -0.06,
+    "VGT": -0.05
+  },
+  "rationale": "Tilt nhẹ dựa trên: GDP Q3/2025 +8.23% YoY; SBV ưu tiên tăng trưởng, định hướng tín dụng 19–20%; thuế nhập khẩu Mỹ 20% với hàng Việt hiệu lực 2025-08-07 gây áp lực dệt may/giày dép; dầu Brent quanh ~65 USD và OPEC+ tăng sản lượng rất nhỏ (137 kbpd) → thận trọng Năng lượng; pháp lý BĐS được gỡ và hoạt động IPO/CTCK sôi động → nâng nhẹ Tài chính, Bất động sản, thép. Nguồn: Reuters 2025-10-06, 2025-10-03; Investing (Reuters) 2025-09-09; EY VN 2025-07-29; FT/Reuters/TE 2025-10-01→06. TTL: hiệu lực đến hết phiên 2025-10-13 (EOD, VN)."
 }
