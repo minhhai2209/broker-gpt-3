@@ -17,17 +17,8 @@ on:
         default: "20"
   schedule:
     # Note: GitHub cron uses UTC. Vietnam (ICT) = UTC+7, no DST.
-    # Market open windows (Mon–Fri):
-    #   - Morning 09:00–11:30 ICT => 02:00–04:30 UTC
-    #   - Afternoon 13:00–15:00 ICT => 06:00–08:00 UTC
-    # Run periodically during open windows (every 15 minutes),
-    # plus one extra run at 07:00 ICT (00:00 UTC) and 21:00 ICT (14:00 UTC).
-    - cron: '0,15,30,45 2-3 * * 1-5'   # 09:00–10:45 ICT
-    - cron: '0,15,30 4 * * 1-5'        # 11:00–11:30 ICT
-    - cron: '0,15,30,45 6-7 * * 1-5'   # 13:00–14:45 ICT
-    - cron: '0 8 * * 1-5'              # 15:00 ICT (close)
-    - cron: '0 0 * * 1-5'              # 07:00 ICT
-    - cron: '0 14 * * 1-5'             # 21:00 ICT
+    # Run every 2 hours to refresh AI overlays on a predictable cadence.
+    - cron: '0 */2 * * *'
   workflow_call:
     inputs:
       rounds:
