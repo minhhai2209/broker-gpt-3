@@ -91,6 +91,21 @@
     "sl_trim_step_1_frac": 0.25,
     "sl_trim_step_2_trigger": 0.8,
     "sl_trim_step_2_frac": 0.35,
+    // Multi-target ATR scaling for staged exits
+    "tp1_atr_mult": 1.0,
+    "tp2_atr_mult": 1.8,
+    "trailing_atr_mult": 1.5,
+    "trim_frac_tp1": 0.45,
+    "trim_frac_tp2": 0.30,
+    "breakeven_after_tp1": 1,
+    "time_stop_days": 5,
+    "trim_rsi_gate": 70.0,
+    "cooldown_days_after_exit": 2,
+    // Partial entry controls (stateless)
+    "partial_entry_enabled": 0,
+    "partial_entry_frac": 0.30,
+    "partial_entry_floor_lot": 1,
+    "new_partial_buffer": 0.05,
     // Exit on MA20/MA50 break heuristic (1/0 = on/off)
     "exit_on_ma_break": 1,
     // Cooldown days after exit before re‑entry signals are allowed
@@ -310,7 +325,7 @@
       "beta_dist_per_tick": 1.0,
       "beta_size": 45.0,
       "beta_vol": 8.0,
-      "mae_bps": 12.0,
+      "mae_bps": 15.0,
       "last_fit_date": null
     }
   },
@@ -353,6 +368,8 @@
     "leftover_redistribute": 1,
     // Minimum ticket notional in thousands VND (0 disables)
     "min_ticket_k": 0.0,
+    "qty_min_lot": 100,
+    "min_notional_per_order": 2000000.0,
     // Covariance estimation window and regularization
     "cov_lookback_days": 250,
     "cov_reg": 0.0003,

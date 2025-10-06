@@ -116,7 +116,7 @@ def _enforce_scalar(
             raise GuardrailError(f'Invalid numeric override value: {new_value}') from exc
         val = _clip(val, bounds)
         delta = val - prev_value
-        if abs(delta) > rate_limit:
+        if state_entry and abs(delta) > rate_limit:
             val = prev_value + rate_limit * (1 if delta > 0 else -1)
             val = _clip(val, bounds)
         sanitized = float(round(val, 5))
@@ -261,6 +261,8 @@ def enforce_guardrails(
     # but raw overrides cannot set 'add_max'/'new_max'.
     allowed_runtime_keys = {
         'buy_budget_frac',
+        'add_max',
+        'new_max',
         'sector_bias',
         'ticker_bias',
         'news_risk_tilt',
@@ -301,7 +303,8 @@ def enforce_guardrails(
     if isinstance(buy_override, (int, float)):
         cap_hi = float(buy_baseline) + float(WEEKLY_BUDGET_POS_CAP)
         try:
-            buy_override = float(min(float(buy_override), cap_hi))
+            if buy_state:
+                buy_override = float(min(float(buy_override), cap_hi))
         except Exception:
             pass
     buy_val, buy_state_next = _enforce_scalar(

@@ -1988,7 +1988,10 @@ def decide_actions(
                     "base_add","base_new","trim_th","tp_pct","sl_pct","tp_atr_mult","sl_atr_mult",
                     "tp_floor_pct","tp_cap_pct","sl_floor_pct","sl_cap_pct","tp_trim_frac","exit_on_ma_break",
                     "exit_ma_break_rsi","trim_rsi_below_ma20","trim_rsi_macdh_neg","tp_sl_mode",
-                    "sl_trim_step_1_trigger","sl_trim_step_1_frac","sl_trim_step_2_trigger","sl_trim_step_2_frac"
+                    "sl_trim_step_1_trigger","sl_trim_step_1_frac","sl_trim_step_2_trigger","sl_trim_step_2_frac",
+                    "tp1_atr_mult","tp2_atr_mult","trailing_atr_mult","trim_frac_tp1","trim_frac_tp2",
+                    "breakeven_after_tp1","time_stop_days","trim_rsi_gate","cooldown_days_after_exit",
+                    "partial_entry_enabled","partial_entry_frac","partial_entry_floor_lot","new_partial_buffer"
                 ):
                     if key in raw_ov and raw_ov.get(key) is not None:
                         th_ov[key] = raw_ov.get(key)
@@ -2220,20 +2223,95 @@ def decide_actions(
         neutral_conf = {}
     neutral_active = bool(getattr(regime, 'is_neutral', False))
     partial_ratio = float(neutral_conf.get('partial_threshold_ratio', 0.0) or 0.0)
-    partial_entry_frac = float(neutral_conf.get('partial_entry_frac', 0.30) or 0.30)
+    partial_entry_enabled_base = bool(int(th.get('partial_entry_enabled', 0)))
+    if neutral_active and not partial_entry_enabled_base:
+        # Neutral mode historically enabled partial entries even when baseline flag omitted.
+        fallback_flag = neutral_conf.get('partial_entry_enabled')
+        if fallback_flag is not None:
+            try:
+                partial_entry_enabled_base = bool(int(fallback_flag))
+            except Exception:
+                partial_entry_enabled_base = bool(fallback_flag)
+        elif partial_ratio > 0.0 or float(neutral_conf.get('partial_entry_frac', 0.0) or 0.0) > 0.0:
+            partial_entry_enabled_base = True
+    partial_entry_frac_conf = th.get('partial_entry_frac')
+    if partial_entry_frac_conf is None:
+        partial_entry_frac_conf = neutral_conf.get('partial_entry_frac', 0.30)
+    partial_entry_frac = float(partial_entry_frac_conf or 0.0)
+    partial_entry_frac = max(0.0, min(1.0, partial_entry_frac))
     partial_allow_leftover = bool(int(neutral_conf.get('partial_allow_leftover', 0)))
+    partial_entry_floor_lot = int(float(th.get('partial_entry_floor_lot', 1) or 1))
+    partial_entry_floor_lot = max(1, partial_entry_floor_lot)
+    buffer_conf = th.get('new_partial_buffer')
+    if buffer_conf is None:
+        buffer_conf = neutral_conf.get('new_partial_buffer')
+    if buffer_conf is None:
+        buffer_conf = 0.05
+    try:
+        new_partial_buffer_base = float(buffer_conf)
+    except Exception:
+        new_partial_buffer_base = 0.05
+    new_partial_buffer_base = max(0.0, new_partial_buffer_base)
     min_new_per_day = int(neutral_conf.get('min_new_per_day', 0) or 0)
     max_new_overrides_per_day = int(neutral_conf.get('max_new_overrides_per_day', 0) or 0)
     add_max_neutral_cap = int(neutral_conf.get('add_max_neutral_cap', 0) or 0)
-    neutral_partial_set: set[str] = set()
+    partial_entry_set: set[str] = set()
+    partial_frac_map: Dict[str, float] = dict(state_local.get('partial_frac_map', {}) or {})
+    partial_floor_map: Dict[str, int] = dict(state_local.get('partial_floor_map', {}) or {})
+    partial_buffer_map: Dict[str, float] = dict(state_local.get('partial_buffer_map', {}) or {})
+    partial_enabled_map: Dict[str, bool] = dict(state_local.get('partial_enabled_map', {}) or {})
     neutral_override_set: set[str] = set()
     neutral_accum_set: set[str] = set()
+
+    ticker_overrides_map = getattr(regime, 'ticker_overrides', {}) if hasattr(regime, 'ticker_overrides') else {}
+
+    def _partial_conf_for(ticker: str) -> tuple[bool, float, float, int]:
+        enabled_local = partial_entry_enabled_base
+        frac_local = partial_entry_frac
+        buffer_local = new_partial_buffer_base
+        floor_local = partial_entry_floor_lot
+        try:
+            raw_conf = ticker_overrides_map.get(ticker, {}) if isinstance(ticker_overrides_map, dict) else {}
+            if isinstance(raw_conf, dict):
+                if raw_conf.get('partial_entry_enabled') is not None:
+                    try:
+                        enabled_local = bool(int(raw_conf.get('partial_entry_enabled')))
+                    except Exception:
+                        enabled_local = bool(raw_conf.get('partial_entry_enabled'))
+                if raw_conf.get('partial_entry_frac') is not None:
+                    try:
+                        frac_local = float(raw_conf.get('partial_entry_frac'))
+                    except Exception:
+                        pass
+                if raw_conf.get('new_partial_buffer') is not None:
+                    try:
+                        buffer_local = float(raw_conf.get('new_partial_buffer'))
+                    except Exception:
+                        pass
+                if raw_conf.get('partial_entry_floor_lot') is not None:
+                    try:
+                        floor_local = max(1, int(raw_conf.get('partial_entry_floor_lot')))
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        frac_local = max(0.0, min(1.0, float(frac_local)))
+        buffer_local = max(0.0, float(buffer_local))
+        floor_local = max(1, int(floor_local))
+        return enabled_local, frac_local, buffer_local, floor_local
 
     try:
         state_local.update({
             'partial_entry_frac': partial_entry_frac,
             'partial_allow_leftover': partial_allow_leftover,
+            'partial_entry_enabled': partial_entry_enabled_base,
+            'partial_entry_floor_lot': partial_entry_floor_lot,
+            'new_partial_buffer': new_partial_buffer_base,
         })
+        state_local['partial_frac_map'] = partial_frac_map
+        state_local['partial_floor_map'] = partial_floor_map
+        state_local['partial_buffer_map'] = partial_buffer_map
+        state_local['partial_enabled_map'] = partial_enabled_map
         regime.neutral_state = state_local
     except Exception:
         pass
@@ -2310,8 +2388,15 @@ def decide_actions(
                 continue
             ok, reason, note = _check_new_safety(t)
             if ok:
+                enabled_local, frac_local, buffer_local, floor_local = _partial_conf_for(t)
+                if not enabled_local:
+                    continue
                 act[t] = "new_partial"
-                neutral_partial_set.add(t)
+                partial_entry_set.add(t)
+                partial_frac_map[t] = frac_local
+                partial_floor_map[t] = floor_local
+                partial_buffer_map[t] = buffer_local
+                partial_enabled_map[t] = enabled_local
             else:
                 if reason:
                     debug_filters.setdefault(reason, []).append(t)
@@ -2324,7 +2409,7 @@ def decide_actions(
         new_pool_scores = [score[t] for t in score.keys()]
     else:
         add_pool_scores = [score[t] for t in held if t in score]
-        new_pool_scores = [score[t] for t in act.keys() if t not in held and act.get(t) == "new"]
+        new_pool_scores = [score[t] for t in act.keys() if t not in held and act.get(t) in {"new", "new_partial"}]
     if add_pool_scores:
         qv_add = float(np.quantile(np.array(add_pool_scores), q_add))
         add_gate = max(base_add, qv_add)
@@ -2336,9 +2421,47 @@ def decide_actions(
         qv_new = float(np.quantile(np.array(new_pool_scores), q_new))
         new_gate = max(base_new, qv_new)
         for t in list(act.keys()):
-            if t not in held and act.get(t) == "new" and score.get(t, 0.0) < new_gate:
-                quantile_filtered.append((t, score.get(t, 0.0)))
+            if t in held:
+                continue
+            sc_val = float(score.get(t, 0.0) or 0.0)
+            action_now = act.get(t)
+            if action_now not in {"new", "new_partial"}:
+                continue
+            enabled_local, frac_local, buffer_local, floor_local = _partial_conf_for(t)
+            lower_bound = new_gate
+            if enabled_local and new_gate > 0.0:
+                if buffer_local >= 1.0:
+                    lower_bound = max(base_new, new_gate - buffer_local)
+                else:
+                    lower_bound = max(base_new, new_gate * (1.0 - buffer_local))
+            if action_now == "new":
+                if sc_val >= new_gate - 1e-9:
+                    # keep as new; record per-ticker configs
+                    partial_enabled_map[t] = enabled_local
+                    partial_frac_map[t] = frac_local
+                    partial_floor_map[t] = floor_local
+                    partial_buffer_map[t] = buffer_local
+                    continue
+                if enabled_local and sc_val >= lower_bound - 1e-9:
+                    act[t] = "new_partial"
+                    partial_entry_set.add(t)
+                    partial_frac_map[t] = frac_local
+                    partial_floor_map[t] = floor_local
+                    partial_buffer_map[t] = buffer_local
+                    partial_enabled_map[t] = enabled_local
+                    continue
+                quantile_filtered.append((t, sc_val))
                 del act[t]
+            elif action_now == "new_partial":
+                if not enabled_local or sc_val < lower_bound - 1e-9:
+                    quantile_filtered.append((t, sc_val))
+                    del act[t]
+                    partial_entry_set.discard(t)
+                else:
+                    partial_frac_map[t] = frac_local
+                    partial_floor_map[t] = floor_local
+                    partial_buffer_map[t] = buffer_local
+                    partial_enabled_map[t] = enabled_local
 
     # Safety filters for NEW and NEW_PARTIAL candidates
     new_safety_pass: set[str] = set()
@@ -2350,11 +2473,20 @@ def decide_actions(
         if not ok:
             del act[t]
             if action == "new_partial":
-                neutral_partial_set.discard(t)
+                partial_entry_set.discard(t)
+                partial_frac_map.pop(t, None)
+                partial_floor_map.pop(t, None)
+                partial_buffer_map.pop(t, None)
+                partial_enabled_map.pop(t, None)
             if reason:
                 debug_filters.setdefault(reason, []).append(t)
                 _note_filter(t, reason, note or "")
         else:
+            enabled_local, frac_local, buffer_local, floor_local = _partial_conf_for(t)
+            partial_frac_map[t] = frac_local
+            partial_floor_map[t] = floor_local
+            partial_buffer_map[t] = buffer_local
+            partial_enabled_map[t] = enabled_local
             if action == "new":
                 new_safety_pass.add(t)
 
@@ -2378,7 +2510,25 @@ def decide_actions(
             for t, _ in candidates:
                 if overrides_budget <= 0:
                     break
-                act[t] = "new"
+                enabled_local, frac_local, buffer_local, floor_local = _partial_conf_for(t)
+                lower_bound = base_new
+                if enabled_local and base_new > 0.0:
+                    if partial_ratio > 0.0:
+                        lower_bound = max(0.0, base_new * partial_ratio)
+                    elif buffer_local >= 1.0:
+                        lower_bound = max(base_new, base_new - buffer_local)
+                    else:
+                        lower_bound = max(base_new, base_new * (1.0 - buffer_local))
+                sc_val = float(score.get(t, 0.0) or 0.0)
+                if enabled_local and sc_val < base_new - 1e-9 and sc_val >= lower_bound - 1e-9:
+                    act[t] = "new_partial"
+                    partial_entry_set.add(t)
+                    partial_frac_map[t] = frac_local
+                    partial_floor_map[t] = floor_local
+                    partial_buffer_map[t] = buffer_local
+                    partial_enabled_map[t] = enabled_local
+                else:
+                    act[t] = "new"
                 neutral_override_set.add(t)
                 new_safety_pass.add(t)
                 overrides_budget -= 1
@@ -2514,7 +2664,7 @@ def decide_actions(
     for t in new_names:
         if t not in new_sorted:
             del act[t]
-    neutral_partial_final = sorted(t for t in neutral_partial_set if act.get(t) == "new_partial")
+    neutral_partial_final = sorted(t for t in partial_entry_set if act.get(t) == "new_partial")
     neutral_override_final = sorted(t for t in neutral_override_set if act.get(t) == "new")
     neutral_accum_final = sorted(neutral_accum_set)
     try:
@@ -2922,6 +3072,11 @@ def build_orders(
     partial_entry_frac = float(state_local.get('partial_entry_frac', 0.30) or 0.30)
     partial_entry_frac = max(0.0, min(1.0, partial_entry_frac))
     partial_allow_leftover = bool(state_local.get('partial_allow_leftover', False))
+    partial_entry_enabled_state = bool(state_local.get('partial_entry_enabled', False))
+    partial_frac_map_state = dict(state_local.get('partial_frac_map', {}) or {})
+    partial_floor_map_state = dict(state_local.get('partial_floor_map', {}) or {})
+    partial_buffer_map_state = dict(state_local.get('partial_buffer_map', {}) or {})
+    partial_enabled_map_state = dict(state_local.get('partial_enabled_map', {}) or {})
     if require_sector_caps:
         missing_candidates = sorted(
             {
@@ -3132,10 +3287,12 @@ def build_orders(
         'new',
     )
 
-    if neutral_active and partial_entry_frac > 0.0:
+    if partial_entry_enabled_state and partial_entry_frac > 0.0:
         for t in list(new_alloc.keys()):
             if t in new_partial_names or t in neutral_override_names:
-                new_alloc[t] = partial_entry_frac * float(new_alloc.get(t, 0.0))
+                frac_local = float(partial_frac_map_state.get(t, partial_entry_frac) or partial_entry_frac)
+                frac_local = max(0.0, min(1.0, frac_local))
+                new_alloc[t] = frac_local * float(new_alloc.get(t, 0.0))
 
     if allocation_model == 'mean_variance' and allocation_diagnostics:
         try:
@@ -3450,6 +3607,7 @@ def build_orders(
         if qty0 <= 0:
             return 0
         qty_cap = qty0
+        risk_cap_qty: Optional[int] = None
         # Position cap
         # Allow per-ticker override of max_pos_frac
         mpf_override = None
@@ -3529,10 +3687,15 @@ def build_orders(
             if tp_sl_entry and px_now > 0.0:
                 sl_pct_eff = to_float(tp_sl_entry.get('sl_pct'))
                 if sl_pct_eff is not None and sl_pct_eff > 0:
-                    stop_dist_k = float(sl_pct_eff) * float(px_now)
+                    sl_pct_val = float(sl_pct_eff)
+                    # Ignore extreme placeholders (>=50%) which typically mean "no static stop";
+                    # otherwise blend with ATR-derived distance by taking the larger distance.
+                    if sl_pct_val < 0.5:
+                        stop_dist_k = max(stop_dist_k, sl_pct_val * float(px_now))
             allowed_risk_k = float(rpt) * float(nav_for_caps)
             if stop_dist_k > 0 and allowed_risk_k > 0:
                 cap_qty3 = int(max(allowed_risk_k / stop_dist_k / lot, 0)) * lot
+                risk_cap_qty = cap_qty3
                 qty_cap = min(qty_cap, cap_qty3)
         if tranche_frac > 0.0 and tranche_frac < 1.0 and _max_pos_frac > 0.0 and limit_price > 0.0:
             max_val = float(_max_pos_frac) * float(nav_for_caps)
@@ -3541,6 +3704,16 @@ def build_orders(
             tranche_cap_qty = int(max(headroom_val * tranche_frac / max(limit_price, 1e-9) / lot, 0)) * lot
             if tranche_cap_qty >= 0:
                 qty_cap = min(qty_cap, tranche_cap_qty)
+        min_notional_vnd = float(sizing.get('min_notional_per_order', 0.0) or 0.0)
+        if min_notional_vnd > 0.0 and limit_price > 0.0:
+            min_notional_k = min_notional_vnd / 1000.0
+            required_lots = int(math.ceil(min_notional_k / max(limit_price, 1e-9) / lot))
+            required_qty = max(required_lots * lot, 0)
+            if required_qty > 0 and qty_cap < required_qty:
+                if risk_cap_qty is not None and risk_cap_qty == qty_cap and qty_cap >= lot:
+                    pass
+                else:
+                    return 0
         return max(qty_cap, 0)
 
     spent_buy_k = 0.0
@@ -3580,10 +3753,24 @@ def build_orders(
         market_price = to_float(s.get("Price")) or to_float(s.get("P"))
         budget = float(new_alloc.get(t, 0.0))
         qty = _apply_caps_and_qty(t, budget, limit)
-        if qty >= lot:
-            qty = lot
-        elif qty > 0:
-            qty = 0
+        is_partial = t in new_partial_names
+        floor_lot_local = int(partial_floor_map_state.get(t, state_local.get('partial_entry_floor_lot', 1)) or 1)
+        floor_lot_local = max(1, floor_lot_local)
+        min_qty = lot if not is_partial else max(lot, floor_lot_local * lot)
+        if is_partial:
+            if qty < min_qty:
+                required = min_qty * float(limit)
+                if required <= budget + 1e-6:
+                    qty = min_qty
+                else:
+                    qty = 0
+            else:
+                qty = max(min_qty, qty)
+        else:
+            if qty >= lot:
+                qty = lot
+            elif qty > 0:
+                qty = 0
         if market_price is not None and limit > float(market_price) + 1e-9:
             _track_filter(t, "limit_gt_market", f"limit {limit:.2f} > market {market_price:.2f}", side="BUY", quantity=qty, limit_price=limit, market_price=float(market_price))
             continue

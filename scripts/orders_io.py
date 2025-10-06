@@ -98,6 +98,7 @@ def _compute_execution_metrics(
     pricing_conf: Dict,
     thresholds: Dict,
     snapshot_row: pd.Series | None,
+    ticker_overrides: Dict[str, Dict[str, object]] | None = None,
 ) -> Dict[str, object]:
     fill_conf = dict(pricing_conf.get('fill_prob', {}) or {})
     for req in ('base', 'cross', 'near_ceiling', 'min', 'decay_scale_min_ticks'):
@@ -157,7 +158,15 @@ def _compute_execution_metrics(
     beta_vol = float(slip_conf.get('beta_vol', 0.0) or 0.0)
     size_ratio = float(qty) / avg_volume if avg_volume > 0.0 else 0.0
     slip_bps = alpha + beta_dist * dist_ticks + beta_size * size_ratio + beta_vol * (atr_pct * 100.0)
-    slip_bps = float(max(0.0, slip_bps))
+    mae_floor = float(slip_conf.get('mae_bps', 0.0) or 0.0)
+    if ticker_overrides and ticker in ticker_overrides:
+        ov = ticker_overrides.get(ticker) or {}
+        if isinstance(ov, dict) and ov.get('mae_bps') is not None:
+            try:
+                mae_floor = max(mae_floor, float(ov.get('mae_bps')))
+            except Exception:
+                mae_floor = mae_floor
+    slip_bps = float(max(mae_floor, slip_bps, 0.0))
     return {
         'fill_prob_price': max(0.0, min(1.0, float(fill))),
         'fill_rate': max(0.0, min(1.0, float(fill_rate))),
@@ -227,6 +236,7 @@ def write_orders_csv(
             tc = float(pricing_conf['tc_roundtrip_frac'])
         except Exception as exc:
             raise SystemExit(f"Invalid pricing.tc_roundtrip_frac: {exc}") from exc
+        ticker_overrides = dict(getattr(regime, 'ticker_overrides', {}) or {})
         for o in orders:
             t = o.ticker; side = o.side; qty = o.quantity; limit = float(o.limit_price)
             market = None
@@ -234,7 +244,8 @@ def write_orders_csv(
             pre_row = _as_series(pre, t) if enrich else None
             if snap_row is not None:
                 market = to_float(snap_row.get("Price")) or to_float(snap_row.get("P"))
-            prio = 0.0
+            prio_raw = 0.0
+            prio_net = 0.0
             if enrich:
                 tick = hose_tick_size(market if market is not None else limit)
                 ceil_tick = to_float(pre_row.get('BandCeiling_Tick')) or to_float(pre_row.get('BandCeilingRaw')) if pre_row is not None else None
@@ -253,13 +264,28 @@ def write_orders_csv(
                     pricing_conf=pricing_conf,
                     thresholds=th,
                     snapshot_row=snap_row,
+                    ticker_overrides=ticker_overrides,
                 )
-                fill_combined = float(metrics.get('fill_prob_price', 0.0)) * float(metrics.get('fill_rate', 1.0))
-                prio = max(0.0, float(scores.get(t, 0.0) if scores else 0.0)) * float(fill_combined)
-            rows.append([t, side, qty, f"{limit:.2f}", prio])
-        # Sort BUY first, then by internal priority (desc). Column not written.
-        rows.sort(key=lambda r: (r[1] != 'BUY', -float(r[4]) if isinstance(r[4], (int,float,str)) else 0.0))
-        for t, side, qty, limit_str, _prio in rows:
+                fill_prob_price = float(metrics.get('fill_prob_price', 0.0))
+                fill_rate = float(metrics.get('fill_rate', 1.0))
+                slip_bps = float(metrics.get('slip_bps', 0.0))
+                raw_score = max(0.0, float(scores.get(t, 0.0) if scores else 0.0))
+                fill_combined = max(0.0, fill_prob_price * fill_rate)
+                prio_raw = raw_score * fill_combined
+                slip_frac = max(0.0, slip_bps / 10000.0)
+                prio_net = prio_raw * max(0.0, 1.0 - tc)
+                if slip_frac > 0.0:
+                    prio_net = prio_net / (1.0 + slip_frac)
+            rows.append([t, side, qty, f"{limit:.2f}", prio_net, prio_raw])
+        # Sort BUY first, then by net priority (desc). Column not written.
+        rows.sort(
+            key=lambda r: (
+                r[1] != 'BUY',
+                -float(r[4]) if isinstance(r[4], (int, float, str)) else 0.0,
+                -float(r[5]) if isinstance(r[5], (int, float, str)) else 0.0,
+            )
+        )
+        for t, side, qty, limit_str, _prio_net, _prio_raw in rows:
             w.writerow([t, side, qty, limit_str])
 
 
@@ -304,6 +330,7 @@ def write_orders_quality(orders, snapshot: pd.DataFrame, presets: pd.DataFrame, 
         tc = float(pricing_conf['tc_roundtrip_frac'])
     except Exception as exc:
         raise SystemExit(f"Invalid pricing.tc_roundtrip_frac: {exc}") from exc
+    ticker_overrides = dict(getattr(regime, 'ticker_overrides', {}) or {})
     for o in orders:
         t = o.ticker
         side = o.side
@@ -331,6 +358,7 @@ def write_orders_quality(orders, snapshot: pd.DataFrame, presets: pd.DataFrame, 
             pricing_conf=pricing_conf,
             thresholds=th,
             snapshot_row=snap_row,
+            ticker_overrides=ticker_overrides,
         )
         fill_prob_price = float(exec_metrics.get('fill_prob_price', 0.0))
         fill_rate = float(exec_metrics.get('fill_rate', 1.0))
@@ -339,6 +367,7 @@ def write_orders_quality(orders, snapshot: pd.DataFrame, presets: pd.DataFrame, 
         notes = list(exec_metrics.get('notes', []) or [])
         # Expected R (TP/SL ratio) from thresholds & ATR
         exp_r = 0.0
+        exp_r_net = 0.0
         try:
             tp_pct = th.get('tp_pct'); sl_pct = th.get('sl_pct')
             tp_floor = float(th.get('tp_floor_pct') or 0.0)
@@ -355,9 +384,21 @@ def write_orders_quality(orders, snapshot: pd.DataFrame, presets: pd.DataFrame, 
                 tp_net = max(0.0, float(tp_eff) - 2.0 * tc)
                 sl_net = max(1e-9, float(sl_eff) + 2.0 * tc)
                 exp_r = float(tp_net) / float(sl_net)
+                slip_frac = max(0.0, slip_bps / 10000.0)
+                tp_net_adj = max(0.0, float(tp_eff) - 2.0 * tc - slip_frac)
+                sl_net_adj = max(1e-9, float(sl_eff) + 2.0 * tc + slip_frac)
+                if sl_net_adj > 0:
+                    exp_r_net = max(0.0, tp_net_adj / sl_net_adj)
         except Exception:
             exp_r = 0.0
-        priority = max(0.0, float(scores.get(t, 0.0) or 0.0)) * max(0.0, fill_prob_price * fill_rate)
+            exp_r_net = 0.0
+        raw_score = max(0.0, float(scores.get(t, 0.0) or 0.0))
+        fill_combined = max(0.0, fill_prob_price * fill_rate)
+        priority_raw = raw_score * fill_combined
+        slip_frac = max(0.0, slip_bps / 10000.0)
+        priority_net = priority_raw * max(0.0, 1.0 - tc)
+        if slip_frac > 0.0:
+            priority_net = priority_net / (1.0 + slip_frac)
         # TTL suggestion based on index volatility percentile
         try:
             mf_conf = getattr(regime, 'market_filter', {}) or {}
@@ -413,7 +454,9 @@ def write_orders_quality(orders, snapshot: pd.DataFrame, presets: pd.DataFrame, 
             'FillProb': round(fill_prob_price, 3),
             'FillRateExp': round(fill_rate, 3),
             'ExpR': round(float(exp_r), 2),
-            'Priority': round(priority, 3),
+            'exp_r_net': round(float(exp_r_net), 2),
+            'Priority': round(priority_raw, 3),
+            'priority_net': round(priority_net, 3),
             'TTL_Min': int(ttl),
             'SlipBps': round(slip_bps, 1),
             'SlipPct': round(slip_bps / 10000.0, 4),
@@ -424,7 +467,8 @@ def write_orders_quality(orders, snapshot: pd.DataFrame, presets: pd.DataFrame, 
     df = pd.DataFrame(rows)
     try:
         df['__side_key'] = (df['Side'] != 'BUY').astype(int)
-        df.sort_values(by=['__side_key','Priority'], ascending=[True, False], inplace=True)
+        sort_cols = ['__side_key', 'priority_net', 'Priority'] if 'priority_net' in df.columns else ['__side_key', 'Priority']
+        df.sort_values(by=sort_cols, ascending=[True, False, False][:len(sort_cols)], inplace=True)
         df.drop(columns=['__side_key'], inplace=True)
     except Exception:
         pass
@@ -485,10 +529,11 @@ def write_orders_csv_enriched(
         w = csv.writer(f)
         w.writerow([
             "Ticker", "Side", "Quantity", "LimitPrice", "MarketPrice",
-            "FillProb", "FillRateExp", "ExpR", "Priority", "TTL_Min",
+            "FillProb", "FillRateExp", "ExpR", "exp_r_net", "Priority", "priority_net", "TTL_Min",
             "SlipBps", "Signal", "LimitLock", "Notes",
         ])
         rows = []
+        ticker_overrides = dict(getattr(regime, 'ticker_overrides', {}) or {})
         for o in orders:
             t = o.ticker; side = o.side; qty = int(o.quantity); limit = float(o.limit_price)
             snap_row = _as_series(snap, t)
@@ -513,6 +558,7 @@ def write_orders_csv_enriched(
                 pricing_conf=pricing_conf,
                 thresholds=th,
                 snapshot_row=snap_row,
+                ticker_overrides=ticker_overrides,
             )
             fill_prob_price = float(metrics_exec.get('fill_prob_price', 0.0))
             fill_rate = float(metrics_exec.get('fill_rate', 1.0))
@@ -520,6 +566,7 @@ def write_orders_csv_enriched(
             limit_lock = bool(metrics_exec.get('limit_lock', False))
             notes = list(metrics_exec.get('notes', []) or [])
             exp_r = 0.0
+            exp_r_net = 0.0
             try:
                 tp_pct = th.get('tp_pct'); sl_pct = th.get('sl_pct')
                 tp_floor = float(th.get('tp_floor_pct') or 0.0)
@@ -536,9 +583,21 @@ def write_orders_csv_enriched(
                     tp_net = max(0.0, float(tp_eff) - 2.0 * tc)
                     sl_net = max(1e-9, float(sl_eff) + 2.0 * tc)
                     exp_r = float(tp_net) / float(sl_net)
+                    slip_frac = max(0.0, slip_bps / 10000.0)
+                    tp_net_adj = max(0.0, float(tp_eff) - 2.0 * tc - slip_frac)
+                    sl_net_adj = max(1e-9, float(sl_eff) + 2.0 * tc + slip_frac)
+                    if sl_net_adj > 0:
+                        exp_r_net = max(0.0, tp_net_adj / sl_net_adj)
             except Exception:
                 exp_r = 0.0
-            priority = max(0.0, float(scores.get(t, 0.0) if scores else 0.0)) * max(0.0, fill_prob_price * fill_rate)
+                exp_r_net = 0.0
+            raw_score = max(0.0, float(scores.get(t, 0.0) if scores else 0.0))
+            fill_combined = max(0.0, fill_prob_price * fill_rate)
+            priority_raw = raw_score * fill_combined
+            slip_frac = max(0.0, slip_bps / 10000.0)
+            priority_net = priority_raw * max(0.0, 1.0 - tc)
+            if slip_frac > 0.0:
+                priority_net = priority_net / (1.0 + slip_frac)
             ttl = ttl_hard if idx_atr_pctile >= hard_thr else (ttl_soft if idx_atr_pctile >= soft_thr else ttl_base)
             sig = ''
             try:
@@ -567,7 +626,9 @@ def write_orders_csv_enriched(
                 f"{fill_prob_price:.3f}",
                 f"{fill_rate:.3f}",
                 f"{float(exp_r):.2f}",
-                f"{priority:.3f}",
+                f"{float(exp_r_net):.2f}",
+                f"{priority_raw:.3f}",
+                f"{priority_net:.3f}",
                 ttl,
                 f"{slip_bps:.1f}",
                 sig,
@@ -576,7 +637,7 @@ def write_orders_csv_enriched(
             ])
         def _parse_prio(row):
             try:
-                return float(row[8])
+                return float(row[10])
             except Exception:
                 return 0.0
         rows.sort(key=lambda r: (r[1] != 'BUY', -_parse_prio(r)))
