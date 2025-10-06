@@ -26,9 +26,9 @@
     "base_add": 0.35,
     "base_new": 0.4,
     "trim_th": -0.05,
-    "q_add": 0.0,
-    "q_new": 0.9620253164556962,
-    "min_liq_norm": 0.4803921568627451,
+    "q_add": 0.6666666666666667,
+    "q_new": 0.9552238805970149,
+    "min_liq_norm": 0.00980392156862745,
     "near_ceiling_pct": 0.9371971074213226,
     "tp_pct": 0.0,
     "sl_pct": 0.0,
@@ -129,8 +129,8 @@
         "weight": 0.8
       },
       "turnover": {
-        "mean": 0.582323916230039,
-        "std": 0.3151068322699371,
+        "mean": 0.5823432690992089,
+        "std": 0.31509488892430026,
         "weight": 0.8
       },
       "mcclellan": {
@@ -146,31 +146,38 @@
     }
   },
   "sector_bias": {
-    "Bất động sản": -0.05,
+    "Bất động sản": 0.07,
     "Công nghiệp": -0.02,
     "Dịch vụ tiện ích": 0.03,
-    "Hàng tiêu dùng không thiết yếu": 0.05,
+    "Hàng tiêu dùng không thiết yếu": -0.06,
     "Hàng tiêu dùng thiết yếu": 0.03,
-    "Nguyên vật liệu": 0.06,
-    "Năng lượng": 0.03,
-    "Tài chính": 0.04,
+    "Nguyên vật liệu": 0.05,
+    "Năng lượng": -0.04,
+    "Tài chính": 0.06,
     "Y tế": 0.02,
-    "Công nghệ thông tin": 0.06
+    "Công nghệ thông tin": -0.03
   },
   "ticker_bias": {
-    "GAS": 0.04,
-    "PVD": 0.08,
+    "GAS": -0.03,
+    "PVD": -0.05,
     "POW": 0.03,
     "HPG": 0.06,
-    "FPT": 0.07,
-    "VHM": 0.03,
-    "VIC": -0.04,
-    "VCB": 0.05,
-    "SSI": 0.03,
+    "FPT": -0.03,
+    "VHM": 0.06,
+    "VIC": 0.03,
+    "VCB": 0.03,
+    "SSI": 0.05,
     "VNM": 0.04,
     "MWG": 0.04,
     "NVL": -0.06,
-    "DIG": -0.04
+    "DIG": -0.04,
+    "KBC": 0.05,
+    "VND": 0.05,
+    "MBB": 0.04,
+    "GEX": 0.04,
+    "TCM": -0.06,
+    "TNG": -0.06,
+    "VGT": -0.05
   },
   "calibration": {
     "on_run": 0,
@@ -205,7 +212,7 @@
     "severe_drop_mult": 1.5,
     "idx_chg_smoothed_hard_drop": 0.3484877041695573,
     "trend_norm_hard_floor": -0.36045671543390895,
-    "vol_ann_hard_ceiling": 0.26794368448467454,
+    "vol_ann_hard_ceiling": 0.2679436844846745,
     "us_epu_soft_pct": null,
     "us_epu_hard_pct": null,
     "dxy_soft_pct": null,
@@ -276,7 +283,7 @@
     "momentum_unit": 0.12
   },
   "sizing": {
-    "softmax_tau": 0.08874740600586048,
+    "softmax_tau": 0.0500000000000022,
     "add_share": 0.5,
     "new_share": 0.5,
     "min_lot": 100,
@@ -291,7 +298,7 @@
     "qty_min_lot": 100,
     "min_notional_per_order": 2000000.0,
     "cov_lookback_days": 250,
-    "cov_reg": 0.0004326237988098865,
+    "cov_reg": 0.0004326230895475089,
     "risk_parity_floor": 0.2,
     "dynamic_caps": {
       "enable": 0,
@@ -414,5 +421,6 @@
       "enp_total_target": 9,
       "sector_limit_target": 0.35
     }
-  }
+  },
+  "rationale": "Tilt nhẹ dựa trên: GDP Q3/2025 +8.23% YoY; SBV ưu tiên tăng trưởng, định hướng tín dụng 19–20%; thuế nhập khẩu Mỹ 20% với hàng Việt hiệu lực 2025-08-07 gây áp lực dệt may/giày dép; dầu Brent quanh ~65 USD và OPEC+ tăng sản lượng rất nhỏ (137 kbpd) → thận trọng Năng lượng; pháp lý BĐS được gỡ và hoạt động IPO/CTCK sôi động → nâng nhẹ Tài chính, Bất động sản, thép. Nguồn: Reuters 2025-10-06, 2025-10-03; Investing (Reuters) 2025-09-09; EY VN 2025-07-29; FT/Reuters/TE 2025-10-01→06. TTL: hiệu lực đến hết phiên 2025-10-13 (EOD, VN)."
 }
