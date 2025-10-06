@@ -150,8 +150,8 @@ run_policy() {
   echo "[policy] Using: $PY_BIN"
   echo "[git] Pulling latest changes"
   git pull
-  # Unbuffered Python for streaming logs into server
-  "$PY_BIN" -u scripts/tuning/codex_policy_budget_bias_tuner.py
+  # Run unified tuner to refresh config/policy_overrides.json
+  "$PY_BIN" -u -m scripts.tuning.tune
   commit_and_push_policy
 }
 

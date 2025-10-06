@@ -27,7 +27,7 @@
     "base_new": 0.4,
     "trim_th": -0.05,
     "q_add": 0.6666666666666667,
-    "q_new": 0.9552238805970149,
+    "q_new": 0.9545454545454546,
     "min_liq_norm": 0.00980392156862745,
     "near_ceiling_pct": 0.9371971074213226,
     "tp_pct": 0.0,
@@ -146,23 +146,23 @@
     }
   },
   "sector_bias": {
-    "Công nghệ thông tin": 0.1,
-    "Nguyên vật liệu": 0.08,
-    "Hàng tiêu dùng thiết yếu": 0.05,
-    "Tài chính": 0.05,
-    "Bất động sản": -0.06,
-    "Dịch vụ tiện ích": -0.03
+    "Công nghệ thông tin": 0.08,
+    "Công nghiệp": 0.05,
+    "Nguyên vật liệu": 0.05,
+    "Tài chính": 0.04,
+    "Bất động sản": 0.03,
+    "Hàng tiêu dùng không thiết yếu": -0.07
   },
   "ticker_bias": {
-    "FPT": 0.12,
-    "HPG": 0.1,
-    "VNM": 0.08,
-    "MWG": 0.06,
-    "VCB": 0.05,
-    "MBB": 0.05,
-    "SSI": 0.04,
-    "NVL": -0.06,
-    "TCM": -0.05
+    "FPT": 0.08,
+    "HPG": 0.06,
+    "VHM": 0.06,
+    "TCB": 0.05,
+    "VPB": 0.05,
+    "TCM": -0.08,
+    "MSH": -0.07,
+    "VGT": -0.06,
+    "GIL": -0.06
   },
   "calibration": {
     "on_run": 0,

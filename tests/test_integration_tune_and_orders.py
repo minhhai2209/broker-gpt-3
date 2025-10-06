@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from scripts.tuning import codex_policy_budget_bias_tuner as budget_tuner
+from scripts.tuning.calibrators import calibrate_ai_overrides as ai_cal
 import scripts.engine.config_io as config_io
 import scripts.engine.pipeline as pipeline
 import scripts.orders.order_engine as oe
@@ -67,13 +67,13 @@ class TestIntegrationTuneAndOrders(unittest.TestCase):
             json.dumps(baseline, ensure_ascii=False, indent=2), encoding='utf-8'
         )
 
-    def test_budget_tuner_writes_ai_overrides_in_test_mode(self) -> None:
+    def test_ai_calibrator_merges_overrides(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
             self._init_temp_repo(base)
 
             def fake_run(cmd, input=None, stdout=None, stderr=None, check=None, cwd=None):  # type: ignore[override]
-                Path(cwd, budget_tuner.ANALYSIS_FILENAME).write_text('analysis', encoding='utf-8')
+                Path(cwd, ai_cal.ANALYSIS_FILENAME).write_text('analysis', encoding='utf-8')
                 gen_payload = {
                     'buy_budget_frac': 0.12,
                     'sector_bias': {'Finance': 0.1},
@@ -81,24 +81,25 @@ class TestIntegrationTuneAndOrders(unittest.TestCase):
                     'news_risk_tilt': -0.5,
                     'rationale': 'integration test',
                 }
-                Path(cwd, budget_tuner.OUTPUT_FILENAME).write_text(json.dumps(gen_payload), encoding='utf-8')
+                Path(cwd, ai_cal.OUTPUT_FILENAME).write_text(json.dumps(gen_payload), encoding='utf-8')
                 return SimpleNamespace(stdout=b'END\n')
 
             with ExitStack() as stack:
                 stack.enter_context(change_cwd(base))
-                stack.enter_context(patch.object(budget_tuner, 'BASE_DIR', base))
-                stack.enter_context(patch.object(budget_tuner, 'CONFIG_DIR', base / 'config'))
-                stack.enter_context(patch.object(budget_tuner, 'OUT_DIR', base / 'out'))
+                stack.enter_context(patch.object(ai_cal, 'BASE_DIR', base))
+                stack.enter_context(patch.object(ai_cal, 'CONFIG_DIR', base / 'config'))
+                stack.enter_context(patch.object(ai_cal, 'OUT_DIR', base / 'out'))
+                stack.enter_context(patch.object(ai_cal, 'ORDERS_DIR', base / 'out' / 'orders'))
                 stack.enter_context(patch('subprocess.run', fake_run))
                 stack.enter_context(patch.dict(os.environ, {'BROKER_CX_REASONING': 'low'}, clear=False))
+                # Seed runtime policy for merge
+                (base / 'out' / 'orders').mkdir(parents=True, exist_ok=True)
+                (base / 'out' / 'orders' / 'policy_overrides.json').write_text('{}', encoding='utf-8')
+                ai_cal.calibrate(write=True)
 
-                budget_tuner.main()
-
-            generated = base / 'config' / 'policy_ai_overrides.json'
-            self.assertTrue(generated.exists(), 'policy_ai_overrides.json should be written in test mode')
-            payload = json.loads(generated.read_text(encoding='utf-8'))
-            self.assertIn('buy_budget_frac', payload)
-            self.assertIn('news_risk_tilt', payload, 'raw payload should be preserved without guardrails')
+            merged = json.loads((base / 'out' / 'orders' / 'policy_overrides.json').read_text(encoding='utf-8'))
+            self.assertIn('sector_bias', merged)
+            self.assertIn('ticker_bias', merged)
 
     def test_generate_orders_in_test_mode(self) -> None:
         with TemporaryDirectory() as tmp_dir:
@@ -210,38 +211,42 @@ class TestIntegrationTuneAndOrders(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             base = Path(tmp)
             self._seed_base(base)
-            # Patch module paths
-            budget_tuner.BASE_DIR = base
-            budget_tuner.CONFIG_DIR = base / 'config'
-            budget_tuner.OUT_DIR = base / 'out'
+            # Patch module paths and seed runtime policy
+            ai_cal.BASE_DIR = base
+            ai_cal.CONFIG_DIR = base / 'config'
+            ai_cal.OUT_DIR = base / 'out'
+            ai_cal.ORDERS_DIR = base / 'out' / 'orders'
+            (base / 'out' / 'orders').mkdir(parents=True, exist_ok=True)
+            (base / 'out' / 'orders' / 'policy_overrides.json').write_text('{}', encoding='utf-8')
 
             def fake_run(cmd, input=None, stdout=None, stderr=None, check=None, cwd=None):  # type: ignore[override]
-                Path(cwd, budget_tuner.ANALYSIS_FILENAME).write_text('round analysis', encoding='utf-8')
-                gen_path = Path(cwd, budget_tuner.OUTPUT_FILENAME)
+                Path(cwd, ai_cal.ANALYSIS_FILENAME).write_text('round analysis', encoding='utf-8')
+                gen_path = Path(cwd, ai_cal.OUTPUT_FILENAME)
                 gen_path.write_text('{"buy_budget_frac": 0.12}', encoding='utf-8')
                 return SimpleNamespace(stdout=b"END\n")
 
             with patch('subprocess.run', fake_run), patch.dict(os.environ, {'BROKER_CX_GEN_ROUNDS': '1', 'BROKER_CX_REASONING': 'low'}, clear=False):
-                budget_tuner.main()
-
-            dest = base / 'config' / 'policy_ai_overrides.json'
-            self.assertTrue(dest.exists())
-            self.assertEqual(json.loads(dest.read_text(encoding='utf-8')), {"buy_budget_frac": 0.12})
+                ai_cal.calibrate(write=True)
+            merged = json.loads((base / 'out' / 'orders' / 'policy_overrides.json').read_text(encoding='utf-8'))
+            self.assertNotIn('buy_budget_frac', merged)
 
     def test_generate_policy_missing_file_raises(self):
         with TemporaryDirectory() as tmp:
             base = Path(tmp)
             self._seed_base(base)
-            budget_tuner.BASE_DIR = base
-            budget_tuner.CONFIG_DIR = base / 'config'
-            budget_tuner.OUT_DIR = base / 'out'
+            ai_cal.BASE_DIR = base
+            ai_cal.CONFIG_DIR = base / 'config'
+            ai_cal.OUT_DIR = base / 'out'
+            ai_cal.ORDERS_DIR = base / 'out' / 'orders'
+            (base / 'out' / 'orders').mkdir(parents=True, exist_ok=True)
+            (base / 'out' / 'orders' / 'policy_overrides.json').write_text('{}', encoding='utf-8')
 
             def fake_run(cmd, input=None, stdout=None, stderr=None, check=None, cwd=None):  # type: ignore[override]
-                Path(cwd, budget_tuner.ANALYSIS_FILENAME).write_text('some analysis', encoding='utf-8')
+                Path(cwd, ai_cal.ANALYSIS_FILENAME).write_text('some analysis', encoding='utf-8')
                 return SimpleNamespace(stdout=b"END\n")
 
             with patch('subprocess.run', fake_run), self.assertRaises(SystemExit) as ctx:
-                budget_tuner.main()
+                ai_cal.calibrate(write=True)
             self.assertIn('Missing generated file', str(ctx.exception))
             files = list((base / 'out' / 'debug').glob('codex_policy_raw_END_*.txt'))
             self.assertTrue(files)
@@ -250,17 +255,19 @@ class TestIntegrationTuneAndOrders(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             base = Path(tmp)
             self._seed_base(base)
-            budget_tuner.BASE_DIR = base
-            budget_tuner.CONFIG_DIR = base / 'config'
-            budget_tuner.OUT_DIR = base / 'out'
+            ai_cal.BASE_DIR = base
+            ai_cal.CONFIG_DIR = base / 'config'
+            ai_cal.OUT_DIR = base / 'out'
+            (base / 'out' / 'orders').mkdir(parents=True, exist_ok=True)
+            (base / 'out' / 'orders' / 'policy_overrides.json').write_text('{}', encoding='utf-8')
 
             def fake_run(cmd, input=None, stdout=None, stderr=None, check=None, cwd=None):  # type: ignore[override]
-                Path(cwd, budget_tuner.ANALYSIS_FILENAME).write_text('first round analysis', encoding='utf-8')
+                Path(cwd, ai_cal.ANALYSIS_FILENAME).write_text('first round analysis', encoding='utf-8')
                 return SimpleNamespace(stdout=b"CONTINUE\n")
 
             with patch('subprocess.run', fake_run), patch.dict(os.environ, {'BROKER_CX_GEN_ROUNDS': '1', 'BROKER_CX_REASONING': 'low'}, clear=False):
                 with self.assertRaises(SystemExit) as ctx:
-                    budget_tuner.main()
+                    ai_cal.calibrate(write=True)
             self.assertIn('Exceeded maximum analysis rounds', str(ctx.exception))
             latest = base / 'out' / 'debug' / 'codex_analysis_latest.txt'
             self.assertTrue(latest.exists())
