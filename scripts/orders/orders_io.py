@@ -15,20 +15,11 @@ from scripts.utils import to_float, hose_tick_size
 LOT_SIZE = 100
 
 
-def _test_mode_enabled() -> bool:
-    val = os.getenv('BROKER_TEST_MODE', '').strip().lower()
-    return val not in {'', '0', 'false', 'no', 'off'}
-
-
 @contextmanager
 def _open_for_write(path: Path, mode: str = 'w', *, newline: str | None = None) -> Iterator[StringIO | object]:
-    if _test_mode_enabled():
-        buffer = StringIO()
-        yield buffer
-    else:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open(mode, newline=newline, encoding='utf-8') as handle:
-            yield handle
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open(mode, newline=newline, encoding='utf-8') as handle:
+        yield handle
 
 
 def _as_series(df: pd.DataFrame, ticker: str) -> pd.Series | None:

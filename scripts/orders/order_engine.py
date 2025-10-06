@@ -62,8 +62,8 @@ Non-core helpers are split into scripts/engine/* for readability.
 
 
 def _test_mode_enabled() -> bool:
-    val = os.getenv('BROKER_TEST_MODE', '').strip().lower()
-    return val not in {'', '0', 'false', 'no', 'off'}
+    # Test mode removed; always behave normally (write outputs).
+    return False
 
 
 # ensure_policy_override_file moved to scripts.engine.config_io
@@ -3980,35 +3980,12 @@ def run(simulate: bool = False, *, context: Optional[Dict[str, Any]] = None, fla
             if _truthy(cal_conf.get(_key)):
                 cfg_violations.append(f'calibration.{_key}')
 
-    calibrate_envs = [
-        'CALIBRATE_REGIME_COMPONENTS',
-        'CALIBRATE_REGIME',
-        'CALIBRATE_MARKET_FILTER',
-        'CALIBRATE_BREADTH_FLOOR',
-        'CALIBRATE_LEADER_GATES',
-        'CALIBRATE_LIQUIDITY',
-        'CALIBRATE_SIZING',
-        'CALIBRATE_THRESHOLDS_TOPK',
-        'CALIBRATE_SIZING_TAU',
-        'CALIBRATE_RISK_LIMITS',
-        'CALIBRATE_DYNAMIC_CAPS',
-        'CALIBRATE_QUANTILE_GATES',
-        'CALIBRATE_NEAR_CEILING',
-        'CALIBRATE_FILL_PROB',
-        'CALIBRATE_TTL_MINUTES',
-        'CALIBRATE_WATCHLIST',
-    ]
-    env_violations = [name for name in calibrate_envs if _truthy(_os.getenv(name))]
-
-    if cfg_violations or env_violations:
+    if cfg_violations:
         lines = [
             'Runtime calibration during order generation has been removed.',
             'Run the GitHub Actions tuning workflows to refresh policy overrides before generating orders.',
         ]
-        if cfg_violations:
-            lines.append('Disable the following config toggles: ' + ', '.join(cfg_violations))
-        if env_violations:
-            lines.append('Unset the following environment variables: ' + ', '.join(env_violations))
+        lines.append('Disable the following config toggles: ' + ', '.join(cfg_violations))
         raise SystemExit('\n'.join(lines))
 
     # Policy runtime copy should already be updated by the tuning workflows upstream
@@ -4042,9 +4019,7 @@ def run(simulate: bool = False, *, context: Optional[Dict[str, Any]] = None, fla
             "metrics": metrics,
             "presets": presets,
         }
-    if _test_mode_enabled():
-        print("[test] BROKER_TEST_MODE=1: Skipping order persistence (test mode).")
-        return
+    # Always persist outputs; test mode removed.
     # Entry gating: move low-probability/weak micro-tape BUYs to watchlist (configurable via orders_ui)
     ou_conf = {}
     try:
@@ -4316,11 +4291,8 @@ def run(simulate: bool = False, *, context: Optional[Dict[str, Any]] = None, fla
         write_orders_analysis(analysis_lines, OUT_ORDERS_DIR / "orders_analysis.txt")
     # Portfolio evaluation (exposures, concentration, liquidity, risk)
     try:
-        import os as _os_eval
-        enable_eval = str(_os_eval.getenv('BROKER_EVAL_ENABLE', '1')).strip().lower() not in ('0','false','no','off')
-        if enable_eval:
-            from scripts.portfolio.evaluation import build_portfolio_evaluation as _build_eval
-            _build_eval(portfolio, snapshot, metrics, OUT_ORDERS_DIR, regime=regime)
+        from scripts.portfolio.evaluation import build_portfolio_evaluation as _build_eval
+        _build_eval(portfolio, snapshot, metrics, OUT_ORDERS_DIR, regime=regime)
     except Exception as _exc_eval:
         analysis_lines.append(f"[warn] portfolio_evaluation failed: {_exc_eval}")
         write_orders_analysis(analysis_lines, OUT_ORDERS_DIR / "orders_analysis.txt")

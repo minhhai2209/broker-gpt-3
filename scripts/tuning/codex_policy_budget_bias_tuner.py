@@ -30,16 +30,11 @@ ALLOWED_RUNTIME_KEYS: List[str] = [
 ]
 
 
-def _test_mode_enabled() -> bool:
-    val = os.getenv('BROKER_TEST_MODE', '').strip().lower()
-    return val not in {'', '0', 'false', 'no', 'off'}
-
-
 def _resolve_reasoning_effort() -> str:
     override = os.getenv('BROKER_CX_REASONING', '').strip()
     if override:
         return override
-    return 'low' if _test_mode_enabled() else 'high'
+    return 'high'
 
 
 def _read_text(path: Path) -> str:

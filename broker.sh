@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Unified helper
-# Usage: ./broker.sh [orders|tests|policy|tune-ai|tune-nightly|server|fundamentals] [extra args]
+# Usage: ./broker.sh [orders|tests|policy|tune|server|fundamentals] [extra args]
 # - No arg defaults to: orders
 # - Only one task allowed at a time
 
@@ -156,29 +156,17 @@ run_policy() {
 }
 
 # Local AI tuning without auto push; writes config/policy_ai_overrides.json
-run_tune_ai() {
+# Unified tune (AI + calibrators) -> writes config/policy_overrides.json
+run_tune() {
   ensure_venv
-  echo "[tune-ai] Using: $PY_BIN"
+  echo "[tune] Using: $PY_BIN"
   # Ensure Codex CLI config exists (optional; script will fail fast otherwise)
   if [[ -f .codex/config.toml ]]; then
     mkdir -p "$HOME/.codex"
     cp -f .codex/config.toml "$HOME/.codex/config.toml"
     chmod 600 "$HOME/.codex/config.toml" || true
   fi
-  "$PY_BIN" -u scripts/tuning/codex_policy_budget_bias_tuner.py
-  if [[ -f config/policy_ai_overrides.json ]]; then
-    echo "[tune-ai] Wrote: config/policy_ai_overrides.json"
-  else
-    echo "[tune-ai] No AI overlay produced" >&2
-    exit 2
-  fi
-}
-
-# Local nightly calibrations (no push): builds snapshot then runs calibrators and writes config/policy_nightly_overrides.json
-run_tune_nightly() {
-  ensure_venv
-  echo "[tune-nightly] Using: $PY_BIN"
-  "$PY_BIN" -u -m scripts.tuning.tune_nightly
+  "$PY_BIN" -u -m scripts.tuning.tune
 }
 
 run_fundamentals() {
@@ -198,11 +186,8 @@ main() {
     tests)
       run_tests "$@"
       ;;
-    tune-ai)
-      run_tune_ai "$@"
-      ;;
-    tune-nightly)
-      run_tune_nightly "$@"
+    tune)
+      run_tune "$@"
       ;;
     coverage)
       BROKER_COVERAGE=1 run_tests "$@"

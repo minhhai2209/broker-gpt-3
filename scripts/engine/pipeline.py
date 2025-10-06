@@ -43,12 +43,7 @@ def ensure_pipeline_artifacts() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFram
             uni.append(t)
     if not uni:
         raise SystemExit('No tickers to fetch (need data/industry_map.csv or in/portfolio/*.csv)')
-    # Optional: limit universe size for development/testing
-    lim_env = os.getenv('BROKER_UNI_LIMIT', '0').strip()
-    if lim_env:
-        lim = int(lim_env)
-        if lim > 0:
-            uni = uni[:lim]
+    # Single-behavior: no env-based universe limiting; keep full universe.
     # 3) Ensure OHLC caches and load merged history DF
     # Use a longer calendar window to ensure >= ~400 trading sessions for calibrations
     prices_history_df = ensure_and_load_history_df(uni, outdir=str(OUT_DIR / 'data'), min_days=700, resolution='D')

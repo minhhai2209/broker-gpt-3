@@ -50,9 +50,8 @@ Kết quả chính (out/)
 Lệnh tiện ích
 - `./broker.sh orders` — chạy Order Engine (mặc định).
 - `./broker.sh tests` — chạy test; bật coverage: `BROKER_COVERAGE=1 ./broker.sh tests`.
-- `./broker.sh tune-ai` — sinh overlay AI tại `config/policy_ai_overrides.json`; không push. Workflow GitHub Actions tự động chạy lệnh này mỗi 2 giờ.
-- `./broker.sh tune-nightly` — chạy toàn bộ calibrators và ghi overlay nightly tại `config/policy_nightly_overrides.json`; không push. Workflow tương ứng sẽ kích hoạt mỗi khi có commit mới.
-- `./broker.sh server` — chạy API server cục bộ (Flask) phục vụ extension/ứng dụng (mặc định `PORT=8787`). Lưu ý: lệnh này tắt PolicyScheduler tự động (không tự chạy tuning/policy). Muốn bật lại, hãy chạy trực tiếp `scripts/api/server.py` với `BROKER_POLICY_AUTORUN=1` (không khuyến nghị cho môi trường cục bộ).
+- `./broker.sh tune` — chạy toàn bộ calibrators + AI (Codex) và ghi đè một file duy nhất `config/policy_overrides.json`.
+- `./broker.sh server` — chạy API server cục bộ (Flask) phục vụ extension/ứng dụng (mặc định `PORT=8787`). Lưu ý: server luôn tắt auto‑policy (PolicyScheduler). Việc refresh policy được thực hiện bởi CI hoặc lệnh `./broker.sh policy` khi cần.
 
   
 
@@ -66,15 +65,19 @@ API server (tùy chọn)
   - `POST /portfolio/reset` — xoá các CSV trong `in/portfolio/`.
   - `POST /portfolio/upload` — nạp 1 CSV (JSON body: `{name, content}`).
   - `POST /done` — bỏ qua policy và chỉ chạy Order Engine; trả về đường dẫn các file lệnh trong `out/orders/`.
-- Ghi chú: `/done` luôn bỏ qua bước policy; policy có thể được cập nhật riêng qua `./broker.sh policy`. Khi chạy qua `./broker.sh server`, PolicyScheduler đã bị tắt theo mặc định.
+- Ghi chú: `/done` luôn bỏ qua bước policy; policy có thể được cập nhật riêng qua `./broker.sh policy`. Server không còn tự kích hoạt tuning/policy theo lịch.
+
+Môi trường (env)
+- Repo loại bỏ hầu hết biến môi trường “hành vi”. Mặc định chỉ còn:
+  - `POLICY_FILE` (tùy chọn): chỉ rõ đường dẫn policy nguồn để merge runtime.
+  - `PORT` (server): cổng HTTP, mặc định 8787.
+  - Các biến cấu hình CI riêng cho workflow AI (ví dụ `BROKER_CX_GEN_ROUNDS`) không ảnh hưởng hành vi engine.
 
 Policy & cấu hình
 - Baseline: `config/policy_default.json` (nguồn sự thật, có chú thích đầy đủ).
-- Overlays (không ghi đè baseline):
-  - `config/policy_nightly_overrides.json` — do nightly calibrations sinh ra.
-  - `config/policy_ai_overrides.json` — do AI tuner sinh ra (ghi đè trực tiếp lên overlay AI hiện tại).
-  - (Legacy) `config/policy_overrides.json` — vẫn được engine đọc nếu tồn tại, để tương thích đường cũ.
-- Runtime: engine hợp nhất theo thứ tự ưu tiên tăng dần: baseline → nightly → ai → legacy. Không có bước deep‑merge vào baseline; baseline luôn ổn định. Chi tiết trong SYSTEM_DESIGN.md.
+- Overlay (duy nhất):
+  - `config/policy_overrides.json` — nguồn override duy nhất được cập nhật bởi `./broker.sh tune`.
+  - Runtime: engine tạo bản hợp nhất tại `out/orders/policy_overrides.json` từ baseline + overlay duy nhất.
 
 Tài liệu chi tiết
 - Kiến trúc, pipeline, nhận diện market regime, thuật toán quyết định lệnh, calibrations, chi tiết merge policy: xem `SYSTEM_DESIGN.md`.

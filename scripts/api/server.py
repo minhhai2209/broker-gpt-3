@@ -278,22 +278,10 @@ class PolicyScheduler:
         }
 
 
-AUTO_RUN_POLICY = os.getenv('BROKER_POLICY_AUTORUN', '1').strip() not in ('0', 'false', 'False')
-POLICY_LEAD_MINUTES = int(os.getenv('BROKER_POLICY_LEAD_MINUTES', '10'))
-POLICY_MAX_AGE = os.getenv('BROKER_POLICY_MAX_AGE_MINUTES')
-POLICY_MAX_AGE_DELTA = (
-    timedelta(minutes=int(POLICY_MAX_AGE)) if POLICY_MAX_AGE else timedelta(minutes=25)
-)
-
+# Behavioral env toggles removed: server runs in a single, stable mode with no
+# automatic policy scheduler. Policy refresh is handled explicitly via CI
+# workflows or the `broker.sh policy` command.
 POLICY_SCHEDULER: Optional[PolicyScheduler] = None
-if AUTO_RUN_POLICY:
-    POLICY_SCHEDULER = PolicyScheduler(
-        times=_default_policy_times(),
-        lead=timedelta(minutes=POLICY_LEAD_MINUTES),
-        max_age=POLICY_MAX_AGE_DELTA,
-        timezone_name=os.getenv('BROKER_POLICY_TZ', 'Asia/Ho_Chi_Minh'),
-    )
-    POLICY_SCHEDULER.start()
 
 
 def _resp(data: Dict[str, Any], status: int = 200):

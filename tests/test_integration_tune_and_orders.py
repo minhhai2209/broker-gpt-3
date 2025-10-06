@@ -41,7 +41,6 @@ class TestIntegrationTuneAndOrders(unittest.TestCase):
             encoding='utf-8',
         )
 
-    @unittest.skip("Codex CLI unavailable in this environment")
     def test_budget_tuner_writes_ai_overrides_in_test_mode(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
@@ -60,12 +59,12 @@ class TestIntegrationTuneAndOrders(unittest.TestCase):
                 return SimpleNamespace(stdout=b'END\n')
 
             with ExitStack() as stack:
-                stack.enter_context(patch.dict(os.environ, {'BROKER_TEST_MODE': '1'}, clear=False))
                 stack.enter_context(change_cwd(base))
                 stack.enter_context(patch.object(budget_tuner, 'BASE_DIR', base))
                 stack.enter_context(patch.object(budget_tuner, 'CONFIG_DIR', base / 'config'))
                 stack.enter_context(patch.object(budget_tuner, 'OUT_DIR', base / 'out'))
                 stack.enter_context(patch('subprocess.run', fake_run))
+                stack.enter_context(patch.dict(os.environ, {'BROKER_CX_REASONING': 'low'}, clear=False))
 
                 budget_tuner.main()
 
@@ -122,6 +121,24 @@ class TestIntegrationTuneAndOrders(unittest.TestCase):
                 order = oe.Order(ticker='AAA', side='BUY', quantity=100, limit_price=20.0, note='Test order')
                 regime_stub = SimpleNamespace(
                     risk_on=True,
+                    pricing={
+                        'tc_roundtrip_frac': 0.0,
+                        'fill_prob': {
+                            'base': 0.3,
+                            'cross': 0.9,
+                            'near_ceiling': 0.05,
+                            'min': 0.05,
+                            'decay_scale_min_ticks': 5.0,
+                        },
+                        'slippage_model': {
+                            'alpha_bps': 5.0,
+                            'beta_dist_per_tick': 1.0,
+                            'beta_size': 45.0,
+                            'beta_vol': 8.0,
+                            'mae_bps': 15.0,
+                        },
+                    },
+                    thresholds={'near_ceiling_pct': 0.98},
                     diag_warnings=[],
                     filtered_records=[],
                     debug_filters={},
@@ -130,7 +147,6 @@ class TestIntegrationTuneAndOrders(unittest.TestCase):
                 return [order], {'AAA': 'Test order'}, regime_stub
 
             with ExitStack() as stack:
-                stack.enter_context(patch.dict(os.environ, {'BROKER_TEST_MODE': '1'}, clear=False))
                 stack.enter_context(change_cwd(base))
                 stack.enter_context(patch.object(config_io, 'BASE_DIR', base))
                 stack.enter_context(patch.object(config_io, 'OUT_DIR', base / 'out'))
@@ -152,19 +168,12 @@ class TestIntegrationTuneAndOrders(unittest.TestCase):
             self.assertTrue(build_called.get('ok'), 'order_engine.build_orders should be invoked')
 
             orders_dir = base / 'out' / 'orders'
-            forbidden = [
+            # With test mode removed, outputs should be written
+            expected_any = [
                 'orders_final.csv',
-                'orders_print.txt',
-                'orders_reasoning.csv',
-                'orders_quality.csv',
-                'orders_watchlist.csv',
-                'orders_filtered.csv',
-                'trade_suggestions.txt',
-                'last_actions.csv',
-                'position_state.csv',
+                'orders_analysis.txt',
             ]
-            for name in forbidden:
-                self.assertFalse((orders_dir / name).exists(), f'{name} should not be persisted in test mode')
+            self.assertTrue(any((orders_dir / name).exists() for name in expected_any), 'expected outputs not found')
 
 
 if __name__ == '__main__':

@@ -9,7 +9,6 @@ from unittest.mock import patch
 from scripts.tuning import codex_policy_budget_bias_tuner as budget_tuner
 
 
-@unittest.skip("Codex CLI unavailable in this environment")
 class TestGeneratePolicyFileflow(unittest.TestCase):
     def _seed_base(self, base: Path) -> None:
         # Minimal sample file content (not parsed, only embedded into prompt)
@@ -54,7 +53,7 @@ class TestGeneratePolicyFileflow(unittest.TestCase):
                 # STDOUT contains END marker
                 return SimpleNamespace(stdout=b"END\n")
 
-            with patch('subprocess.run', fake_run), patch.dict(os.environ, {'BROKER_CX_GEN_ROUNDS': '1'}, clear=False):
+            with patch('subprocess.run', fake_run), patch.dict(os.environ, {'BROKER_CX_GEN_ROUNDS': '1', 'BROKER_CX_REASONING': 'low'}, clear=False):
                 budget_tuner.main()
 
             # Expect copied file exists with correct content
@@ -92,7 +91,7 @@ class TestGeneratePolicyFileflow(unittest.TestCase):
                 Path(cwd, budget_tuner.ANALYSIS_FILENAME).write_text('first round analysis', encoding='utf-8')
                 return SimpleNamespace(stdout=b"CONTINUE\n")
 
-            with patch('subprocess.run', fake_run), patch.dict(os.environ, {'BROKER_CX_GEN_ROUNDS': '1'}, clear=False):
+            with patch('subprocess.run', fake_run), patch.dict(os.environ, {'BROKER_CX_GEN_ROUNDS': '1', 'BROKER_CX_REASONING': 'low'}, clear=False):
                 with self.assertRaises(SystemExit) as ctx:
                     budget_tuner.main()
             self.assertIn('Exceeded maximum analysis rounds', str(ctx.exception))
