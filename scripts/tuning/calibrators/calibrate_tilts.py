@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-Calibrate AI overrides (sector_bias, ticker_bias) via Codex CLI, calibrator style.
+Calibrate tilts (sector_bias, ticker_bias) via Codex CLI, calibrator style.
 
 - Invokes Codex to generate a lightweight overrides JSON.
 - Filters allowed keys (sector_bias, ticker_bias) and merges into

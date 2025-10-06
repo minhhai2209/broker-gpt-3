@@ -89,8 +89,8 @@ def main() -> int:
 
     # Run AI overrides calibrator (Codex)
     try:
-        from scripts.tuning.calibrators import calibrate_ai_overrides
-        calibrate_ai_overrides.calibrate(write=True)
+        from scripts.tuning.calibrators import calibrate_tilts
+        calibrate_tilts.calibrate(write=True)
     except SystemExit as exc:
         # Surface clear error; unified tune requires Codex when enabled
         raise
@@ -116,4 +116,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

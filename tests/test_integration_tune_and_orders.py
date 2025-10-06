@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from scripts.tuning.calibrators import calibrate_ai_overrides as ai_cal
+from scripts.tuning.calibrators import calibrate_tilts as ai_cal
 import scripts.engine.config_io as config_io
 import scripts.engine.pipeline as pipeline
 import scripts.orders.order_engine as oe
