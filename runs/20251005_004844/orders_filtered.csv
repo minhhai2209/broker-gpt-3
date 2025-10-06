@@ -1,6 +1,0 @@
-Ticker,Reason,Side,Quantity,LimitPrice,MarketPrice,Note
-CTG,market,BUY,0,50.7,50.8,market filter active – defer adding until trend/breadth improves
-MWG,market,BUY,0,75.3,77.0,market filter active – defer adding until trend/breadth improves
-VCG,market,BUY,0,27.05,27.25,market filter active – defer adding until trend/breadth improves
-VNM,market,BUY,0,59.2,61.3,market filter active – defer adding until trend/breadth improves
-VRE,market,BUY,0,30.55,32.75,market filter active – pause new entries under weak market conditions
