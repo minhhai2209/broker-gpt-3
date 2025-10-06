@@ -1,18 +1,13 @@
 {
-  "buy_budget_frac": 0.115,
+  "buy_budget_frac": 0.103,
   "sector_bias": {
-    "Công nghệ thông tin": 0.12,
-    "Công nghiệp": 0.08,
-    "Hàng tiêu dùng thiết yếu": 0.06,
-    "Nguyên vật liệu": 0.06,
-    "Tài chính": 0.03,
-    "Hàng tiêu dùng không thiết yếu": 0.02,
-    "Năng lượng": -0.02,
-    "Bất động sản": -0.1
+    "Tài chính": 0.08,
+    "Bất động sản": -0.05,
+    "Nguyên vật liệu": -0.03
   },
   "ticker_bias": {
-    "FPT": 0.1,
-    "HPG": 0.1,
-    "VNM": 0.06
+    "VCB": 0.05,
+    "VPB": 0.06,
+    "SSI": 0.06
   }
 }
