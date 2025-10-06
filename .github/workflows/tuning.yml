@@ -1,4 +1,4 @@
-name: Tuning AI Overrides
+name: Unified Tuning (AI + Calibrations)
 
 on:
   workflow_dispatch:
@@ -16,9 +16,12 @@ on:
         required: false
         default: "20"
   schedule:
-    # Note: GitHub cron uses UTC. Vietnam (ICT) = UTC+7, no DST.
-    # Run every 2 hours to refresh AI overlays on a predictable cadence.
+    # GitHub cron uses UTC. Vietnam (ICT) = UTC+7.
     - cron: '0 */2 * * *'
+  push:
+    # Run when code changes land, but avoid infinite loops on overlay commits
+    paths-ignore:
+      - 'config/policy_overrides.json'
   workflow_call:
     inputs:
       rounds:
@@ -41,19 +44,20 @@ on:
         required: true
 
 concurrency:
-  group: tuning-ai-overrides-${{ github.ref }}
+  group: tuning-unified-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: write
 
 jobs:
-  generate:
-    name: Generate and persist policy_overrides.json via Codex CLI
+  tune:
+    name: Run unified tune and persist overlay
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       BROKER_CX_GEN_ROUNDS: ${{ inputs.rounds || '1' }}
+      BROKER_CX_REASONING: low
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -67,6 +71,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
+          set -euo pipefail
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
@@ -100,7 +105,7 @@ jobs:
           cp -f .codex/config.toml "$HOME/.codex/config.toml"
           chmod 600 "$HOME/.codex/config.toml"
 
-      - name: Unified tune (AI + calibrators)
+      - name: Run unified tune
         run: |
           set -euo pipefail
           echo "Running unified tune, rounds=$BROKER_CX_GEN_ROUNDS"
@@ -111,15 +116,13 @@ jobs:
           BRANCH_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          test -f config/policy_overrides.json || { echo '::error::generated config/policy_overrides.json missing'; exit 2; }
+          test -f config/policy_overrides.json || { echo '::error::unified policy not found'; exit 2; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Ensure we are up-to-date before committing/pushing
           git fetch origin "$BRANCH_NAME"
-          git rebase "origin/$BRANCH_NAME" || { echo 'Rebase failed, attempting to continue per fail-fast policy'; }
+          git rebase "origin/$BRANCH_NAME" || { echo 'Rebase failed, trying to continue'; }
           git add config/policy_overrides.json
-          git commit -m "chore(policy): update unified policy_overrides via tune" || echo "No changes to commit"
-          # Push with small retry window in case of concurrent updates
+          git commit -m "chore(policy): update unified policy_overrides via tuning" || echo "No changes to commit"
           for i in 1 2 3; do
             if git push origin "$BRANCH_NAME"; then exit 0; fi
             echo "Push failed, retry $i/3 after rebase"
@@ -133,7 +136,9 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: policy-overrides-unified
+          name: tuning-artifacts-unified
           path: |
+            out/
             config/policy_overrides.json
-            out/debug/**
+            out/orders/policy_overrides.json
+
