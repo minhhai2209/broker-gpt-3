@@ -368,4 +368,9 @@ Mục này tổng hợp các cơ chế hiệu chỉnh (calibration) và chẩn �
     - Mapping hiện hành: `low → 14/11/8`, `medium → 11/9/7`, `high → 8/6/5` (lần lượt `base/soft/hard`, tính bằng phút).
     - Output: ghi đè vào `config/policy_overrides.json` (hoặc `out/orders/policy_overrides.json` runtime) các khóa liên quan TTL và metadata: `ttl_bucket_minutes`, `ttl_bucket_thresholds`, `ttl_bucket_state`. Lần chạy Order Engine kế tiếp sẽ sử dụng TTL mới.
 
+- Hiệu chỉnh mean‑variance (runtime) — fallback an toàn
+  - Trong một số phiên, lưới tham số hoặc dữ liệu lịch sử có thể không đủ điều kiện để đánh giá (ví dụ thiếu số điểm đủ dài sau khi căn chỉnh các mã “new/add”).
+  - Từ 2025‑10‑06, khi calibrator không sinh được kết quả hợp lệ, Order Engine không dừng pipeline nữa mà ghi diagnostics `calibration: {status: 'fallback', reason: ...}` và quay về các tham số baseline trong `sizing` (`risk_alpha`, `cov_reg`, `bl_alpha_scale`).
+  - Các lỗi cấu hình bắt buộc (thiếu schema/policy) vẫn giữ nguyên chế độ fail‑fast.
+
 Lưu ý: Các calibration và diagnostics trên phải được kiểm định bằng dữ liệu khách quan. Khi thay đổi mô hình/slopes/ngưỡng, cập nhật policy, baseline và tests kèm theo để đảm bảo CI xanh và hành vi nhất quán.

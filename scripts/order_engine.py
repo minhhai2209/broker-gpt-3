@@ -2943,19 +2943,32 @@ def build_orders(
         and calibration_conf.get('enable')
         and (add_names or new_names)
     ):
-        outcome = calibrate_mean_variance_params(
-            prices_history=prices_history,
-            scores=scores,
-            tickers=list(set(add_names + new_names)),
-            market_symbol=market_index_symbol,
-            sector_by_ticker=sector_by_ticker,
-            sizing_conf=sizing,
-            calibration_conf=calibration_conf,
-        )
-        risk_alpha = float(outcome.params['risk_alpha'])
-        cov_reg = float(outcome.params['cov_reg'])
-        bl_alpha_scale = float(outcome.params['bl_alpha_scale'])
-        allocation_diagnostics['calibration'] = outcome.diagnostics
+        try:
+            outcome = calibrate_mean_variance_params(
+                prices_history=prices_history,
+                scores=scores,
+                tickers=list(set(add_names + new_names)),
+                market_symbol=market_index_symbol,
+                sector_by_ticker=sector_by_ticker,
+                sizing_conf=sizing,
+                calibration_conf=calibration_conf,
+            )
+            risk_alpha = float(outcome.params['risk_alpha'])
+            cov_reg = float(outcome.params['cov_reg'])
+            bl_alpha_scale = float(outcome.params['bl_alpha_scale'])
+            allocation_diagnostics['calibration'] = outcome.diagnostics
+        except SystemExit as _exc_cal:
+            allocation_diagnostics['calibration'] = {
+                'status': 'fallback',
+                'reason': str(_exc_cal),
+                'params': 'baseline',
+            }
+        except Exception as _exc_cal2:
+            allocation_diagnostics['calibration'] = {
+                'status': 'fallback',
+                'reason': f'unexpected_error: {_exc_cal2}',
+                'params': 'baseline',
+            }
     def _allocate_mean_variance(
         budget_k: float,
         items: List[Tuple[str, float]],
@@ -4334,4 +4347,3 @@ def resolve_tp_sl(thresholds: Dict[str, object], feats: Optional[Dict[str, float
         'sl_dynamic_raw': dyn_sl,
     }
     return tp_eff, sl_eff, info
-
