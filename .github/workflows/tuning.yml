@@ -105,6 +105,20 @@ jobs:
           cp -f .codex/config.toml "$HOME/.codex/config.toml"
           chmod 600 "$HOME/.codex/config.toml"
 
+      - name: Prepare sample inputs (portfolio)
+        run: |
+          set -euo pipefail
+          mkdir -p in/portfolio
+          # If the portfolio folder is empty (no CSV), copy sample if available
+          if [ -z "$(ls -1 in/portfolio/*.csv 2>/dev/null || true)" ]; then
+            if [ -f samples/portfolio.csv ]; then
+              cp -f samples/portfolio.csv in/portfolio/sample_portfolio.csv
+              echo "seeded in/portfolio/sample_portfolio.csv"
+            else
+              echo "no samples/portfolio.csv found; proceeding with empty folder"
+            fi
+          fi
+
       - name: Run unified tune
         run: |
           set -euo pipefail
@@ -141,4 +155,3 @@ jobs:
             out/
             config/policy_overrides.json
             out/orders/policy_overrides.json
-
