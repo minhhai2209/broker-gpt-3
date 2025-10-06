@@ -1,5 +1,5 @@
 {
-  "buy_budget_frac": 0.101,
+  "buy_budget_frac": 0.125,
   "buy_budget_by_regime": {
     "risk_on": 0.12,
     "neutral": 0.06,
@@ -28,7 +28,7 @@
     "trim_th": -0.05,
     "q_add": 0.0,
     "q_new": 0.9620253164556962,
-    "min_liq_norm": 0.45098039215686275,
+    "min_liq_norm": 0.4803921568627451,
     "near_ceiling_pct": 0.9371971074213226,
     "tp_pct": 0.0,
     "sl_pct": 0.0,
@@ -146,27 +146,31 @@
     }
   },
   "sector_bias": {
-    "Bất động sản": -0.08,
-    "Công nghiệp": 0.03,
+    "Bất động sản": -0.05,
+    "Công nghiệp": -0.02,
     "Dịch vụ tiện ích": 0.03,
-    "Hàng tiêu dùng không thiết yếu": -0.04,
-    "Hàng tiêu dùng thiết yếu": 0.02,
-    "Nguyên vật liệu": 0.05,
-    "Năng lượng": 0.1,
-    "Tài chính": -0.05,
+    "Hàng tiêu dùng không thiết yếu": 0.05,
+    "Hàng tiêu dùng thiết yếu": 0.03,
+    "Nguyên vật liệu": 0.06,
+    "Năng lượng": 0.03,
+    "Tài chính": 0.04,
     "Y tế": 0.02,
     "Công nghệ thông tin": 0.06
   },
   "ticker_bias": {
-    "GAS": 0.1,
+    "GAS": 0.04,
     "PVD": 0.08,
-    "POW": 0.06,
-    "HPG": 0.05,
-    "FPT": 0.05,
-    "VHM": -0.05,
+    "POW": 0.03,
+    "HPG": 0.06,
+    "FPT": 0.07,
+    "VHM": 0.03,
     "VIC": -0.04,
-    "VCB": -0.03,
-    "SSI": -0.03
+    "VCB": 0.05,
+    "SSI": 0.03,
+    "VNM": 0.04,
+    "MWG": 0.04,
+    "NVL": -0.06,
+    "DIG": -0.04
   },
   "calibration": {
     "on_run": 0,
@@ -272,7 +276,7 @@
     "momentum_unit": 0.12
   },
   "sizing": {
-    "softmax_tau": 0.08293151855468861,
+    "softmax_tau": 0.08874740600586048,
     "add_share": 0.5,
     "new_share": 0.5,
     "min_lot": 100,
