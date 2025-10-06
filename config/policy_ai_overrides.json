@@ -1,78 +1,11 @@
 {
-  "buy_budget_frac": 0.003,
-  "add_max": 1,
-  "new_max": 1,
-  "weights": {
-    "w_beta": 0.0
-  },
-  "thresholds": {
-    "min_liq_norm": 0.30,
-    "near_ceiling_pct": 0.98,
-    "sl_atr_mult": 0.9,
-    "tp1_atr_mult": 1.0,
-    "tp2_atr_mult": 1.8,
-    "trailing_atr_mult": 1.5,
-    "trim_frac_tp1": 0.45,
-    "trim_frac_tp2": 0.30,
-    "breakeven_after_tp1": 1,
-    "time_stop_days": 5,
-    "trim_rsi_gate": 70.0,
-    "cooldown_days_after_exit": 2,
-    "partial_entry_enabled": 1,
-    "partial_entry_frac": 0.25,
-    "partial_entry_floor_lot": 1,
-    "new_partial_buffer": 0.05
-  },
-  "pricing": {
-    "tc_roundtrip_frac": 0.0025,
-    "slippage_model": {
-      "mae_bps": 18.0
-    }
-  },
-  "sizing": {
-    "risk_per_trade_frac": 0.006,
-    "min_notional_per_order": 3000000.0
-  },
-  "neutral_adaptive": {
-    "min_new_per_day": 1
-  },
-  "ticker_overrides": {
-    "FPT": {
-      "sl_atr_mult": 0.85,
-      "tp1_atr_mult": 0.95,
-      "tp2_atr_mult": 1.60,
-      "trailing_atr_mult": 1.30,
-      "time_stop_days": 4,
-      "partial_entry_frac": 0.20,
-      "new_partial_buffer": 0.06,
-      "mae_bps": 18.0
-    },
-    "HPG": {
-      "sl_atr_mult": 1.05,
-      "tp1_atr_mult": 1.10,
-      "tp2_atr_mult": 2.00,
-      "trailing_atr_mult": 1.60,
-      "time_stop_days": 6,
-      "partial_entry_frac": 0.30,
-      "new_partial_buffer": 0.04,
-      "mae_bps": 12.0
-    }
-  },
+  "buy_budget_frac": 0.1124,
   "sector_bias": {
-    "Tài chính": 0.1,
-    "Nguyên vật liệu": 0.07,
-    "Hàng tiêu dùng không thiết yếu": 0.05,
-    "Năng lượng": 0.03,
-    "Công nghệ thông tin": -0.05,
-    "Bất động sản": -0.08
-  },
-  "ticker_bias": {
-    "VNM": 0.08,
-    "HPG": 0.06,
-    "GAS": 0.04,
-    "VCB": 0.05,
-    "CTG": 0.05,
-    "FPT": -0.06,
-    "VHM": -0.06
+    "Tài chính": 0.06,
+    "Công nghệ thông tin": 0.05,
+    "Hàng tiêu dùng thiết yếu": 0.04,
+    "Công nghiệp": 0.03,
+    "Nguyên vật liệu": 0.03,
+    "Bất động sản": -0.03
   }
 }

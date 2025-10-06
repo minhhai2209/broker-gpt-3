@@ -1,0 +1,8 @@
+Ticker,Reason,Side,Quantity,LimitPrice,MarketPrice,Note
+ACB,near_ceiling,BUY,0,25.95,26.4,price 26.40 within 0.94 of ceiling 27.40
+CTG,near_ceiling,BUY,0,50.9,51.7,(ADD) price 51.70 within 0.94 of ceiling 54.30
+GEX,near_ceiling,BUY,0,51.8,53.3,(ADD) price 53.30 within 0.94 of ceiling 56.10
+HPG,near_ceiling,BUY,0,28.75,28.75,(ADD) price 28.75 within 0.94 of ceiling 29.55
+MWG,near_ceiling,BUY,0,77.4,77.4,(ADD) price 77.40 within 0.94 of ceiling 82.30
+VIX,near_ceiling,BUY,0,36.5,37.4,(ADD) price 37.40 within 0.94 of ceiling 37.95
+VNM,near_ceiling,BUY,0,62.0,62.0,(ADD) price 62.00 within 0.94 of ceiling 65.50
