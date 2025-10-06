@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from scripts.order_engine import build_orders, decide_actions
+from scripts.orders.order_engine import build_orders, decide_actions
 
 
 class TestCooldownLedger(unittest.TestCase):

@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from unittest.mock import patch
 
-from scripts.engine.portfolio_risk import (
+from scripts.portfolio.portfolio_risk import (
     ExpectedReturnInputs,
     compute_cov_matrix,
     compute_expected_returns,
@@ -35,9 +35,9 @@ class TestPortfolioRisk(unittest.TestCase):
             index=dates,
             columns=["AAA", "BBB"],
         )
-        from scripts.engine import portfolio_risk as pr
+        from scripts.portfolio import portfolio_risk as pr
 
-        with patch("scripts.engine.portfolio_risk._ledoit_wolf", None):
+        with patch("scripts.portfolio.portfolio_risk._ledoit_wolf", None):
             cov = pr.compute_cov_matrix(data, reg=1e-4)
         np.linalg.cholesky(cov.to_numpy())
 

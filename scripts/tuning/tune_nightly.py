@@ -16,7 +16,7 @@ import re
 import shutil
 
 
-BASE_DIR = Path(__file__).resolve().parents[1]
+BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / "out"
 CFG_DIR = BASE_DIR / "config"
 
@@ -50,7 +50,7 @@ def main() -> int:
     ensure_pipeline_artifacts()
 
     # Run calibrators (always write runtime overrides)
-    from scripts.engine import (
+    from scripts.tuning.calibrators import (
         calibrate_regime_components,
         calibrate_regime,
         calibrate_market_filter,

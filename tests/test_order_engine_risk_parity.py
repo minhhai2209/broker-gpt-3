@@ -2,7 +2,7 @@ import unittest
 import pandas as pd
 import numpy as np
 
-from scripts.order_engine import decide_actions, build_orders
+from scripts.orders.order_engine import decide_actions, build_orders
 
 
 def make_history(n=120, sigma_a=0.01, sigma_b=0.03, seed=42):

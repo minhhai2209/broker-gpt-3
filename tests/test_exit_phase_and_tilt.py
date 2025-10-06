@@ -4,7 +4,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from scripts.order_engine import decide_actions
+from scripts.orders.order_engine import decide_actions
 
 
 class TestExitPhaseAndTilt(unittest.TestCase):

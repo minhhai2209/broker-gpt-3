@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 
 
-BASE_DIR = Path(__file__).resolve().parents[2]
+BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / 'out'
 ORDERS_PATH = OUT_DIR / 'orders' / 'policy_overrides.json'
 CONFIG_PATH = BASE_DIR / 'config' / 'policy_overrides.json'

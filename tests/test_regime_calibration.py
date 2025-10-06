@@ -7,8 +7,8 @@ from tempfile import TemporaryDirectory
 import numpy as np
 import pandas as pd
 
-import scripts.engine.calibrate_regime as cal_reg
-from scripts.order_engine import get_market_regime
+from scripts.tuning.calibrators import calibrate_regime as cal_reg
+from scripts.orders.order_engine import get_market_regime
 
 
 class TestRegimeCalibration(unittest.TestCase):

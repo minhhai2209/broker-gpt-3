@@ -1,0 +1,1 @@
+"""Order generation entry points."""

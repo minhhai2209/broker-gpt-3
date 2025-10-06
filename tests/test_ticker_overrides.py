@@ -1,6 +1,6 @@
 import unittest
 
-from scripts.order_engine import MarketRegime, classify_action
+from scripts.orders.order_engine import MarketRegime, classify_action
 
 
 class TestTickerOverrides(unittest.TestCase):

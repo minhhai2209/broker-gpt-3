@@ -46,7 +46,7 @@ import numpy as np
 import pandas as pd
 
 
-BASE_DIR = Path(__file__).resolve().parents[2]
+BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / 'out'
 ORDERS_PATH = OUT_DIR / 'orders' / 'policy_overrides.json'
 CONFIG_PATH = BASE_DIR / 'config' / 'policy_overrides.json'
@@ -93,7 +93,7 @@ def _load_vnindex_history(min_days: int = 400) -> pd.DataFrame:
     if len(vn) < min_days:
         # Attempt a targeted refill of VNINDEX cache, then retry once
         try:
-            from scripts.fetch_ticker_data import ensure_and_load_history_df as _ensure_hist
+            from scripts.data_fetching.fetch_ticker_data import ensure_and_load_history_df as _ensure_hist
             refill = _ensure_hist(['VNINDEX'], outdir=str(OUT_DIR / 'data'), min_days=max(min_days, 700), resolution='D')
             if not refill.empty:
                 refill['Ticker'] = refill['Ticker'].astype(str).str.upper()

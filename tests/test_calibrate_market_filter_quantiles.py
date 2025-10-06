@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 import numpy as np
 import pandas as pd
 
-import scripts.engine.calibrate_market_filter as cmf
+from scripts.tuning.calibrators import calibrate_market_filter as cmf
 
 
 class TestCalibrateMarketFilterQuantiles(unittest.TestCase):

@@ -14,14 +14,22 @@ import pandas as pd
 from scripts.build_metrics import build_metrics_df
 from scripts.build_presets_all import build_presets_all_df, _infer_in_session
 from scripts.build_snapshot import build_snapshot_df
-from scripts.collect_intraday import ensure_intraday_latest
+from scripts.data_fetching.collect_intraday import ensure_intraday_latest
 from scripts.compute_sector_strength import compute_sector_strength_df
-from scripts.fetch_ticker_data import ensure_and_load_history_df
+from scripts.data_fetching.fetch_ticker_data import ensure_and_load_history_df
 # Domain helpers: indicators and prep modules
-from scripts.ingest_portfolio_auto import ingest_portfolio_df
-from scripts.orders_io import print_orders, write_orders_csv, write_orders_reasoning, write_orders_analysis, write_text_lines, write_orders_quality, write_orders_csv_enriched
-from scripts.precompute_indicators import precompute_indicators_from_history_df
-from scripts.report_portfolio_pnl import build_portfolio_pnl_dfs
+from scripts.portfolio.ingest_auto import ingest_portfolio_df
+from scripts.orders.orders_io import (
+    print_orders,
+    write_orders_csv,
+    write_orders_reasoning,
+    write_orders_analysis,
+    write_text_lines,
+    write_orders_quality,
+    write_orders_csv_enriched,
+)
+from scripts.indicators.precompute_indicators import precompute_indicators_from_history_df
+from scripts.portfolio.report_pnl import build_portfolio_pnl_dfs
 from scripts.utils import (clip_to_band, detect_session_phase_now_vn,
                            hose_tick_size, load_universe_from_files,
                            round_to_tick, to_float)
@@ -29,7 +37,7 @@ from scripts.engine.config_io import ensure_policy_override_file, suggest_tuning
 from scripts.engine.pipeline import ensure_pipeline_artifacts
 from scripts.engine.volatility import garman_klass_sigma, percentile_thresholds
 from scripts.engine.schema import MarketFilter as _MarketFilter, NeutralAdaptive, Execution as _Execution
-from scripts.engine.portfolio_risk import (
+from scripts.portfolio.portfolio_risk import (
     ExpectedReturnInputs,
     compute_cov_matrix,
     compute_expected_returns,
@@ -37,11 +45,11 @@ from scripts.engine.portfolio_risk import (
     solve_mean_variance_weights,
     TRADING_DAYS_PER_YEAR,
 )
-from scripts.engine.mean_variance_calibrator import calibrate_mean_variance_params
+from scripts.tuning.mean_variance_calibrator import calibrate_mean_variance_params
 import json
 
 # Paths
-BASE_DIR = Path(__file__).resolve().parents[1]
+BASE_DIR = Path(__file__).resolve().parents[2]
 OUT_DIR = BASE_DIR / "out"
 OUT_ORDERS_DIR = OUT_DIR / "orders"
 OVERRIDE_SRC = BASE_DIR / "config" / "policy_overrides.json"
@@ -1350,7 +1358,7 @@ class Order:
     limit_price: float
     note: str = ""
 
-    # IO/price utils moved to scripts.order_price and scripts.orders_io
+    # IO/price utils moved to scripts.order_price and scripts.orders.orders_io
 
 
 def pick_limit_price(ticker: str, side: str, snap_row: pd.Series, preset_row: Optional[pd.Series], metrics_row: Optional[pd.Series], regime: Optional[MarketRegime] = None) -> float:
@@ -3912,7 +3920,7 @@ def build_orders(
     return orders, notes, regime
 
 
-    # IO moved to scripts.orders_io
+    # IO moved to scripts.orders.orders_io
 
 
 def run(simulate: bool = False, *, context: Optional[Dict[str, Any]] = None, flags: Optional[Dict[str, Any]] = None):
@@ -4311,7 +4319,7 @@ def run(simulate: bool = False, *, context: Optional[Dict[str, Any]] = None, fla
         import os as _os_eval
         enable_eval = str(_os_eval.getenv('BROKER_EVAL_ENABLE', '1')).strip().lower() not in ('0','false','no','off')
         if enable_eval:
-            from scripts.portfolio_evaluation import build_portfolio_evaluation as _build_eval
+            from scripts.portfolio.evaluation import build_portfolio_evaluation as _build_eval
             _build_eval(portfolio, snapshot, metrics, OUT_ORDERS_DIR, regime=regime)
     except Exception as _exc_eval:
         analysis_lines.append(f"[warn] portfolio_evaluation failed: {_exc_eval}")

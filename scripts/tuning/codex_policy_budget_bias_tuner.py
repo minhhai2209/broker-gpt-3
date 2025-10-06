@@ -8,29 +8,26 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List
 
-BASE_DIR = Path(__file__).resolve().parents[2]
+BASE_DIR = Path(__file__).resolve().parents[3]
 CONFIG_DIR = BASE_DIR / "config"
 OUT_DIR = BASE_DIR / "out"
 ANALYSIS_FILENAME = "analysis_round.txt"
 OUTPUT_FILENAME = "policy_overrides.generated.json"
 
-# Ensure repo root is importable (match scripts/generate_orders.py behavior)
+# Ensure repo root is importable (match scripts/orders/generate_orders.py behavior)
 import sys as _sys
 if str(BASE_DIR) not in _sys.path:
     _sys.path.insert(0, str(BASE_DIR))
 
-from scripts.ai.guardrails import apply_guardrails
-
-# Single source of truth for AI-adjustable runtime override keys.
-# This list drives both:
-# - The prompt whitelist shown to the model (allowed_keys)
-# - The set of keys considered "owned" by the AI when we merge
-#   sanitized overrides into the persistent overlay (runtime_keys).
-# Keep this surface intentionally small for auditability.
+# Single source of truth for high-level knobs we highlight to the model in the prompt.
+# The generated JSON is now written verbatim without additional guardrails, but we
+# still surface a focused list so the assistant understands the intended scope.
 ALLOWED_RUNTIME_KEYS: List[str] = [
     'sector_bias',          # sector‑level tilts in [-0.20..0.20]
     'ticker_bias',          # ticker‑level tilts in [-0.20..0.20]
-    'news_risk_tilt',       # optional helper input in [-1..+1]; mapped by guardrails
+    'buy_budget_frac',      # portfolio budget fraction for new buys
+    'add_max',              # max concurrent add slots
+    'new_max',              # max concurrent new positions
     'rationale',            # required: brief natural‑language justification for changes
 ]
 
@@ -60,9 +57,9 @@ def build_prompt(sample_json: str, analysis_so_far: str, round_idx: int, max_rou
     # to reduce overlap with calibrators and improve stability/auditability.
     # Calibrators compute quantiles, ATR-based thresholds, market filters, sizing, etc.
     # Daily AI/script may only touch the following knobs:
-    # Minimize tunable surface: no direct slot overrides from AI.
-    # Slots may still be derived internally from 'news_risk_tilt' by guardrails,
-    # but the generator must not set 'add_max' or 'new_max' explicitly.
+    # Minimize tunable surface to reduce overlap with calibrators. The generated
+    # payload is written verbatim, so the assistant must adhere to the whitelist
+    # below without expecting additional guardrails to post-process values.
     allowed_list = "\n".join([f"- {k}" for k in ALLOWED_RUNTIME_KEYS])
     prompt = f"""
 Bạn là chuyên gia cấu hình hệ thống giao dịch.
@@ -77,9 +74,7 @@ Nhiệm vụ của bạn: sinh "policy_overrides" NHẸ chứa CHỈ các khoá 
 
 Bạn có thể dựa trên tin tức/sentiment mới nhất để điều chỉnh các khoá cho phép ở trên.
 YÊU CẦU: phải cung cấp trường 'rationale' (string) mô tả ngắn gọn lý do thay đổi, nguồn tin và thời hạn hiệu lực (TTL).
-Tuỳ chọn: nếu tiện, bạn có thể xuất 'news_risk_tilt' trong [-1..+1] (âm = risk‑off), script sẽ tự ánh xạ sang budget/slots theo guardrails.
-
-Chế độ nhiều lượt (multi-round):
+    Chế độ nhiều lượt (multi-round):
 - Bạn có nhiều lượt phân tích. Lên kế hoạch cho tối ưu. Không được cố gắng hoàn thành trong một lượt.
 - Bạn không hỏi xác nhận hay ý kiến gì từ người dùng. Bạn phải tự động cho phương án tối ưu.
 - Khi cần thêm lượt, chỉ in ra "CONTINUE". "CONTINUE" phải là nội dung duy nhất trên dòng chứa nó.
@@ -99,60 +94,20 @@ Schema tham chiếu (để hiểu ngữ cảnh và giới hạn):
     return prompt
 
 
-def _copy_generated(src: Path, dest: Path) -> None:
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(src.read_text(encoding='utf-8'), encoding='utf-8')
-    print(f"Copied {src} -> {dest}")
-
-
 def _write_analysis_dump(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
 
 
-def _write_overrides_merged(target_path: Path, sanitized: Dict[str, object]) -> None:
-    """Write sanitized runtime overrides while preserving non-runtime keys.
-
-    Rationale:
-    - Runtime deep-merge happens inside the engine (baseline + overrides -> out/orders/policy_overrides.json).
-    - The generator should not blow away calibrations/metadata (e.g., TTL buckets) that may co-exist
-      in config/policy_overrides.json. We therefore remove only the runtime knobs the generator owns
-      and replace them with the sanitized values.
-    """
+def _write_overrides_raw(target_path: Path, overrides: Dict[str, object]) -> None:
     import json
-    # Keys owned by the generator/guardrails at the top level
-    # Use the same whitelist as the prompt to avoid drift.
-    runtime_keys = set(ALLOWED_RUNTIME_KEYS)
-    existing: Dict[str, object] = {}
-    if target_path.exists():
-        try:
-            existing = json.loads(target_path.read_text(encoding='utf-8'))
-        except Exception:
-            # Fail-fast: if file is corrupt, do not try to merge silently
-            raise SystemExit(f'Invalid JSON in existing overrides: {target_path}')
 
-    preserved = {k: v for k, v in (existing or {}).items() if k not in runtime_keys}
+    if not isinstance(overrides, dict):
+        raise SystemExit('Generated policy overrides must be a JSON object at the top level.')
 
-    def _deep_merge(dst: Dict[str, object], src: Dict[str, object]) -> Dict[str, object]:
-        out = dict(dst)
-        for k, v in (src or {}).items():
-            if isinstance(v, dict) and isinstance(out.get(k), dict):
-                out[k] = _deep_merge(out[k], v)  # type: ignore[arg-type]
-            else:
-                out[k] = v
-        return out
-
-    # Replace mode for bias dicts; deep-merge for the rest
-    sanitized = sanitized or {}
-    non_bias = {k: v for k, v in sanitized.items() if k not in {"sector_bias", "ticker_bias"}}
-    merged = _deep_merge(preserved, non_bias)
-    if "sector_bias" in sanitized:
-        merged["sector_bias"] = sanitized["sector_bias"]  # replace entirely
-    if "ticker_bias" in sanitized:
-        merged["ticker_bias"] = sanitized["ticker_bias"]  # replace entirely
     target_path.parent.mkdir(parents=True, exist_ok=True)
-    target_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding='utf-8')
-    print(f"Guardrails applied: deep-merge + replace(bias) into {target_path} (preserved {len(preserved)} non-runtime keys)")
+    target_path.write_text(json.dumps(overrides, ensure_ascii=False, indent=2), encoding='utf-8')
+    print(f"Wrote generated policy overrides -> {target_path}")
 
 
 def main() -> None:
@@ -233,9 +188,8 @@ def main() -> None:
                     raw_path.write_text(text, encoding='utf-8')
                     raise SystemExit(f"Missing generated file {OUTPUT_FILENAME}. Raw output saved to {raw_path}")
                 raw_overrides = json.loads(output_file_path.read_text(encoding='utf-8'))
-                sanitized = apply_guardrails(raw_overrides)
                 target_path = CONFIG_DIR / 'policy_ai_overrides.json'
-                _write_overrides_merged(target_path, sanitized)
+                _write_overrides_raw(target_path, raw_overrides)
                 print(f"[codex] Completed in round {round_idx} (file written).")
                 return
 

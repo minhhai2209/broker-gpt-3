@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from scripts.order_engine import decide_actions, build_orders
+from scripts.orders.order_engine import decide_actions, build_orders
 
 
 class TestMarketFilterScalingParams(unittest.TestCase):

@@ -6,7 +6,7 @@ import unittest
 
 import pandas as pd
 
-import scripts.report_portfolio_pnl as rpt
+import scripts.portfolio.report_pnl as rpt
 
 
 class TestReportPortfolioPnL(unittest.TestCase):

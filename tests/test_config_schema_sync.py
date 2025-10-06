@@ -5,7 +5,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ENGINE = ROOT / 'scripts' / 'order_engine.py'
+ENGINE = ROOT / 'scripts' / 'orders' / 'order_engine.py'
 BASELINE = ROOT / 'config' / 'policy_default.json'
 
 
@@ -14,7 +14,7 @@ def _read(path: Path) -> str:
 
 
 def _strip_json_comments(s: str) -> str:
-    # keep in sync with scripts/ai/codex_policy_budget_bias_tuner.py
+    # keep in sync with scripts/tuning/codex_policy_budget_bias_tuner.py
     s = re.sub(r"/\*.*?\*/", "", s, flags=re.S)
     s = re.sub(r"(^|\s)//.*$", "", s, flags=re.M)
     s = re.sub(r"(^|\s)#.*$", "", s, flags=re.M)

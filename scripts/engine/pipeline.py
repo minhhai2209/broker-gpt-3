@@ -14,15 +14,15 @@ import pandas as pd
 from scripts.build_metrics import build_metrics_df
 from scripts.build_presets_all import build_presets_all_df, _infer_in_session
 from scripts.build_snapshot import build_snapshot_df
-from scripts.collect_intraday import ensure_intraday_latest
+from scripts.data_fetching.collect_intraday import ensure_intraday_latest
 from scripts.compute_sector_strength import compute_sector_strength_df
-from scripts.fetch_ticker_data import ensure_and_load_history_df
-from scripts.ingest_portfolio_auto import ingest_portfolio_df
+from scripts.data_fetching.fetch_ticker_data import ensure_and_load_history_df
+from scripts.portfolio.ingest_auto import ingest_portfolio_df
 from scripts.fundamentals import load_latest_fundamentals, merge_fundamentals
-from scripts.precompute_indicators import precompute_indicators_from_history_df
-from scripts.report_portfolio_pnl import build_portfolio_pnl_dfs
+from scripts.indicators.precompute_indicators import precompute_indicators_from_history_df
+from scripts.portfolio.report_pnl import build_portfolio_pnl_dfs
 from scripts.utils import load_universe_from_files
-from scripts.collect_global_factors import ensure_global_factors
+from scripts.data_fetching.collect_global_factors import ensure_global_factors
 
 
 BASE_DIR = Path(__file__).resolve().parents[2]

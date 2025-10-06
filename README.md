@@ -43,7 +43,7 @@ Kết quả chính (out/)
 Lệnh tiện ích
 - `./broker.sh orders` — chạy Order Engine (mặc định).
 - `./broker.sh tests` — chạy test; bật coverage: `BROKER_COVERAGE=1 ./broker.sh tests`.
-- `./broker.sh tune-ai` — sinh overlay AI tại `config/policy_ai_overrides.json` (áp guardrails); không push. Workflow GitHub Actions tự động chạy lệnh này mỗi 2 giờ.
+- `./broker.sh tune-ai` — sinh overlay AI tại `config/policy_ai_overrides.json`; không push. Workflow GitHub Actions tự động chạy lệnh này mỗi 2 giờ.
 - `./broker.sh tune-nightly` — chạy toàn bộ calibrators và ghi overlay nightly tại `config/policy_nightly_overrides.json`; không push. Workflow tương ứng sẽ kích hoạt mỗi khi có commit mới.
 - `./broker.sh server` — chạy API server cục bộ (Flask) phục vụ extension/ứng dụng (mặc định `PORT=8787`).
 
@@ -65,12 +65,12 @@ Policy & cấu hình
 - Baseline: `config/policy_default.json` (nguồn sự thật, có chú thích đầy đủ).
 - Overlays (không ghi đè baseline):
   - `config/policy_nightly_overrides.json` — do nightly calibrations sinh ra.
-  - `config/policy_ai_overrides.json` — do AI tuner sinh ra (bị giới hạn bề mặt qua guardrails).
+  - `config/policy_ai_overrides.json` — do AI tuner sinh ra (ghi đè trực tiếp lên overlay AI hiện tại).
   - (Legacy) `config/policy_overrides.json` — vẫn được engine đọc nếu tồn tại, để tương thích đường cũ.
 - Runtime: engine hợp nhất theo thứ tự ưu tiên tăng dần: baseline → nightly → ai → legacy. Không có bước deep‑merge vào baseline; baseline luôn ổn định. Chi tiết trong SYSTEM_DESIGN.md.
 
 Tài liệu chi tiết
-- Kiến trúc, pipeline, nhận diện market regime, thuật toán quyết định lệnh, calibrations, guardrails I/O: xem `SYSTEM_DESIGN.md`.
+- Kiến trúc, pipeline, nhận diện market regime, thuật toán quyết định lệnh, calibrations, chi tiết merge policy: xem `SYSTEM_DESIGN.md`.
 
 FAQ nhanh / khắc phục sự cố
 - Danh mục rỗng hoặc sai đơn vị giá vốn → kiểm tra `in/portfolio/*.csv` (AvgCost tính theo nghìn đồng/cp), xem `out/portfolio_clean.csv` để xác nhận ingest.

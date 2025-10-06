@@ -2,8 +2,8 @@ from __future__ import annotations
 
 """Unit coverage for quantile-gate calibrators."""
 
-from scripts.engine import calibrate_quantile_gates as qg
-from scripts.engine import calibrate_thresholds as qt
+from scripts.tuning.calibrators import calibrate_quantile_gates as qg
+from scripts.tuning.calibrators import calibrate_thresholds as qt
 
 
 def test_quantile_gate_keep_all_returns_zero():

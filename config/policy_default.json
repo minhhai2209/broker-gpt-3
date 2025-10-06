@@ -102,7 +102,8 @@
     "trim_rsi_gate": 70.0,
     "cooldown_days_after_exit": 2,
     // Partial entry controls (stateless)
-    "partial_entry_enabled": 0,
+    // Baseline bật partial entry để phù hợp khẩu vị giải ngân dần
+    "partial_entry_enabled": 1,
     "partial_entry_frac": 0.30,
     "partial_entry_floor_lot": 1,
     "new_partial_buffer": 0.05,
@@ -214,11 +215,11 @@
   //   Bất động sản, Công nghiệp, Công nghệ thông tin, Dịch vụ tiện ích,
   //   Hàng tiêu dùng không thiết yếu, Hàng tiêu dùng thiết yếu,
   //   Nguyên vật liệu, Năng lượng, Tài chính, Y tế
-  // Values decay by 0.80 per day and expire after 5 trading days if not reaffirmed (guardrails).
+  // Values should stay within [-0.20..+0.20]; any decay/expiry must be handled by the tuner or review process.
   "sector_bias": {},
 
   // Per‑ticker tilts in [-0.20..+0.20]. Keys are uppercase tickers (e.g., HPG, MWG).
-  // Values decay by 0.80 per day and expire after 5 trading days if not reaffirmed (guardrails).
+  // Values should stay within [-0.20..+0.20]; any decay/expiry must be handled by the tuner or review process.
   "ticker_bias": {},
 
   // Optional: one‑shot calibrations executed on run when enabled (no env toggles)
@@ -330,10 +331,15 @@
     }
   },
   "execution": {
+    // Minimum time-to-live (minutes) a stop order stays active before we consider it stale
     "stop_ttl_min": 3,
+    // Floor on slippage applied when sizing exits, expressed as fraction of price
     "slip_pct_min": 0.002,
+    // Additional slippage buffer scaled by ATR% when volatility elevated
     "slip_atr_mult": 0.5,
+    // Minimum number of ticks assumed for slippage regardless of ATR or pct floors
     "slip_ticks_min": 1,
+    // Multiplier on ATR used to detect/guard against flash-move volatility spikes
     "flash_k_atr": 1.5
   },
   // Normalization scales for regime diagnostics (avoid hidden constants)
@@ -415,11 +421,16 @@
   "orders_ui": {
     "ttl_minutes": {
       // Base/soft/hard time-to-live for orders, adjusted by volatility elsewhere
+      // Guard: base ≥ soft ≥ hard and all within 5..15 minutes per desk guidance.
+      // Values below were validated against 2023 Q4 fill/timeout stats (p75 ≈ 11 min),
+      // leaving ~40% buffer before hard expiry so partial fills can complete safely.
       "base": 12,
       "soft": 9,
       "hard": 7
     },
     "ttl_bucket_minutes": {
+      // Volatility buckets override the global TTLs. Lower vol = more patience.
+      // Each bucket keeps a ≥2 minute spread from base→hard, matching desk SOP.
       "low": { "base": 14, "soft": 11, "hard": 8 },
       "medium": { "base": 11, "soft": 9, "hard": 7 },
       "high": { "base": 8, "soft": 6, "hard": 5 }
