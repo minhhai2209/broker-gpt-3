@@ -26,14 +26,14 @@
     "base_add": 0.35,
     "base_new": 0.4,
     "trim_th": -0.05,
-    "q_add": 0.0,
-    "q_new": 0.967391304347826,
-    "min_liq_norm": 0.4117647058823529,
-    "near_ceiling_pct": 0.9366629107981221,
+    "q_add": 0.6666666666666667,
+    "q_new": 0.9577464788732395,
+    "min_liq_norm": 0.0,
+    "near_ceiling_pct": 0.999,
     "tp_pct": 0.0,
     "sl_pct": 0.0,
-    "tp_atr_mult": 0.9433962264150942,
-    "sl_atr_mult": 0.6289308176100629,
+    "tp_atr_mult": 0.970873786407767,
+    "sl_atr_mult": 0.6472491909385114,
     "tp_floor_pct": 0.03,
     "tp_cap_pct": 0.1,
     "sl_floor_pct": 0.02,
@@ -51,6 +51,19 @@
     "sl_trim_step_1_frac": 0.25,
     "sl_trim_step_2_trigger": 0.8,
     "sl_trim_step_2_frac": 0.35,
+    "tp1_atr_mult": 1.0,
+    "tp2_atr_mult": 1.8,
+    "trailing_atr_mult": 1.5,
+    "trim_frac_tp1": 0.45,
+    "trim_frac_tp2": 0.3,
+    "breakeven_after_tp1": 1,
+    "time_stop_days": 5,
+    "trim_rsi_gate": 70.0,
+    "cooldown_days_after_exit": 2,
+    "partial_entry_enabled": 0,
+    "partial_entry_frac": 0.3,
+    "partial_entry_floor_lot": 1,
+    "new_partial_buffer": 0.05,
     "exit_on_ma_break": 1,
     "cooldown_days": 3,
     "exit_ma_break_rsi": 45.0,
@@ -82,12 +95,12 @@
     "add_max_neutral_cap": 1
   },
   "regime_model": {
-    "intercept": 2.0218190590271843,
+    "intercept": 2.0277605294097016,
     "threshold": 0.78,
     "components": {
       "trend": {
-        "mean": 0.41878066354689697,
-        "std": 0.35518084646418097,
+        "mean": 0.4206679718828879,
+        "std": 0.3559301894168811,
         "weight": 1.55
       },
       "momentum": {
@@ -101,23 +114,23 @@
         "weight": 1.2
       },
       "drawdown": {
-        "mean": 0.43648118388603957,
-        "std": 0.29057191362181944,
+        "mean": 0.43698871060445765,
+        "std": 0.2904782957521538,
         "weight": 0.95
       },
       "volatility": {
-        "mean": 0.5153878986537758,
-        "std": 0.2663473313182113,
+        "mean": 0.5149294379147553,
+        "std": 0.26625397634103326,
         "weight": 1.05
       },
       "index_return": {
-        "mean": 0.13593774159768834,
-        "std": 0.16326759012211844,
+        "mean": 0.13595094398975563,
+        "std": 0.16309442901978355,
         "weight": 0.8
       },
       "turnover": {
-        "mean": 0.5817746614880188,
-        "std": 0.3152323203405694,
+        "mean": 0.5820899798607316,
+        "std": 0.3149601326589896,
         "weight": 0.8
       },
       "mcclellan": {
@@ -159,25 +172,25 @@
     "dynamic_caps": 0
   },
   "market_filter": {
-    "risk_off_index_drop_pct": 0.3491002267676364,
+    "risk_off_index_drop_pct": 0.3484877041695573,
     "risk_off_trend_floor": 0.0,
     "risk_off_breadth_floor": 0.5294117647058824,
     "risk_off_drawdown_floor": 0.03765736205513479,
     "market_score_soft_floor": 0.6,
     "market_score_hard_floor": 0.3,
-    "leader_min_rsi": 47.6575,
+    "leader_min_rsi": 53.4825,
     "leader_min_mom_norm": 0.7524509803921569,
     "leader_require_ma20": 1,
     "leader_require_ma50": 1,
     "leader_max": 2,
-    "index_atr_soft_pct": 0.8004201680672269,
-    "index_atr_hard_pct": 0.9501050420168067,
+    "index_atr_soft_pct": 0.80041928721174,
+    "index_atr_hard_pct": 0.950104821802935,
     "guard_new_scale_cap": 0.4,
     "atr_soft_scale_cap": 0.5,
     "severe_drop_mult": 1.5,
-    "idx_chg_smoothed_hard_drop": 0.3491002267676364,
-    "trend_norm_hard_floor": -0.3616207839546208,
-    "vol_ann_hard_ceiling": 0.2681380419922694,
+    "idx_chg_smoothed_hard_drop": 0.3484877041695573,
+    "trend_norm_hard_floor": -0.36045671543390895,
+    "vol_ann_hard_ceiling": 0.2679436844846745,
     "us_epu_soft_pct": null,
     "us_epu_hard_pct": null,
     "dxy_soft_pct": null,
@@ -248,7 +261,7 @@
     "momentum_unit": 0.12
   },
   "sizing": {
-    "softmax_tau": 0.0995483398437511,
+    "softmax_tau": 0.0500000000000022,
     "add_share": 0.5,
     "new_share": 0.5,
     "min_lot": 100,
@@ -260,8 +273,10 @@
     "risk_blend": 1.0,
     "leftover_redistribute": 1,
     "min_ticket_k": 0.0,
+    "qty_min_lot": 100,
+    "min_notional_per_order": 2000000.0,
     "cov_lookback_days": 250,
-    "cov_reg": 0.00042855898011979256,
+    "cov_reg": 0.0004306705613763381,
     "risk_parity_floor": 0.2,
     "dynamic_caps": {
       "enable": 0,
@@ -280,7 +295,7 @@
     "min_names_target": 10,
     "market_index_symbol": "VNINDEX",
     "risk_per_trade_frac": 0.005,
-    "default_stop_atr_mult": 0.6289308176100629,
+    "default_stop_atr_mult": 0.6472491909385114,
     "tranche_frac": 0.25,
     "mean_variance_calibration": {
       "enable": 1,
@@ -306,9 +321,9 @@
   },
   "orders_ui": {
     "ttl_minutes": {
-      "base": 14,
-      "soft": 11,
-      "hard": 8
+      "base": 8,
+      "soft": 6,
+      "hard": 5
     },
     "ttl_bucket_minutes": {
       "low": {
@@ -329,18 +344,18 @@
     },
     "watchlist": {
       "enable": 1,
-      "min_priority": 0.284,
+      "min_priority": 0.362,
       "micro_window": 3
     },
     "suggestions_top_n": 3,
     "ttl_bucket_state": {
-      "current": "low",
-      "sigma": 0.00771660211853395
+      "current": "high",
+      "sigma": 0.01910436026422673
     },
     "ttl_bucket_thresholds": {
-      "p75": 0.00835709051006694,
-      "p95": 0.016094279668643595,
-      "latest": 0.00771660211853395
+      "p75": 0.008457346579413173,
+      "p95": 0.017155706018678753,
+      "latest": 0.01910436026422673
     },
     "ttl_minutes_baseline": {
       "base": 12,
