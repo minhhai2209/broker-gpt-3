@@ -1,9 +1,12 @@
 name: Tuning Nightly Calibrations
 
 on:
+  push:
+    # Avoid infinite loops when the workflow commits its own outputs.
+    paths-ignore:
+      - 'config/policy_nightly_overrides.json'
+      - 'config/policy_ai_overrides.json'
   workflow_dispatch:
-  schedule:
-    - cron: '10 8 * * 1-5'  # 15:10 ICT, Mon–Fri (after market close)
   workflow_call:
     inputs:
       python-version:

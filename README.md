@@ -43,8 +43,8 @@ Kết quả chính (out/)
 Lệnh tiện ích
 - `./broker.sh orders` — chạy Order Engine (mặc định).
 - `./broker.sh tests` — chạy test; bật coverage: `BROKER_COVERAGE=1 ./broker.sh tests`.
-- `./broker.sh tune-ai` — sinh overlay AI tại `config/policy_ai_overrides.json` (áp guardrails); không push.
-- `./broker.sh tune-nightly` — chạy toàn bộ calibrators và ghi overlay nightly tại `config/policy_nightly_overrides.json`; không push.
+- `./broker.sh tune-ai` — sinh overlay AI tại `config/policy_ai_overrides.json` (áp guardrails); không push. Workflow GitHub Actions tự động chạy lệnh này mỗi 2 giờ trong ngày làm việc.
+- `./broker.sh tune-nightly` — chạy toàn bộ calibrators và ghi overlay nightly tại `config/policy_nightly_overrides.json`; không push. Workflow tương ứng sẽ kích hoạt mỗi khi có commit mới.
 - `./broker.sh server` — chạy API server cục bộ (Flask) phục vụ extension/ứng dụng (mặc định `PORT=8787`).
 
   
