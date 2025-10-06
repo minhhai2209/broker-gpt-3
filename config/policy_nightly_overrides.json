@@ -1,5 +1,5 @@
 {
-  "buy_budget_frac": 0.113,
+  "buy_budget_frac": 0.101,
   "buy_budget_by_regime": {
     "risk_on": 0.12,
     "neutral": 0.06,
@@ -27,13 +27,13 @@
     "base_new": 0.4,
     "trim_th": -0.05,
     "q_add": 0.0,
-    "q_new": 0.9642857142857143,
-    "min_liq_norm": 0.47058823529411764,
-    "near_ceiling_pct": 0.999,
+    "q_new": 0.9620253164556962,
+    "min_liq_norm": 0.45098039215686275,
+    "near_ceiling_pct": 0.9371971074213226,
     "tp_pct": 0.0,
     "sl_pct": 0.0,
-    "tp_atr_mult": 0.966183574879227,
-    "sl_atr_mult": 0.644122383252818,
+    "tp_atr_mult": 0.9584664536741213,
+    "sl_atr_mult": 0.6389776357827476,
     "tp_floor_pct": 0.03,
     "tp_cap_pct": 0.1,
     "sl_floor_pct": 0.02,
@@ -95,12 +95,12 @@
     "add_max_neutral_cap": 1
   },
   "regime_model": {
-    "intercept": 2.02776539583254,
+    "intercept": 2.028676870328026,
     "threshold": 0.78,
     "components": {
       "trend": {
-        "mean": 0.4206679718828879,
-        "std": 0.3559301894168811,
+        "mean": 0.4206929518988751,
+        "std": 0.355967120549724,
         "weight": 1.55
       },
       "momentum": {
@@ -114,23 +114,23 @@
         "weight": 1.2
       },
       "drawdown": {
-        "mean": 0.43698871060445765,
-        "std": 0.2904782957521538,
+        "mean": 0.4372466055164406,
+        "std": 0.2907471493731408,
         "weight": 0.95
       },
       "volatility": {
-        "mean": 0.5149294379147553,
-        "std": 0.26625397634103326,
+        "mean": 0.5147874161937862,
+        "std": 0.2663878115996557,
         "weight": 1.05
       },
       "index_return": {
-        "mean": 0.13595194733936952,
-        "std": 0.16309446864397706,
+        "mean": 0.1361500372202822,
+        "std": 0.163159104825783,
         "weight": 0.8
       },
       "turnover": {
-        "mean": 0.582150630030552,
-        "std": 0.31499054851250996,
+        "mean": 0.582323916230039,
+        "std": 0.3151068322699371,
         "weight": 0.8
       },
       "mcclellan": {
@@ -189,7 +189,7 @@
     "risk_off_drawdown_floor": 0.03765736205513479,
     "market_score_soft_floor": 0.6,
     "market_score_hard_floor": 0.3,
-    "leader_min_rsi": 53.435,
+    "leader_min_rsi": 55.362500000000004,
     "leader_min_mom_norm": 0.7524509803921569,
     "leader_require_ma20": 1,
     "leader_require_ma50": 1,
@@ -272,7 +272,7 @@
     "momentum_unit": 0.12
   },
   "sizing": {
-    "softmax_tau": 0.08051452636718862,
+    "softmax_tau": 0.08293151855468861,
     "add_share": 0.5,
     "new_share": 0.5,
     "min_lot": 100,
@@ -287,7 +287,7 @@
     "qty_min_lot": 100,
     "min_notional_per_order": 2000000.0,
     "cov_lookback_days": 250,
-    "cov_reg": 0.00043096068223151844,
+    "cov_reg": 0.0004326237988098865,
     "risk_parity_floor": 0.2,
     "dynamic_caps": {
       "enable": 0,
@@ -306,7 +306,7 @@
     "min_names_target": 10,
     "market_index_symbol": "VNINDEX",
     "risk_per_trade_frac": 0.005,
-    "default_stop_atr_mult": 0.644122383252818,
+    "default_stop_atr_mult": 0.6389776357827476,
     "tranche_frac": 0.25,
     "mean_variance_calibration": {
       "enable": 1,
@@ -355,18 +355,18 @@
     },
     "watchlist": {
       "enable": 1,
-      "min_priority": 0.366,
+      "min_priority": 0.397,
       "micro_window": 3
     },
     "suggestions_top_n": 3,
     "ttl_bucket_state": {
       "current": "high",
-      "sigma": 0.0191001021877353
+      "sigma": 0.02055044276285892
     },
     "ttl_bucket_thresholds": {
       "p75": 0.008457346579413173,
       "p95": 0.017155706018678753,
-      "latest": 0.0191001021877353
+      "latest": 0.02055044276285892
     },
     "ttl_minutes_baseline": {
       "base": 12,

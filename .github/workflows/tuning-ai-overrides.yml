@@ -17,8 +17,8 @@ on:
         default: "20"
   schedule:
     # Note: GitHub cron uses UTC. Vietnam (ICT) = UTC+7, no DST.
-    # Run every 2 hours on weekdays to refresh AI overlays regularly.
-    - cron: '0 */2 * * 1-5'
+    # Run every 2 hours to refresh AI overlays on a predictable cadence.
+    - cron: '0 */2 * * *'
   workflow_call:
     inputs:
       rounds:
