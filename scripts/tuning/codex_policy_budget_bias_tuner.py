@@ -7,6 +7,7 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List
+import shutil
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 CONFIG_DIR = BASE_DIR / "config"
@@ -121,8 +122,18 @@ def main() -> None:
         prompt = build_prompt(sample, analysis_accum, round_idx, max_rounds)
 
         print(f"[codex] Round {round_idx}/{max_rounds}: Generating via Codex CLI (gpt-5 + web_search)...")
+        # Strict requirement: use global Codex CLI on PATH. Fail fast if missing.
+        codex_bin = shutil.which('codex')
+        if not codex_bin:
+            raise SystemExit(
+                'Missing Codex CLI. Install globally with:\n'
+                '  npm install -g @openai/codex@latest\n'
+                'Ensure the npm global bin directory is on PATH and retry.'
+            )
+
         cmd = [
-            'codex', 'exec',
+            codex_bin,
+            'exec',
             '--skip-git-repo-check',  # run outside trusted repo; we isolate in temp dir
             '--full-auto',
             '--model', 'gpt-5',
