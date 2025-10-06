@@ -41,6 +41,32 @@ class TestIntegrationTuneAndOrders(unittest.TestCase):
             encoding='utf-8',
         )
 
+    # Minimal seed for Codex fileflow tests (does not parse; just a context payload)
+    def _seed_base(self, base: Path) -> None:
+        (base / 'config').mkdir(parents=True, exist_ok=True)
+        (base / 'out' / 'debug').mkdir(parents=True, exist_ok=True)
+        # Baseline policy to provide schema context
+        baseline = {
+            "buy_budget_frac": 0.10,
+            "add_max": 4,
+            "new_max": 3,
+            "thresholds": {
+                "base_add": 0.35,
+                "base_new": 0.40,
+                "trim_th": -0.05,
+            },
+            "sizing": {
+                "add_share": 0.5,
+                "new_share": 0.5,
+                "reuse_sell_proceeds_frac": 0.1,
+            },
+            "sector_bias": {},
+            "ticker_bias": {},
+        }
+        (base / 'config' / 'policy_default.json').write_text(
+            json.dumps(baseline, ensure_ascii=False, indent=2), encoding='utf-8'
+        )
+
     def test_budget_tuner_writes_ai_overrides_in_test_mode(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
@@ -101,26 +127,8 @@ class TestIntegrationTuneAndOrders(unittest.TestCase):
 
             def fake_decide_actions(portfolio, snapshot, metrics, presets, industry, sector_strength, session_summary, tuning, prices_history=None):  # noqa: E501
                 regime_stub = SimpleNamespace(
-                    orders_ui={},
-                    pricing={'tc_roundtrip_frac': 0.0},
-                    thresholds={},
-                    market_filter={'index_atr_soft_pct': 0.5, 'index_atr_hard_pct': 0.8},
-                    index_atr_percentile=0.4,
-                    diag_warnings=[],
-                    filtered_records=[],
-                    debug_filters={},
-                    ttl_overrides={},
-                )
-                actions = {'AAA': 'new'}
-                scores = {'AAA': 0.9}
-                feats = {'AAA': {'atr_pct': 0.01, 'adtv20_k': 50.0}}
-                return actions, scores, feats, regime_stub
-
-            def fake_build_orders(actions, portfolio, snapshot, metrics, presets, pnl_summary, scores, regime, prices_history):
-                build_called['ok'] = True
-                order = oe.Order(ticker='AAA', side='BUY', quantity=100, limit_price=20.0, note='Test order')
-                regime_stub = SimpleNamespace(
                     risk_on=True,
+                    orders_ui={'ttl_minutes': {'base': 12, 'soft': 9, 'hard': 7}},
                     pricing={
                         'tc_roundtrip_frac': 0.0,
                         'fill_prob': {
@@ -139,12 +147,34 @@ class TestIntegrationTuneAndOrders(unittest.TestCase):
                         },
                     },
                     thresholds={'near_ceiling_pct': 0.98},
+                    market_filter={'index_atr_soft_pct': 0.5, 'index_atr_hard_pct': 0.8},
+                    buy_budget_frac=0.10,
+                    buy_budget_frac_effective=0.10,
+                    market_score=0.55,
+                    risk_on_probability=0.60,
+                    top_sectors=['Technology', 'Finance'],
+                    trend_strength=0.02,
+                    breadth_hint=0.55,
+                    model_components={'breadth_long': 0.50, 'ma200_slope': 0.01, 'uptrend': 1.0},
+                    drawdown_pct=0.05,
+                    turnover_percentile=0.50,
+                    index_atr_percentile=0.4,
+                    index_change_pct=0.001,
+                    index_change_pct_smoothed=0.001,
                     diag_warnings=[],
                     filtered_records=[],
                     debug_filters={},
                     ttl_overrides={},
                 )
-                return [order], {'AAA': 'Test order'}, regime_stub
+                actions = {'AAA': 'new'}
+                scores = {'AAA': 0.9}
+                feats = {'AAA': {'atr_pct': 0.01, 'adtv20_k': 50.0}}
+                return actions, scores, feats, regime_stub
+
+            def fake_build_orders(actions, portfolio, snapshot, metrics, presets, pnl_summary, scores, regime, prices_history):
+                build_called['ok'] = True
+                order = oe.Order(ticker='AAA', side='BUY', quantity=100, limit_price=20.0, note='Test order')
+                return [order], {'AAA': 'Test order'}, regime
 
             with ExitStack() as stack:
                 stack.enter_context(change_cwd(base))
@@ -174,6 +204,67 @@ class TestIntegrationTuneAndOrders(unittest.TestCase):
                 'orders_analysis.txt',
             ]
             self.assertTrue(any((orders_dir / name).exists() for name in expected_any), 'expected outputs not found')
+
+    # Unified: bring Codex fileflow tests into this integration suite
+    def test_generate_policy_copies_file_on_END(self):
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            self._seed_base(base)
+            # Patch module paths
+            budget_tuner.BASE_DIR = base
+            budget_tuner.CONFIG_DIR = base / 'config'
+            budget_tuner.OUT_DIR = base / 'out'
+
+            def fake_run(cmd, input=None, stdout=None, stderr=None, check=None, cwd=None):  # type: ignore[override]
+                Path(cwd, budget_tuner.ANALYSIS_FILENAME).write_text('round analysis', encoding='utf-8')
+                gen_path = Path(cwd, budget_tuner.OUTPUT_FILENAME)
+                gen_path.write_text('{"buy_budget_frac": 0.12}', encoding='utf-8')
+                return SimpleNamespace(stdout=b"END\n")
+
+            with patch('subprocess.run', fake_run), patch.dict(os.environ, {'BROKER_CX_GEN_ROUNDS': '1', 'BROKER_CX_REASONING': 'low'}, clear=False):
+                budget_tuner.main()
+
+            dest = base / 'config' / 'policy_ai_overrides.json'
+            self.assertTrue(dest.exists())
+            self.assertEqual(json.loads(dest.read_text(encoding='utf-8')), {"buy_budget_frac": 0.12})
+
+    def test_generate_policy_missing_file_raises(self):
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            self._seed_base(base)
+            budget_tuner.BASE_DIR = base
+            budget_tuner.CONFIG_DIR = base / 'config'
+            budget_tuner.OUT_DIR = base / 'out'
+
+            def fake_run(cmd, input=None, stdout=None, stderr=None, check=None, cwd=None):  # type: ignore[override]
+                Path(cwd, budget_tuner.ANALYSIS_FILENAME).write_text('some analysis', encoding='utf-8')
+                return SimpleNamespace(stdout=b"END\n")
+
+            with patch('subprocess.run', fake_run), self.assertRaises(SystemExit) as ctx:
+                budget_tuner.main()
+            self.assertIn('Missing generated file', str(ctx.exception))
+            files = list((base / 'out' / 'debug').glob('codex_policy_raw_END_*.txt'))
+            self.assertTrue(files)
+
+    def test_generate_policy_continue_flow(self):
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            self._seed_base(base)
+            budget_tuner.BASE_DIR = base
+            budget_tuner.CONFIG_DIR = base / 'config'
+            budget_tuner.OUT_DIR = base / 'out'
+
+            def fake_run(cmd, input=None, stdout=None, stderr=None, check=None, cwd=None):  # type: ignore[override]
+                Path(cwd, budget_tuner.ANALYSIS_FILENAME).write_text('first round analysis', encoding='utf-8')
+                return SimpleNamespace(stdout=b"CONTINUE\n")
+
+            with patch('subprocess.run', fake_run), patch.dict(os.environ, {'BROKER_CX_GEN_ROUNDS': '1', 'BROKER_CX_REASONING': 'low'}, clear=False):
+                with self.assertRaises(SystemExit) as ctx:
+                    budget_tuner.main()
+            self.assertIn('Exceeded maximum analysis rounds', str(ctx.exception))
+            latest = base / 'out' / 'debug' / 'codex_analysis_latest.txt'
+            self.assertTrue(latest.exists())
+            self.assertIn('first round analysis', latest.read_text(encoding='utf-8'))
 
 
 if __name__ == '__main__':
