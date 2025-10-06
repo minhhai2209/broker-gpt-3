@@ -213,7 +213,9 @@ main() {
     server)
       ensure_venv
       echo "[server] Using: $PY_BIN"
-      PORT="${PORT:-8787}" "$PY_BIN" scripts/api/server.py
+      # Disable any automatic policy/tuning scheduler when starting the local server via this entrypoint.
+      # Rationale: server should only serve API requests; tuning is run explicitly via workflows or CLI.
+      BROKER_POLICY_AUTORUN=0 PORT="${PORT:-8787}" "$PY_BIN" scripts/api/server.py
       ;;
     fundamentals)
       run_fundamentals "$@"
