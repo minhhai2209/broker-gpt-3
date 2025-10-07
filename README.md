@@ -50,7 +50,7 @@ Kết quả chính (out/)
 Lệnh tiện ích
 - `./broker.sh orders` — chạy Order Engine (mặc định).
 - `./broker.sh tests` — chạy test; bật coverage: `BROKER_COVERAGE=1 ./broker.sh tests`.
-- `./broker.sh tune` — chạy toàn bộ calibrators + AI (Codex) và ghi đè một file duy nhất `config/policy_overrides.json`.
+- `./broker.sh tune` — chạy toàn bộ calibrators + AI (Codex) và xuất policy hợp nhất ở `out/orders/policy_overrides.json` (GitHub Action trên nhánh `main` mới ghi đè `config/policy_overrides.json`).
 - `./broker.sh server` — chạy API server cục bộ (Flask) phục vụ extension/ứng dụng (mặc định `PORT=8787`). Lưu ý: server luôn tắt auto‑policy (PolicyScheduler). Việc refresh policy được thực hiện bởi CI hoặc lệnh `./broker.sh policy` khi cần.
 
   
@@ -64,8 +64,8 @@ API server (tùy chọn)
   - `GET /health` — kiểm tra sống.
   - `POST /portfolio/reset` — xoá các CSV trong `in/portfolio/`.
   - `POST /portfolio/upload` — nạp 1 CSV (JSON body: `{name, content}`).
-  - `POST /done` — bỏ qua policy và chỉ chạy Order Engine; trả về đường dẫn các file lệnh trong `out/orders/`.
-- Ghi chú: `/done` luôn bỏ qua bước policy; policy có thể được cập nhật riêng qua `./broker.sh policy`. Server không còn tự kích hoạt tuning/policy theo lịch.
+  - `POST /done` — chạy `./broker.sh orders` trên các CSV đã upload và trả về danh sách file đầu vào/đầu ra cùng log thực thi.
+- Ghi chú: server chỉ ghi file vào `in/portfolio/` cục bộ và chạy pipeline ngay trong process; không còn bước commit/push hoặc thư mục `runs/`. Policy vẫn được refresh riêng qua `./broker.sh policy` hoặc CI trên nhánh `main`.
 
 Môi trường (env)
 - Repo loại bỏ hầu hết biến môi trường “hành vi”. Mặc định chỉ còn:
@@ -76,7 +76,7 @@ Môi trường (env)
 Policy & cấu hình
 - Baseline: `config/policy_default.json` (nguồn sự thật, có chú thích đầy đủ).
 - Overlay (duy nhất):
-  - `config/policy_overrides.json` — nguồn override duy nhất được cập nhật bởi `./broker.sh tune`.
+  - `out/orders/policy_overrides.json` — kết quả mới nhất từ `./broker.sh tune`; pipeline CI trên nhánh `main` sẽ sao chép sang `config/policy_overrides.json` khi cần publish.
   - Runtime: engine tạo bản hợp nhất tại `out/orders/policy_overrides.json` từ baseline + overlay duy nhất.
 
 Tài liệu chi tiết

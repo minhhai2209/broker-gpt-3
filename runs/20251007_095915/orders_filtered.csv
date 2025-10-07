@@ -1,8 +1,0 @@
-Ticker,Reason,Side,Quantity,LimitPrice,MarketPrice,Note
-LPB,near_ceiling,BUY,0,50.0,53.2,price 53.20 within 0.96 of ceiling 55.40
-GEX,market,BUY,0,54.0,54.2,market filter active – defer adding until trend/breadth improves
-HPG,market,BUY,0,29.0,29.1,market filter active – defer adding until trend/breadth improves
-MWG,market,BUY,0,77.9,78.1,market filter active – defer adding until trend/breadth improves
-VNM,market,BUY,0,62.1,62.3,market filter active – defer adding until trend/breadth improves
-ACB,market,BUY,0,25.95,26.75,market filter active – pause new entries under weak market conditions; leader bypass not active
-HDB,market,BUY,0,30.85,31.25,market filter active – pause new entries under weak market conditions; leader bypass not active
