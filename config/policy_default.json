@@ -470,6 +470,11 @@
       "ms_hard_q": 0.35,
       "dd_floor_q": 0.8,
       "breadth_floor_q": 0.4,
+      // Exponential half-life (days) for weighting breadth history toward recent data
+      "breadth_floor_half_life_days": 126,
+      // Hard clamps to avoid unrealistic guard thresholds in thin breadth regimes
+      "breadth_floor_min": 0.32,
+      "breadth_floor_max": 0.48,
       "leader_rsi_q": 0.75,
       "leader_mom_q": 0.75
     },

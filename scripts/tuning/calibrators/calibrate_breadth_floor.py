@@ -19,8 +19,10 @@ Fail-fast on missing files/columns or insufficient data.
 """
 
 from pathlib import Path
+import argparse
 import json
 import re
+from typing import Any, Mapping
 
 import numpy as np
 import pandas as pd
@@ -40,17 +42,43 @@ def _strip(s: str) -> str:
     return s
 
 
-def _load_policy() -> dict:
-    src = ORDERS_PATH if ORDERS_PATH.exists() else CONFIG_PATH
-    if not src.exists():
-        raise SystemExit(f'Missing policy file: {src}')
-    return json.loads(_strip(src.read_text(encoding='utf-8')))
+def _load_json(path: Path, *, required: bool = True) -> dict[str, Any]:
+    if not path.exists():
+        if required:
+            raise SystemExit(f'Missing policy file: {path}')
+        return {}
+    try:
+        return json.loads(_strip(path.read_text(encoding='utf-8')))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f'Policy file {path} is not valid JSON: {exc}') from exc
 
 
-def _save_policy(obj: dict) -> None:
-    target = ORDERS_PATH if ORDERS_PATH.exists() else CONFIG_PATH
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf-8')
+def _resolve_policy_paths(policy_path: Path | None) -> tuple[dict[str, Any], dict[str, Any], Path]:
+    """Return baseline defaults, overlay policy, and the file we will update."""
+
+    defaults = _load_json(DEFAULTS_PATH, required=True)
+
+    if policy_path is not None:
+        path = policy_path
+        overlay = _load_json(path, required=False)
+        if not overlay:
+            # Ensure parent exists when the caller points to a new file.
+            path.parent.mkdir(parents=True, exist_ok=True)
+        return defaults, overlay, path
+
+    for candidate in (ORDERS_PATH, CONFIG_PATH):
+        if candidate.exists():
+            overlay = _load_json(candidate, required=True)
+            return defaults, overlay, candidate
+
+    # Fallback: create overrides file if none exist yet.
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    return defaults, {}, CONFIG_PATH
+
+
+def _save_policy(obj: Mapping[str, Any], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf-8')
 
 
 def _load_history() -> pd.DataFrame:
@@ -92,35 +120,155 @@ def _compute_breadth_series(df: pd.DataFrame) -> pd.Series:
     return frac
 
 
-def calibrate(write: bool = False) -> float:
-    pol = _load_policy()
-    tgt = (pol.get('calibration_targets', {}) or {}).get('market_filter', {})
-    if 'breadth_floor_q' not in tgt:
+def _weighted_quantile(series: pd.Series, q: float, half_life_days: float | None) -> float:
+    values = series.to_numpy(dtype=float)
+    if values.size == 0:
+        raise SystemExit('Breadth series empty (not enough MA50 data)')
+
+    if half_life_days is None or half_life_days <= 0:
+        return float(np.quantile(values, q))
+
+    idx = series.index
+    if isinstance(idx, pd.DatetimeIndex):
+        delta_days = ((idx[-1] - idx) / np.timedelta64(1, 'D')).astype(float)
+    else:
+        delta_days = (np.arange(len(values))[-1] - np.arange(len(values))).astype(float)
+
+    lam = np.log(2.0) / float(half_life_days)
+    weights = np.exp(-lam * delta_days)
+    weights = np.asarray(weights, dtype=float)
+    mask = np.isfinite(values) & np.isfinite(weights)
+    if not mask.any():
+        raise SystemExit('No finite data available for weighted quantile')
+
+    values = values[mask]
+    weights = weights[mask]
+    if not (weights > 0).any():
+        raise SystemExit('Invalid weights for weighted quantile (all zero)')
+
+    sorter = np.argsort(values)
+    values = values[sorter]
+    weights = weights[sorter]
+
+    total = float(weights.sum())
+    if not np.isfinite(total) or total <= 0:
+        raise SystemExit('Invalid cumulative weight during weighted quantile calculation')
+    weights = weights / total
+    cum = np.cumsum(weights)
+
+    if q <= 0.0:
+        return float(values[0])
+    if q >= 1.0:
+        return float(values[-1])
+
+    idx_high = int(np.searchsorted(cum, q, side='left'))
+    idx_high = min(idx_high, values.size - 1)
+    if idx_high == 0:
+        return float(values[0])
+
+    idx_low = idx_high - 1
+    w_low = cum[idx_low]
+    w_high = cum[idx_high]
+    if not np.isfinite(w_low):
+        w_low = 0.0
+    if w_high <= w_low:
+        return float(values[idx_high])
+    ratio = (q - w_low) / (w_high - w_low)
+    return float(values[idx_low] + ratio * (values[idx_high] - values[idx_low]))
+
+
+def _merge_dict(base: Mapping[str, Any] | None, override: Mapping[str, Any] | None) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    if base:
+        result.update(base)
+    if override:
+        result.update(override)
+    return result
+
+
+def _extract_targets(defaults: Mapping[str, Any], overlay: Mapping[str, Any]) -> dict[str, Any]:
+    defaults_targets = ((defaults.get('calibration_targets') or {}).get('market_filter') or {})
+    overlay_targets = ((overlay.get('calibration_targets') or {}).get('market_filter') or {})
+    targets = _merge_dict(defaults_targets, overlay_targets)
+    if 'breadth_floor_q' not in targets:
         raise SystemExit('Missing calibration_targets.market_filter.breadth_floor_q')
+    return targets
+
+
+def calibrate(*, write: bool = False, policy_path: Path | None = None) -> float:
+    defaults, overlay, target_path = _resolve_policy_paths(policy_path)
+    targets = _extract_targets(defaults, overlay)
+
     try:
-        q = float(tgt['breadth_floor_q'])
+        q = float(targets['breadth_floor_q'])
     except Exception as exc:
         raise SystemExit(f'invalid breadth_floor_q: {exc}') from exc
     if not (0.0 <= q <= 1.0):
         raise SystemExit('breadth_floor_q must be in [0,1]')
+
+    def _clean(name: str, bounds: tuple[float, float] | None = None) -> float | None:
+        raw = targets.get(name)
+        if raw is None:
+            return None
+        try:
+            value = float(raw)
+        except Exception as exc:
+            raise SystemExit(f'invalid {name}: {exc}') from exc
+        if bounds is not None and not (bounds[0] <= value <= bounds[1]):
+            raise SystemExit(f'{name} must be within [{bounds[0]}, {bounds[1]}]')
+        return value
+
+    half_life = _clean('breadth_floor_half_life_days')
+    floor_min = _clean('breadth_floor_min', (0.0, 1.0))
+    floor_max = _clean('breadth_floor_max', (0.0, 1.0))
+
+    if half_life is not None and half_life <= 0.0:
+        half_life = None
+
+    if floor_min is not None and floor_max is not None and floor_min > floor_max:
+        raise SystemExit('breadth_floor_min cannot exceed breadth_floor_max')
+
     hist = _load_history()
     series = _compute_breadth_series(hist)
-    floor = float(np.quantile(series.to_numpy(), q))
+    floor = _weighted_quantile(series, q, half_life)
+    if floor_min is not None:
+        floor = max(floor, floor_min)
+    if floor_max is not None:
+        floor = min(floor, floor_max)
+
     if write:
-        obj = pol
-        mf = dict(obj.get('market_filter', {}) or {})
+        updated = dict(overlay)
+        mf = _merge_dict(overlay.get('market_filter') if overlay else None, None)
         mf['risk_off_breadth_floor'] = float(floor)
-        obj['market_filter'] = mf
-        _save_policy(obj)
+        updated['market_filter'] = mf
+        _save_policy(updated, target_path)
+
     return float(floor)
 
 
-def main():
-    # Always write tuned value to runtime overrides; baseline is updated by nightly merge
-    v = calibrate(write=True)
-    print(f"[calibrate.breadth] risk_off_breadth_floor={v:.2f}")
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description='Calibrate market breadth guard floor.')
+    parser.add_argument(
+        '--policy',
+        type=Path,
+        default=None,
+        help='Override path to the policy JSON file (defaults to out/orders/policy_overrides.json, '
+             'falling back to config/policy_overrides.json).',
+    )
+    parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Compute the floor but do not write it back to the policy file.',
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = _parse_args()
+    value = calibrate(write=not args.dry_run, policy_path=args.policy)
+    suffix = ' (dry-run)' if args.dry_run else ''
+    print(f"[calibrate.breadth] risk_off_breadth_floor={value:.4f}{suffix}")
 
 
 if __name__ == '__main__':
-    import argparse
     main()
