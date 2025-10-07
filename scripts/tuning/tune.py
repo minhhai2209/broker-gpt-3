@@ -9,8 +9,7 @@ Steps
 - Build pipeline artifacts
 - Run all calibrators (writing to out/orders/policy_overrides.json)
 - Run AI overrides calibrator (Codex) to update sector/ticker biases
-- Persist final overlay to config/policy_overrides.json (single source)
-- Remove legacy overlay files if present
+- Leave unified overlay in out/orders/policy_overrides.json for CI to persist if desired
 """
 
 from pathlib import Path
@@ -97,20 +96,11 @@ def main() -> int:
     except Exception as exc:
         raise SystemExit(f"AI overrides calibrator failed: {exc}") from exc
 
-    # Persist overlay
+    # Surface final overlay path for downstream automation (GitHub Action persists when appropriate)
     src = OUT_DIR / 'orders' / 'policy_overrides.json'
     if not src.exists():
         raise SystemExit('Missing out/orders/policy_overrides.json after tuning')
-    CFG_DIR.mkdir(parents=True, exist_ok=True)
-    dst = CFG_DIR / 'policy_overrides.json'
-    dst.write_text(src.read_text(encoding='utf-8'), encoding='utf-8')
-    # Remove legacy overlays if present
-    for old in (CFG_DIR / 'policy_nightly_overrides.json', CFG_DIR / 'policy_ai_overrides.json'):
-        try:
-            old.unlink(missing_ok=True)  # type: ignore[arg-type]
-        except Exception:
-            pass
-    print(f"[tune] Wrote unified overlay -> {dst}")
+    print(f"[tune] Unified overlay ready at {src}")
     return 0
 
 

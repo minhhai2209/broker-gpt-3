@@ -10,7 +10,7 @@ Về triển khai, Broker GPT chủ yếu viết bằng Python (yêu cầu Pytho
 - Cấu hình chiến lược (Policy): Bộ tham số chiến lược điều chỉnh hành vi của engine, gồm một cấu hình mặc định cố định và phần cấu hình linh hoạt (override) có thể thay đổi theo ngày. Hệ thống hợp nhất hai phần này để có policy runtime cho mỗi phiên chạy【8†L5-L7】.
 - Bộ máy ra quyết định lệnh (Order Engine): Sử dụng dữ liệu từ pipeline và policy đã hợp nhất để nhận diện chế độ thị trường hiện tại và tính toán hành động mua/bán/giữ cho từng mã cổ phiếu trong hoặc ngoài danh mục. Thành phần này chính là “bộ não” của hệ thống, quyết định tạo ra lệnh gì với số lượng bao nhiêu và giá nào【8†L6-L8】.
 - Tương tác ngoài & tích hợp frontend: Engine lấy dữ liệu từ các nguồn bên ngoài (API, web) khi cần – ví dụ gọi API VNDirect để lấy giá, dùng Playwright để thu thập dữ liệu cơ bản từ Vietstock【8†L7-L9】. Đồng thời, hệ thống cung cấp một API server (Flask) phục vụ cho extension hoặc ứng dụng bên ngoài: nhận danh mục upload, kích hoạt engine chạy, rồi trả về kết quả lệnh. Phần server này giúp tích hợp Broker GPT vào giao diện người dùng một cách thuận tiện mà vẫn tận dụng core engine chạy nền.
-- Cơ chế hàng đợi & thực thi bất đồng bộ: Do việc tính toán của engine có thể mất thời gian, server Flask không chạy thẳng engine trong request mà sử dụng một cơ chế hàng đợi thông qua Git để kích hoạt xử lý nền. Cụ thể, mỗi yêu cầu chạy lệnh từ frontend sẽ được server commit dữ liệu danh mục vào repo (thư mục runs/) và đẩy (push) lên remote, từ đó kích hoạt GitHub Actions runner đóng vai trò worker để thực thi pipeline và trả kết quả về lại repo【13†L399-L407】【27†L2-L10】. Cách tiếp cận này biến GitHub Actions thành một hàng đợi xử lý lệnh phi đồng bộ (mỗi commit tương ứng một “job” chạy engine). Kết quả tính toán được commit vào thư mục runs/<timestamp>/ tương ứng.
+- Thực thi lệnh qua server: Do pipeline có thể mất vài phút, API server vẫn giữ vai trò điều phối nhưng nay chạy trực tiếp `./broker.sh orders` trong tiến trình Flask. Mỗi lần frontend gửi `/done`, server kiểm tra các CSV trong `in/portfolio/`, chạy toàn bộ pipeline rồi trả về danh sách file đầu vào/đầu ra kèm log của lệnh vừa chạy【F:scripts/api/server.py†L295-L361】. Không còn bước commit/push hay thư mục `runs/`; kết quả chỉ nằm trong `out/orders/` cho tới khi người vận hành tải xuống hoặc xử lý tiếp.
 
 Các phần sau sẽ đi chi tiết vào từng thành phần, mô tả cách chúng hoạt động và gắn kết với nhau trong kiến trúc tổng thể.
 
@@ -43,11 +43,10 @@ Cấu Hình Chiến Lược (Policy) và Điều Chỉnh Tham Số
 Ghi chú cập nhật (2025-10): baseline + overlays (không ghi đè baseline)
 
 - Baseline: `config/policy_default.json` là nguồn sự thật, ổn định.
-- Overlays (không ghi đè baseline):
-  - `config/policy_nightly_overrides.json`: kết quả từ nightly calibrations.
-  - `config/policy_ai_overrides.json`: kết quả từ AI tuner (ghi đè trực tiếp overlay AI hiện tại, không hậu xử lý).
-  - (Legacy) `config/policy_overrides.json`: engine vẫn merge nếu còn tồn tại để tương thích.
-- Runtime merge: hàm `ensure_policy_override_file()` hợp nhất tuần tự baseline → nightly → ai → legacy và ghi kết quả runtime vào `out/orders/policy_overrides.json`.
+- Overlays:
+  - `out/orders/policy_overrides.json`: artefact hợp nhất sau mỗi lần chạy tuner (bao gồm calibrators + AI).
+  - `config/policy_overrides.json`: bản đã publish, chỉ được GitHub Action trên nhánh `main` cập nhật từ artefact ở trên.
+- Runtime merge: hàm `ensure_policy_override_file()` hợp nhất baseline với bản publish (nếu có) và ghi kết quả runtime vào `out/orders/policy_overrides.json`.
 - Engine hợp nhất các lớp cấu hình theo đúng thứ tự nhưng không còn bước lọc/whitelist tự động; tuner phải tự tuân thủ phạm vi override mong muốn. Calibrators có thể ghi các khóa rộng hơn (thresholds/sizing/market_filter…).
 
 
@@ -55,7 +54,7 @@ Policy của Broker GPT là tập hợp các tham số chiến lược chi phố
 
 - Policy mặc định: Được định nghĩa trong file config/policy_default.json. Đây là nguồn sự thật chứa toàn bộ tham số chiến lược cơ bản, kết tinh từ nghiên cứu dài hạn. Ví dụ, trong policy mặc định có: trọng số mô hình điểm cho các yếu tố (xu hướng, động lượng, thanh khoản, beta, v.v.), các ngưỡng kỹ thuật như base_add, base_new (điểm tối thiểu để mua bổ sung/mua mới), ngưỡng trim_th để cắt giảm vị thế khi điểm yếu, các ngưỡng chốt lời (tp_pct) và cắt lỗ (sl_pct), tham số vi mô về khớp lệnh (bước giá HOSE, lô 100, phí giao dịch), giới hạn rủi ro (tỷ trọng tối đa cho một mã, một ngành), v.v. Hầu hết các giá trị trong policy_default là cố định, chỉ thay đổi khi điều chỉnh chiến lược lớn hoặc sau quá trình backtest dài hạn【28†L32-L40】.
 
-- Policy overrides (điều chỉnh hàng ngày): Được định nghĩa trong file config/policy_overrides.json. File này cho phép ghi đè một số ít tham số so với mặc định, nhằm tùy biến chiến lược cho phù hợp với hoàn cảnh thị trường hoặc tin tức mỗi ngày. Mục tiêu của override là giúp hệ thống phản ứng nhanh với các yếu tố khó định lượng (tâm lý thị trường, sự kiện bất ngờ) mà không cần thay đổi toàn bộ cấu hình. Chỉ một tập giới hạn các khóa được phép override, các phần còn lại của policy luôn tuân theo mặc định để đảm bảo ổn định. Cụ thể, các khóa cho phép override bao gồm【28†L33-L40】:
+- Policy overrides (điều chỉnh hàng ngày): Được sinh ra bởi tuner và lưu tại `out/orders/policy_overrides.json`. Đây là bản cấu hình duy nhất chứa các điều chỉnh ngắn hạn. Khi muốn publish, GitHub Action trên nhánh `main` sẽ sao chép artefact này vào `config/policy_overrides.json`. File publish phục vụ audit/rollback; bản runtime luôn đọc trực tiếp từ artefact mới nhất. Override cho phép ghi đè một số ít tham số so với mặc định nhằm tùy biến chiến lược theo diễn biến thị trường. Cụ thể, các khóa được phép override gồm【28†L33-L40】:
 
   - buy_budget_frac – Tỷ lệ ngân sách dành cho lệnh mua trên tổng NAV. Tham số này điều chỉnh mức độ “risk-on/risk-off” chung (mua nhiều hay hạn chế mua).
   - add_max và new_max – Số lệnh mua tối đa cho danh mục hiện tại (add_max) và cho mã mới (new_max) mà engine được phép đề xuất trong phiên. Điều chỉnh hai giá trị này sẽ kiểm soát nhịp độ giải ngân (mua bổ sung thêm bao nhiêu mã đang có, và mua mới tối đa bao nhiêu mã mới)【28†L34-L37】.
@@ -258,7 +257,7 @@ Như vậy, qua các bước tính toán và kiểm soát, engine đảm bảo c
 
 Tương Tác Ngoại Vi & Tích Hợp Hệ Thống
 
-Phần này mô tả cách Broker GPT tương tác với môi trường bên ngoài và tích hợp vào luồng làm việc của người dùng, bao gồm: nguồn dữ liệu, API server backend, quy trình bất đồng bộ qua GitHub Actions (worker), và frontend (ví dụ extension trình duyệt).
+Phần này mô tả cách Broker GPT tương tác với môi trường bên ngoài và tích hợp vào luồng làm việc của người dùng, bao gồm: nguồn dữ liệu, API server backend và frontend (ví dụ extension trình duyệt).
 
 Nguồn Dữ liệu Ngoài
 
@@ -277,80 +276,30 @@ Backend API Server (Flask) và Policy Scheduler
 Broker GPT cung cấp một API server (Flask) chạy cục bộ nhằm hỗ trợ tích hợp với frontend (ví dụ một extension trình duyệt Chrome hoặc ứng dụng UI). Mã server nằm trong scripts/api/server.py. Khi khởi động bằng lệnh ./broker.sh server, ứng dụng Flask sẽ chạy trên cổng mặc định 8787 (có thể cấu hình qua biến môi trường PORT)【38†L155-L161】.
 
 Các endpoint chính mà server cung cấp (HTTP REST API) gồm:
-- GET /health: Kiểm tra nhanh tình trạng server (trả về {"status": "ok", "ts": <timestamp>} nếu server sống)【13†L416-L424】.
-- POST /portfolio/reset: Xóa toàn bộ các file CSV trong thư mục in/portfolio/. Endpoint này dùng để bắt đầu một phiên upload danh mục mới (ví dụ user muốn tải một danh mục khác). Server sẽ dọn thư mục input và reset trạng thái chạy (xóa dấu vết run trước)【13†L309-L318】【13†L426-L434】.
-- POST /portfolio/upload: Tiếp nhận nội dung của một file danh mục từ phía frontend. Request gửi lên dạng JSON có {"name": "<filename>", "content": "<CSV content>"}. Server sẽ lấy nội dung base64/UTF-8 đó, tạo file CSV tương ứng trong in/portfolio/ (tên theo <name>.csv). Đồng thời, server cũng ghi file này vào thư mục runs/<stamp>/portfolio/ hiện tại【13†L322-L330】【13†L331-L339】. Mỗi phiên upload có một timestamp duy nhất (_CURRENT_STAMP) để nhóm các file portfolio chung đợt với nhau. Nếu _CURRENT_STAMP chưa có (lần upload đầu tiên sau reset), server tạo một timestamp mới và folder runs/<stamp>/portfolio/ để chứa file【10†L33-L41】【10†L35-L38】. API trả về JSON xác nhận đã lưu file (đường dẫn file trong in/portfolio và runs/..., dung lượng bytes, và pending_commit=True, kèm run_stamp hiện tại)【13†L331-L339】【13†L338-L344】. Lưu ý: tại bước upload, server chưa chạy engine ngay và cũng chưa commit lên Git. Nó chỉ chuẩn bị dữ liệu và chờ yêu cầu kết thúc.
-- POST /done: Thông báo rằng quá trình upload danh mục đã hoàn tất và yêu cầu hệ thống thực thi lệnh. Khi nhận /done, server sẽ:
-  * Kiểm tra nếu có session đang hoạt động (_CURRENT_STAMP tồn tại). Nếu chưa upload gì mà gọi /done, trả về lỗi.
-  * Tiến hành gọi hàm finalize_and_run(): hàm này sẽ liệt kê các file CSV trong thư mục runs/<stamp>/portfolio, nếu có file sẽ thực hiện commit và push tất cả những file đó lên repo Git (kèm thông điệp "runs: add portfolio batch for <stamp>")【13†L389-L397】【13†L399-L407】. Việc commit dùng git commands thông qua hàm _git_commit_push() (đảm bảo cấu hình tên user bot, v.v.)【10†L41-L50】【10†L51-L59】.
-  * Sau khi push thành công, server reset _CURRENT_STAMP = None để lần upload sau sẽ tạo stamp mới【13†L398-L406】.
-  * Gửi phản hồi JSON gồm: "status": "ok" nếu commit/push thành công (hoặc "error" nếu có lỗi), danh sách file đã commit (committed: [...]), run_stamp vừa xử lý, và trạng thái của policy scheduler nếu có【13†L399-L407】.
-  Quan trọng: Server không trực tiếp chạy engine khi nhận /done, thay vào đó ủy thác cho cơ chế CI/CD qua git (xem phần tiếp theo). Do đó, response của /done không chứa ngay kết quả lệnh, mà chỉ xác nhận job đã được gửi đi.
+- GET /health: kiểm tra nhanh tình trạng server (trả về `{ "status": "ok", "ts": ... }` nếu server sống)【F:scripts/api/server.py†L325-L333】.
+- POST /portfolio/reset: xóa toàn bộ các file CSV trong `in/portfolio/`, giúp bắt đầu một phiên upload danh mục mới. Endpoint này đơn thuần dọn thư mục và báo về danh sách file đã xóa【F:scripts/api/server.py†L251-L258】【F:scripts/api/server.py†L335-L340】.
+- POST /portfolio/upload: tiếp nhận một file danh mục (JSON `{name, content}`) và ghi đúng nội dung vào `in/portfolio/<name>.csv`. Hàm `write_csv_exact` thực hiện normalize tên file, ghi binary và trả về đường dẫn relative + kích thước bytes để frontend biết đã lưu thành công【F:scripts/api/server.py†L261-L274】【F:scripts/api/server.py†L341-L354】.
+- POST /done: chạy `./broker.sh orders` trên toàn bộ CSV đang có. Server kiểm tra `in/portfolio/` phải có ít nhất một file, sau đó chạy pipeline, gom danh sách file đầu vào/đầu ra và trả về log của lệnh vừa thực thi trong phần `run.out`【F:scripts/api/server.py†L295-L361】.
+- GET /policy/status: trả về `{"auto_run": false}` vì PolicyScheduler hiện không được khởi tạo; trường này giúp client nhận biết server không còn tự động refresh policy theo lịch【F:scripts/api/server.py†L329-L333】.
 
-- GET /policy/status: kiểm tra trạng thái Policy Scheduler (xem bên dưới). Nếu auto-run policy tắt, trả về {"auto_run": false}. Nếu bật, trả về {"auto_run": true, "scheduler": {...}} trong đó scheduler có thể bao gồm thông tin lần chạy AI gần nhất, lần kế tiếp, v.v. (phục vụ debug/trạng thái)【13†L419-L427】.
+Do `/done` chạy trực tiếp pipeline, request có thể kéo dài vài phút khi engine thu thập dữ liệu hoặc tái xây dựng cache. Khi hoàn tất, response chứa danh sách file kết quả trong `out/orders/` để frontend tải về ngay mà không cần chờ workflow nền. Trong trường hợp pipeline lỗi (exit code ≠ 0), trường `status` sẽ là `error` và `run.out` bao gồm log chi tiết giúp người vận hành xử lý.
 
 Server cũng hỗ trợ request OPTIONS cho các endpoint trên (phục vụ CORS preflight).
 
-Policy Scheduler: Bên trong server, có cơ chế tự động định kỳ chạy cập nhật policy override bằng AI. Lớp PolicyScheduler chạy trong một thread riêng (daemon) nếu biến môi trường BROKER_POLICY_AUTORUN bật (mặc định bật)【13†L280-L289】. Scheduler được khởi tạo với:
-- Một danh sách thời điểm trong ngày (mặc định 10 mốc giờ trong phiên, ví dụ 09:10, 09:40, 10:10,... đến 14:15)【10†L91-L99】【10†L93-L98】.
-- Tham số lead (mặc định 10 phút) – nghĩa là trước mỗi mốc giờ 10 phút scheduler sẽ khởi động job để đến đúng giờ đó có kết quả.
-- Tham số max_age (mặc định 25 phút) – nghĩa là nếu vì lý do gì quá 25 phút chưa có bản cập nhật policy mới, scheduler sẽ cưỡng bức chạy một lần.
-
-Scheduler hoạt động vòng lặp: tính toán thời điểm chạy kế tiếp, ngủ chờ đến gần thời điểm đó, rồi kích hoạt job. Mỗi job chạy sẽ gọi lệnh bash broker.sh policy thông qua hàm run_cmd(['bash', 'broker.sh', 'policy'])【19†L213-L221】. Lệnh này thực chất chạy script scripts/tuning/codex_policy_budget_bias_tuner.py (như đã phân tích ở phần Policy) để sinh policy_overrides mới bằng AI. Kết quả job (thành công hay thất bại, thời gian bắt đầu/kết thúc, trigger) được lưu vào đối tượng PolicyRunRecord và scheduler tính lịch chạy tiếp【19†L219-L227】【19†L235-L243】. Trong quá trình chạy, server log ra console các thông báo “[srv] === policy job start [trigger]...” và “done” kèm ok=true/false【19†L214-L222】【19†L229-L237】.
-
-Scheduler cũng cung cấp hàm ensure_ready() – có thể được gọi để đảm bảo có một policy override mới nhất (nếu quá cũ thì chạy ngay một job). Endpoint server có thể gọi cái này nếu cần (hiện tại chưa có endpoint công khai, nhưng có thể được dùng nội bộ).
-
-Tóm lại, PolicyScheduler tự động commit những thay đổi policy override (qua broker.sh policy có sẵn logic commit & push【38†L122-L130】【38†L101-L109】) lên repo theo lịch định trước trong phiên. Điều này cho phép hệ thống luôn có config/policy_overrides.json mới nhất (AI cập nhật vài lần trong phiên nếu cần). Mặc định khi chạy server, auto-run bật, do đó user không cần thủ công gọi AI mỗi ngày. Nếu muốn tắt tính năng này, có thể đặt BROKER_POLICY_AUTORUN=0 khi chạy server.
-
-Xử Lý Bất Đồng Bộ qua GitHub Actions (Worker và Queue)
-
-Khi server nhận yêu cầu /done, nó commit dữ liệu danh mục lên Git repository. Ở phía cloud, repository minhhai2209/broker-gpt-2 được cấu hình một GitHub Actions workflow đặc biệt để xử lý các commit này như một job tính toán.
-
-File workflow .github/workflows/runs-orders.yml định nghĩa việc này:
-- Workflow được kích hoạt (on: push) khi có bất kỳ commit nào vào đường dẫn runs/**/portfolio/**【27†L2-L10】. Tức là mỗi khi server push một folder runs/<timestamp>/portfolio/...csv, workflow sẽ chạy.
-- Workflow chạy trên máy ảo Ubuntu (GitHub runner) – đóng vai trò như worker thực thi engine.
-- Bước đầu, workflow checkout code và tìm các folder runs/<stamp> chưa được xử lý (pending stamps). Nó đánh dấu một stamp “đã xử lý” nếu thấy trong folder đó đã có kết quả (file orders_final.csv). Nếu chưa có kết quả thì liệt kê vào danh sách pending để xử lý【27†L22-L30】【27†L31-L39】【27†L41-L48】.
-- Sau đó, nếu có stamp pending, workflow thiết lập môi trường Python (3.11), cài các dependencies (pip install -r requirements.txt)【27†L65-L73】【27†L74-L78】.
-- Tiếp theo, bước “Run orders for pending stamps”: script shell sẽ loop qua từng stamp cần xử lý:
-  * Dọn dẹp thư mục in/portfolio local và copy mọi file CSV từ runs/<stamp>/portfolio/ vào in/portfolio/【27†L93-L100】 (giúp engine đọc danh mục như bình thường).
-  * Xóa thư mục out/orders cũ nếu có (đảm bảo kết quả sạch)【27†L99-L101】.
-  * Chạy lệnh ./broker.sh orders – tức chạy toàn bộ pipeline và order engine trên danh mục vừa copy【27†L99-L102】.
-  * Sau khi chạy xong, kiểm tra phải có file out/orders/orders_final.csv. Nếu thiếu, coi như job fail (có thể engine lỗi)【27†L103-L107】.
-  * Nếu có kết quả, tạo thư mục đích runs/<stamp> (đã có) và copy toàn bộ file trong out/orders/ vào thư mục runs/<stamp>/【27†L107-L112】. Như vậy, kết quả lệnh (orders_final.csv, orders_watchlist.csv, orders_quality.csv, orders_reasoning.csv, orders_analysis.txt, ...) đều được đặt vào thư mục runs tương ứng với đợt đó.
-- Bước cuối, workflow commit và push các kết quả này lên repo:
-  * Thêm tất cả thay đổi trong thư mục runs/<stamp> vào git, commit với thông điệp "runs: results for <stamp>"【27†L128-L136】【27†L138-L142】, rồi push lên nhánh hiện tại.
-  * (Workflow có thiết lập concurrency để không chạy song song hai job trên cùng một nhánh, tránh xung đột khi commit【27†L7-L10】).
-
-Kết quả là, sau vài phút từ lúc người dùng gọi /done, repository sẽ có một commit mới chứa các file kết quả trong runs/<stamp>/. Nhờ đó, phía người dùng có thể truy cập kết quả thông qua repo:
-- Server có thể (tương lai) poll hoặc nhận webhook để biết khi nào kết quả xong. Hiện tại, kiến trúc có thể yêu cầu phía frontend trực tiếp kiểm tra kết quả qua GitHub API hoặc tải raw file. (Ví dụ extension có thể sử dụng GitHub API key của user để fetch nội dung file runs/<stamp>/orders_final.csv khi có thông báo hoàn tất).
-- Trong response của /done, server trả về run_stamp và thông tin commit thành công. Frontend có thể dùng run_stamp này để biết thư mục kết quả trên repo.
-
-Như vậy, GitHub Actions ở đây đóng vai trò như worker hàng đợi: mỗi phiên chạy (một batch danh mục) tương ứng một commit đẩy vào hàng, runner pick up và xử lý. Kiến trúc này tuy độc đáo (dựa trên git) nhưng có lợi: tận dụng được tài nguyên cloud CI, giảm tải cho máy cục bộ của người dùng, và tách bạch quá trình tính toán nặng khỏi giao diện.
-
-Chú ý bảo mật: Quá trình trên dùng repository của user (hoặc fork) để lưu dữ liệu danh mục và kết quả. Do đó, dữ liệu có thể ở chế độ riêng tư nếu repo private, hoặc công khai nếu repo public. Người dùng cần cân nhắc điều này (ví dụ repo private để bảo mật danh mục). Phía server có sử dụng GitHub CLI (gh) để commit/push; user cần cấu hình quyền truy cập git phù hợp.
+Policy Scheduler: Mã nguồn vẫn giữ lớp `PolicyScheduler` để phục vụ các kịch bản tự động refresh policy trong tương lai, nhưng cấu hình hiện tại khởi tạo `POLICY_SCHEDULER = None` nên không có thread nền nào chạy【F:scripts/api/server.py†L235-L333】. Khi cần cập nhật policy, người vận hành sử dụng `./broker.sh policy` thủ công hoặc rely vào workflow CI trên nhánh `main`; API server không tự phát lệnh.
 
 Frontend (Extension) và Luồng Tương Tác Người Dùng
 
-Kiến trúc hệ thống cho phép tích hợp với một frontend giúp người dùng không cần thao tác trong terminal. README có đề cập tới một browser extension kết nối với API server. Chức năng của extension có thể là:
-- Cho phép người dùng chọn hoặc nhập danh mục ngay trên trình duyệt (có UI để upload file CSV hoặc nhập mã cổ phiếu).
-- Gửi danh mục đến server (gọi API /portfolio/upload cho từng file hoặc toàn bộ danh mục).
-- Sau khi upload xong, người dùng bấm “Done” trên extension, extension sẽ gọi API /done để bắt đầu tính toán.
-- Extension sau đó có thể hiển thị trạng thái “Đang tính toán…” trong thời gian đợi GitHub Actions chạy (~ vài phút).
-- Khi nhận được thông báo hoàn thành (có thể extension tự kiểm tra trạng thái repo hoặc server có thể được cấu hình gửi một tín hiệu), extension sẽ tải về file kết quả (ví dụ orders_final.csv) và hiển thị dưới dạng danh sách lệnh trên giao diện cho người dùng xem.
-- Ngoài ra, extension có thể dùng các endpoint khác: ví dụ /portfolio/reset để xóa danh mục cũ, hoặc hiển thị nhanh /health để kiểm tra server chạy chưa.
+Kiến trúc hệ thống vẫn cho phép tích hợp với một frontend để người dùng không phải thao tác trong terminal. Với chế độ mới, extension hoặc ứng dụng chỉ cần giao tiếp với API server cục bộ và chờ HTTP response thay vì phụ thuộc vào GitHub Actions. Một luồng tương tác điển hình:
+- Người dùng chọn hoặc nhập danh mục trên UI, sau đó gửi từng file CSV qua `/portfolio/upload`.
+- Khi hoàn tất, UI gọi `/done` và hiển thị trạng thái đang xử lý trong lúc pipeline chạy (request có thể mất vài phút).
+- Khi nhận phản hồi, frontend đọc trường `outputs` để biết những file nào đã được tạo trong `out/orders/` và có thể hướng dẫn người dùng mở hoặc tải các file đó (ví dụ thông qua một endpoint download riêng hoặc đồng bộ thư mục).
+- Nếu `status` là `error`, frontend hiển thị `run.out` để người dùng xem log và thực hiện bước khắc phục.
 
-Hiện tại, server chưa có endpoint trả kết quả trực tiếp, nên nhiều khả năng extension sẽ truy cập thẳng các file trong thư mục runs/<stamp> trên máy cục bộ hoặc qua GitHub. Một cách khác: extension có thể được cài trong cùng repo (if permissions allow) và lắng nghe event commit (webhook) – tuy nhiên kiến trúc này phức tạp. Có thể trong tương lai server sẽ có endpoint kiểu /results/<stamp> để trả về nội dung file lệnh. 
-
-Từ góc nhìn kiến trúc:
-- Frontend (extension): giao diện người dùng, thu thập input và hiển thị output. Kết nối nhẹ với server qua HTTP (CORS đã được bật trên Flask server để cho phép extension gọi từ localhost hoặc file://).
-- Backend (Flask server): nhận yêu cầu từ frontend, quản lý phiên upload, đảm bảo dữ liệu được đưa vào pipeline chính xác, sau đó sử dụng queue (GitHub Actions) để xử lý nền.
-- Worker (GitHub Actions): thực thi core engine, tách biệt khỏi frontend. Kết quả trả lại backend thông qua commit code.
-
-Luồng này tạo thành một vòng kín: người dùng thao tác trên UI -> call đến backend -> backend đưa nhiệm vụ vào queue -> queue xử lý xong -> kết quả sẵn sàng -> người dùng nhận kết quả trên UI.
-
+Do server trả kết quả ngay trong response, kiến trúc không còn yêu cầu queue/worker độc lập. Các cải tiến tương lai có thể bổ sung endpoint trả trực tiếp nội dung file lệnh hoặc nén chúng thành gói zip để frontend tải xuống thuận tiện hơn.
 Kết Luận
 
-Tài liệu kiến trúc hệ thống (SYSTEM_DESIGN) này mô tả các thành phần và luồng hoạt động của Broker GPT theo trạng thái codebase hiện tại. Hệ thống gồm engine phân tích & ra quyết định giao dịch theo pipeline dữ liệu và policy, stateless với khả năng audit cao qua các file đầu ra. Cấu trúc modular (pipeline, tính điểm, quyết định lệnh, quản lý trạng thái) tương tác qua data frame và config. Bên ngoài, hệ thống tích hợp API server và cơ chế async qua GitHub Actions để phục vụ trải nghiệm người dùng qua extension/ứng dụng.
+Tài liệu kiến trúc hệ thống (SYSTEM_DESIGN) này mô tả các thành phần và luồng hoạt động của Broker GPT theo trạng thái codebase hiện tại. Hệ thống gồm engine phân tích & ra quyết định giao dịch theo pipeline dữ liệu và policy, stateless với khả năng audit cao qua các file đầu ra. Cấu trúc modular (pipeline, tính điểm, quyết định lệnh, quản lý trạng thái) tương tác qua data frame và config. Bên ngoài, hệ thống cung cấp một API server cục bộ để phục vụ extension/ứng dụng và chạy trực tiếp pipeline khi nhận yêu cầu.
 
 Từ danh mục đầu vào, Broker GPT tự động thu thập dữ liệu, đánh giá thị trường, lên chiến lược và đề xuất danh sách lệnh giao dịch, đồng thời vẫn duy trì tính linh hoạt (nhờ AI) và an toàn (nhờ baseline ổn định cùng quy trình review) trong mọi điều kiện thị trường.
 Calibrations & Execution Diagnostics

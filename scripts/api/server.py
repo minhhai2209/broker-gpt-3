@@ -16,52 +16,6 @@ from zoneinfo import ZoneInfo, available_timezones
 BASE_DIR = Path(__file__).resolve().parents[2]
 IN_PORTFOLIO_DIR = BASE_DIR / 'in' / 'portfolio'
 OUT_DIR = BASE_DIR / 'out'
-# Folder that groups timestamped order runs
-RUNS_DIR = BASE_DIR / 'runs'
-
-# Current active archive timestamp folder (set on first upload after reset)
-_CURRENT_STAMP: Optional[str] = None
-
-def _stamp_now() -> str:
-    tzname = os.getenv('BROKER_RUNS_TZ', os.getenv('BROKER_ARCHIVE_TZ', 'Asia/Ho_Chi_Minh'))
-    try:
-        tz = ZoneInfo(tzname)
-    except Exception:
-        tz = None
-    now = datetime.now(tz) if tz else datetime.now()
-    return now.strftime('%Y%m%d_%H%M%S')  # e.g., 20251004_093015
-
-def _ensure_run_stamp() -> str:
-    global _CURRENT_STAMP
-    if not _CURRENT_STAMP:
-        _CURRENT_STAMP = _stamp_now()
-        (RUNS_DIR / _CURRENT_STAMP / 'portfolio').mkdir(parents=True, exist_ok=True)
-        print(f"[srv] run stamp initialized: {_CURRENT_STAMP}", flush=True)
-    return _CURRENT_STAMP
-
-def _git_commit_push(paths: list[Path], message: str) -> Dict[str, Any]:
-    added = []
-    for p in paths:
-        if p.exists():
-            added.append(str(p.relative_to(BASE_DIR)))
-    if not added:
-        return {"ok": True, "out": "no changes"}
-    cmds = [
-        ['git', 'config', 'user.name', os.getenv('BROKER_GIT_USER', 'server-bot')],
-        ['git', 'config', 'user.email', os.getenv('BROKER_GIT_EMAIL', 'server-bot@local')],
-        ['git', 'add'] + added,
-        ['git', 'commit', '-m', message],
-        ['git', 'push'],
-    ]
-    out_all = []
-    ok_overall = True
-    for c in cmds:
-        r = run_cmd(c)
-        out_all.append(r.get('out', ''))
-        ok_overall = ok_overall and bool(r.get('ok'))
-        # If commit produced no changes, proceed to push to be safe
-    return {"ok": ok_overall, "out": ''.join(out_all)}
-
 
 def _parse_time_list(raw: str) -> List[dtime]:
     items: List[dtime] = []
@@ -292,7 +246,6 @@ def _resp(data: Dict[str, Any], status: int = 200):
 
 def ensure_dirs():
     IN_PORTFOLIO_DIR.mkdir(parents=True, exist_ok=True)
-    RUNS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def reset_portfolio() -> Dict[str, Any]:
@@ -302,10 +255,7 @@ def reset_portfolio() -> Dict[str, Any]:
         if p.is_file() and not p.name.startswith('.'):
             p.unlink(missing_ok=True)
             removed.append(p.name)
-    # Clear current run stamp; next upload initializes a new timestamped folder
-    global _CURRENT_STAMP
-    _CURRENT_STAMP = None
-    return {"status": "ok", "removed": removed, "runs_reset": True}
+    return {"status": "ok", "removed": removed}
 
 
 def write_csv_exact(name: str, content_text: str) -> Dict[str, Any]:
@@ -317,19 +267,10 @@ def write_csv_exact(name: str, content_text: str) -> Dict[str, Any]:
     data = content_text.encode('utf-8')
     with dest.open('wb') as f:
         f.write(data)
-    # Also write to runs/<stamp>/portfolio and push to trigger pipeline
-    stamp = _ensure_run_stamp()
-    run_dest = RUNS_DIR / stamp / 'portfolio' / f"{safe}.csv"
-    with run_dest.open('wb') as f:
-        f.write(data)
-    # Do NOT commit here; commit occurs at /done after all uploads finish
     return {
         "status": "ok",
         "saved": str(dest.relative_to(BASE_DIR)),
-        "run_saved": str(run_dest.relative_to(BASE_DIR)),
         "bytes": len(data),
-        "pending_commit": True,
-        "run_stamp": stamp,
     }
 
 
@@ -351,49 +292,28 @@ def run_cmd(cmd: list[str]) -> Dict[str, Any]:
     rc = proc.wait()
     ok = (rc == 0)
     return {"ok": ok, "out": ''.join(out_lines)}
-
-
-def _env_truth(name: str, default: bool = False) -> bool:
-    v = os.getenv(name)
-    if v is None:
-        return default
-    return str(v).strip().lower() in ('1', 'true', 'yes', 'y', 'on')
-
-
 def finalize_and_run() -> Dict[str, Any]:
-    """
-    Finalize the current upload session by committing all files in
-    runs/<stamp>/portfolio. This triggers the external CI to produce outputs.
-
-    - Fails fast if there is no active stamp or no files to commit.
-    - Resets the active stamp so a subsequent upload session starts fresh.
-    """
-    global _CURRENT_STAMP
+    """Run the order pipeline on the uploaded portfolio files."""
     ensure_dirs()
-    if not _CURRENT_STAMP:
-        return {
-            "status": "error",
-            "error": "no_active_session",
-            "hint": "Upload portfolio files first via /portfolio/upload",
-        }
-    stamp = _ensure_run_stamp()
-    portfolio_dir = RUNS_DIR / stamp / 'portfolio'
-    files: List[Path] = [p for p in portfolio_dir.glob('*.csv') if p.is_file()]
+    files: List[Path] = [p for p in IN_PORTFOLIO_DIR.glob('*.csv') if p.is_file()]
     if not files:
         return {
             "status": "error",
             "error": "no_files",
-            "hint": f"No CSV files found in {str(portfolio_dir.relative_to(BASE_DIR))}",
+            "hint": f"No CSV files found in {str(IN_PORTFOLIO_DIR.relative_to(BASE_DIR))}",
         }
-    git_res = _git_commit_push(files, f"runs: add portfolio batch for {stamp}")
-    # Reset current stamp to ensure next upload batch starts a new run folder
-    _CURRENT_STAMP = None
+    result = run_cmd(['bash', 'broker.sh', 'orders'])
+    ok = bool(result.get('ok'))
+    orders_dir = OUT_DIR / 'orders'
+    outputs: List[str] = []
+    if ok and orders_dir.exists():
+        outputs = [str(p.relative_to(BASE_DIR)) for p in sorted(orders_dir.glob('*')) if p.is_file()]
     scheduler_status = POLICY_SCHEDULER.status() if POLICY_SCHEDULER is not None else None
     return {
-        "status": "ok" if git_res.get("ok") else "error",
-        "committed": [str(p.relative_to(BASE_DIR)) for p in files],
-        "git": git_res,
-        "run_stamp": stamp,
+        "status": "ok" if ok else "error",
+        "inputs": [str(p.relative_to(BASE_DIR)) for p in sorted(files)],
+        "outputs": outputs,
+        "run": result,
         "policy_scheduler": scheduler_status,
     }
 
