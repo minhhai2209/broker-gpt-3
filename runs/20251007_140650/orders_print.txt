@@ -1,0 +1,13 @@
+ANV — LO — 100 — Giá đặt: 30.65 (nghìn) — Giá thị trường: 30.60 (nghìn) — Chốt lời (Take Profit) | TP1_ATR
+GMD — LO — 100 — Giá đặt: 67.40 (nghìn) — Giá thị trường: 66.80 (nghìn) — Chốt lời (Take Profit) | TP1_ATR
+MBB — LO — 1000 — Giá đặt: 27.20 (nghìn) — Giá thị trường: 26.95 (nghìn) — Chốt lời (Take Profit) | TP1_ATR
+STB — LO — 100 — Giá đặt: 59.20 (nghìn) — Giá thị trường: 58.70 (nghìn) — Chốt lời (Take Profit) | TP1_ATR
+TCB — LO — 100 — Giá đặt: 39.05 (nghìn) — Giá thị trường: 39.05 (nghìn) — Chốt lời (Take Profit) | TP1_ATR
+VCG — LO — 100 — Giá đặt: 28.55 (nghìn) — Giá thị trường: 28.15 (nghìn) — Chốt lời (Take Profit) | TP1_ATR
+VIC — LO — 100 — Giá đặt: 186.20 (nghìn) — Giá thị trường: 179.90 (nghìn) — Chốt lời (Take Profit) | TP1_ATR
+
+BẢNG TỔNG HỢP TIỀN:
+• Tổng mua: 0 (nghìn)
+• Tổng bán: 68305 (nghìn)
+• Net (mua − bán): -68305 (nghìn)
+• Gợi ý: nếu cần xem bằng VND, nhân 1.000 ngoài phạm vi prompt.

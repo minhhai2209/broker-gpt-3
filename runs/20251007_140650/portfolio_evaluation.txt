@@ -1,0 +1,21 @@
+BÁO CÁO ĐÁNH GIÁ DANH MỤC (tự động)
+- Tổng giá trị (nghìn): 1,390,219
+- HHI (concentration): 0.2186 | Top-1: 31.9% | Top-3: 78.1%
+- ATR% bình quân gia quyền: 2.71% | Beta bình quân: 1.00
+- Trần vị thế theo policy (max_pos_frac): 10.0%
+- Trần ngành theo policy (max_sector_frac): 25.0%
+- Top vị thế:
+  • HPG: 31.9% | ADTV20 1,656,822,925k | DaysToLiq@20%≈0.0
+  • VNM: 24.1% | ADTV20 319,341,902k | DaysToLiq@20%≈0.0
+  • MWG: 22.1% | ADTV20 575,095,194k | DaysToLiq@20%≈0.0
+  • GEX: 7.7% | ADTV20 415,842,294k | DaysToLiq@20%≈0.0
+  • MBB: 5.0% | ADTV20 603,291,392k | DaysToLiq@20%≈0.0
+- Phân bổ theo ngành:
+  • Nguyên vật liệu: 31.9% (vượt trần)
+  • Hàng tiêu dùng thiết yếu: 24.8%
+  • Hàng tiêu dùng không thiết yếu: 22.1%
+  • Tài chính: 10.9%
+  • Công nghiệp: 9.0%
+  • Bất động sản: 1.3%
+  • Dịch vụ tiện ích: 0.1%
+- Cảnh báo: các mã vượt trần vị thế: HPG, MWG, VNM

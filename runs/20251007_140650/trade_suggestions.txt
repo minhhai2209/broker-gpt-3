@@ -1,0 +1,8 @@
+GỢI Ý GIAO DỊCH (tự động)
+- Bối cảnh: Thị trường cân bằng; cần đọc tín hiệu dòng tiền theo từng nhịp (VNINDEX +0.02%; Breadth>MA50 39%; Risk-on 99%; ATR14 1.78%; Trend vs MA200 21.6%).
+- Ưu tiên mua: ADD [-] | NEW [LPB, HAG].
+- Giảm tỷ trọng/Chốt lời: TRIM [-] | TAKE_PROFIT [ANV, GMD, MBB, STB, TCB, VCG, VIC].
+- Dừng lỗ/Thoát: EXIT [GAS].
+- Ngành nên ưu tiên (breadth/momentum): Tài chính, Công nghiệp, Hàng tiêu dùng thiết yếu, Hàng tiêu dùng không thiết yếu.
+- Khối lượng mua dự kiến: ~5% NAV (hiệu lực theo regime).
+- Cảnh báo biến động: ATR của VNINDEX cao (>= soft). Giảm khối lượng/giãn giá và đặt SL chặt hơn.

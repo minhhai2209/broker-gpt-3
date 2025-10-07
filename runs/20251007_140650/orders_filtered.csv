@@ -1,0 +1,9 @@
+Ticker,Reason,Side,Quantity,LimitPrice,MarketPrice,Note
+CTG,market,BUY,0,51.1,51.8,market filter active – defer adding until trend/breadth improves
+GEX,market,BUY,0,53.6,53.6,market filter active – defer adding until trend/breadth improves
+HPG,market,BUY,0,29.0,29.15,market filter active – defer adding until trend/breadth improves
+MWG,market,BUY,0,78.2,78.8,market filter active – defer adding until trend/breadth improves
+VIX,market,BUY,0,36.65,37.6,market filter active – defer adding until trend/breadth improves
+VNM,market,BUY,0,62.1,62.1,market filter active – defer adding until trend/breadth improves
+ACB,market,BUY,0,25.95,26.5,market filter active – pause new entries under weak market conditions
+HDB,market,BUY,0,30.85,31.3,market filter active – pause new entries under weak market conditions
