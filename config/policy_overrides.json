@@ -29,11 +29,11 @@
     "q_add": 0.0,
     "q_new": 0.961038961038961,
     "min_liq_norm": 0.49019607843137253,
-    "near_ceiling_pct": 0.9583871636309302,
+    "near_ceiling_pct": 0.9519677434838957,
     "tp_pct": 0.0,
     "sl_pct": 0.0,
-    "tp_atr_mult": 0.9756097560975608,
-    "sl_atr_mult": 0.6504065040650406,
+    "tp_atr_mult": 0.9615384615384615,
+    "sl_atr_mult": 0.641025641025641,
     "tp_floor_pct": 0.03,
     "tp_cap_pct": 0.1,
     "sl_floor_pct": 0.02,
@@ -95,7 +95,7 @@
     "add_max_neutral_cap": 1
   },
   "regime_model": {
-    "intercept": 2.05622337318885,
+    "intercept": 2.0558114366429945,
     "threshold": 0.8,
     "components": {
       "trend": {
@@ -114,8 +114,8 @@
         "weight": 1.2
       },
       "drawdown": {
-        "mean": 0.4369610673180393,
-        "std": 0.2907801765470275,
+        "mean": 0.43686955622023893,
+        "std": 0.2906835032187111,
         "weight": 0.95
       },
       "volatility": {
@@ -124,13 +124,13 @@
         "weight": 1.05
       },
       "index_return": {
-        "mean": 0.136074923407046,
-        "std": 0.16313348987655035,
+        "mean": 0.1360196865071829,
+        "std": 0.1631250236754793,
         "weight": 0.8
       },
       "turnover": {
-        "mean": 0.5808442508038775,
-        "std": 0.3154476967561673,
+        "mean": 0.5814680811220311,
+        "std": 0.31522434195495885,
         "weight": 0.8
       },
       "mcclellan": {
@@ -146,14 +146,30 @@
     }
   },
   "sector_bias": {
-    "Hàng tiêu dùng thiết yếu": 0.05,
-    "Nguyên vật liệu": 0.04,
-    "Bất động sản": -0.05
+    "Bất động sản": -0.02,
+    "Công nghiệp": 0.04,
+    "Công nghệ thông tin": 0.06,
+    "Dịch vụ tiện ích": 0.0,
+    "Hàng tiêu dùng không thiết yếu": 0.05,
+    "Hàng tiêu dùng thiết yếu": 0.04,
+    "Nguyên vật liệu": 0.02,
+    "Năng lượng": 0.02,
+    "Tài chính": 0.05,
+    "Y tế": 0.01
   },
   "ticker_bias": {
-    "HPG": 0.06,
-    "MWG": 0.05,
-    "VHM": -0.05
+    "FPT": 0.08,
+    "HPG": 0.05,
+    "MWG": 0.06,
+    "VNM": 0.04,
+    "GAS": 0.03,
+    "POW": 0.02,
+    "VCB": 0.05,
+    "SSI": 0.04,
+    "VHM": 0.03,
+    "NVL": -0.05,
+    "TCB": 0.04,
+    "FRT": 0.03
   },
   "calibration": {
     "on_run": 0,
@@ -172,11 +188,11 @@
   "market_filter": {
     "risk_off_index_drop_pct": 0.3484877041695573,
     "risk_off_trend_floor": 0.0,
-    "risk_off_breadth_floor": 0.527450980392157,
+    "risk_off_breadth_floor": 0.48,
     "risk_off_drawdown_floor": 0.03765736205513479,
     "market_score_soft_floor": 0.6,
     "market_score_hard_floor": 0.3,
-    "leader_min_rsi": 53.3975,
+    "leader_min_rsi": 53.144999999999996,
     "leader_min_mom_norm": 0.7524509803921569,
     "leader_require_ma20": 1,
     "leader_require_ma50": 1,
@@ -233,7 +249,7 @@
       "cross": 0.9,
       "near_ceiling": 0.05,
       "min": 0.05,
-      "decay_scale_min_ticks": 17.5
+      "decay_scale_min_ticks": 17.6
     },
     "slippage_model": {
       "alpha_bps": 5.0,
@@ -259,7 +275,7 @@
     "momentum_unit": 0.12
   },
   "sizing": {
-    "softmax_tau": 0.13912658691406357,
+    "softmax_tau": 0.13429260253906358,
     "add_share": 0.5,
     "new_share": 0.5,
     "min_lot": 100,
@@ -274,7 +290,7 @@
     "qty_min_lot": 100,
     "min_notional_per_order": 2000000.0,
     "cov_lookback_days": 250,
-    "cov_reg": 0.00043274559540371576,
+    "cov_reg": 0.00043299845223568724,
     "risk_parity_floor": 0.2,
     "dynamic_caps": {
       "enable": 0,
@@ -293,7 +309,7 @@
     "min_names_target": 10,
     "market_index_symbol": "VNINDEX",
     "risk_per_trade_frac": 0.005,
-    "default_stop_atr_mult": 0.6504065040650406,
+    "default_stop_atr_mult": 0.641025641025641,
     "tranche_frac": 0.25,
     "mean_variance_calibration": {
       "enable": 1,
@@ -319,9 +335,9 @@
   },
   "orders_ui": {
     "ttl_minutes": {
-      "base": 14,
-      "soft": 11,
-      "hard": 8
+      "base": 11,
+      "soft": 9,
+      "hard": 7
     },
     "ttl_bucket_minutes": {
       "low": {
@@ -342,18 +358,18 @@
     },
     "watchlist": {
       "enable": 1,
-      "min_priority": 0.375,
+      "min_priority": 0.35,
       "micro_window": 3
     },
     "suggestions_top_n": 3,
     "ttl_bucket_state": {
-      "current": "low",
-      "sigma": 0.007940746425708385
+      "current": "medium",
+      "sigma": 0.009463654144655973
     },
     "ttl_bucket_thresholds": {
-      "p75": 0.008457346579413173,
+      "p75": 0.008520943182664994,
       "p95": 0.017155706018678753,
-      "latest": 0.007940746425708385
+      "latest": 0.009463654144655973
     },
     "ttl_minutes_baseline": {
       "base": 12,
@@ -383,6 +399,9 @@
       "ms_hard_q": 0.35,
       "dd_floor_q": 0.8,
       "breadth_floor_q": 0.4,
+      "breadth_floor_half_life_days": 126,
+      "breadth_floor_min": 0.32,
+      "breadth_floor_max": 0.48,
       "leader_rsi_q": 0.75,
       "leader_mom_q": 0.75
     },
