@@ -27,9 +27,9 @@
     "base_new": 0.4,
     "trim_th": -0.05,
     "q_add": 0.0,
-    "q_new": 0.9605263157894737,
+    "q_new": 0.9625,
     "min_liq_norm": 0.49019607843137253,
-    "near_ceiling_pct": 0.9566193856614802,
+    "near_ceiling_pct": 0.9599406853004694,
     "tp_pct": 0.0,
     "sl_pct": 0.0,
     "tp_atr_mult": 0.9884678747940691,
@@ -95,7 +95,7 @@
     "add_max_neutral_cap": 1
   },
   "regime_model": {
-    "intercept": 2.056456106484796,
+    "intercept": 2.0564145980346824,
     "threshold": 0.8,
     "components": {
       "trend": {
@@ -114,8 +114,8 @@
         "weight": 1.2
       },
       "drawdown": {
-        "mean": 0.4370109824622941,
-        "std": 0.29083867076393555,
+        "mean": 0.4369943440808758,
+        "std": 0.29081872088600924,
         "weight": 0.95
       },
       "volatility": {
@@ -124,8 +124,8 @@
         "weight": 1.05
       },
       "index_return": {
-        "mean": 0.1361108204351686,
-        "std": 0.16314370400818345,
+        "mean": 0.13610692463366691,
+        "std": 0.16314241594613987,
         "weight": 0.8
       },
       "turnover": {
@@ -145,22 +145,18 @@
       }
     }
   },
-  "sector_bias": {
-    "Tài chính": 0.03,
-    "Công nghiệp": 0.02,
-    "Hàng tiêu dùng thiết yếu": 0.02,
-    "Bất động sản": -0.03
-  },
+  "sector_bias": {},
   "ticker_bias": {
+    "FPT": 0.08,
+    "HPG": 0.06,
+    "MWG": 0.05,
     "VCB": 0.04,
-    "HPG": 0.04,
-    "FPT": 0.04,
-    "VNM": 0.03,
-    "MWG": 0.03,
-    "SSI": 0.02,
-    "GAS": 0.02,
-    "NVL": -0.03,
-    "DIG": -0.03
+    "BID": 0.03,
+    "CTG": 0.03,
+    "TCB": 0.03,
+    "VPB": 0.02,
+    "MBB": 0.02,
+    "POW": 0.04
   },
   "calibration": {
     "on_run": 0,
@@ -240,7 +236,7 @@
       "cross": 0.9,
       "near_ceiling": 0.05,
       "min": 0.05,
-      "decay_scale_min_ticks": 17.1
+      "decay_scale_min_ticks": 17.4
     },
     "slippage_model": {
       "alpha_bps": 5.0,
@@ -266,7 +262,7 @@
     "momentum_unit": 0.12
   },
   "sizing": {
-    "softmax_tau": 0.1370117187500011,
+    "softmax_tau": 0.13686065673828235,
     "add_share": 0.5,
     "new_share": 0.5,
     "min_lot": 100,
@@ -281,7 +277,7 @@
     "qty_min_lot": 100,
     "min_notional_per_order": 2000000.0,
     "cov_lookback_days": 250,
-    "cov_reg": 0.0004324907260972042,
+    "cov_reg": 0.0004324390155838872,
     "risk_parity_floor": 0.2,
     "dynamic_caps": {
       "enable": 0,
@@ -349,18 +345,18 @@
     },
     "watchlist": {
       "enable": 1,
-      "min_priority": 0.392,
+      "min_priority": 0.387,
       "micro_window": 3
     },
     "suggestions_top_n": 3,
     "ttl_bucket_state": {
       "current": "low",
-      "sigma": 0.008039452984566358
+      "sigma": 0.007994935426255744
     },
     "ttl_bucket_thresholds": {
       "p75": 0.008457346579413173,
       "p95": 0.017155706018678753,
-      "latest": 0.008039452984566358
+      "latest": 0.007994935426255744
     },
     "ttl_minutes_baseline": {
       "base": 12,
