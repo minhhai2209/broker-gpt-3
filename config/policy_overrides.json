@@ -27,13 +27,13 @@
     "base_new": 0.4,
     "trim_th": -0.05,
     "q_add": 0.0,
-    "q_new": 0.961038961038961,
+    "q_new": 0.9605263157894737,
     "min_liq_norm": 0.49019607843137253,
-    "near_ceiling_pct": 0.9519677434838957,
+    "near_ceiling_pct": 0.937058532019162,
     "tp_pct": 0.0,
     "sl_pct": 0.0,
-    "tp_atr_mult": 0.9615384615384615,
-    "sl_atr_mult": 0.641025641025641,
+    "tp_atr_mult": 0.9538950715421304,
+    "sl_atr_mult": 0.6359300476947536,
     "tp_floor_pct": 0.03,
     "tp_cap_pct": 0.1,
     "sl_floor_pct": 0.02,
@@ -95,7 +95,7 @@
     "add_max_neutral_cap": 1
   },
   "regime_model": {
-    "intercept": 2.0558114366429945,
+    "intercept": 2.055583586755062,
     "threshold": 0.8,
     "components": {
       "trend": {
@@ -114,8 +114,8 @@
         "weight": 1.2
       },
       "drawdown": {
-        "mean": 0.43686955622023893,
-        "std": 0.2906835032187111,
+        "mean": 0.4368445986481115,
+        "std": 0.2906595123423435,
         "weight": 0.95
       },
       "volatility": {
@@ -124,13 +124,13 @@
         "weight": 1.05
       },
       "index_return": {
-        "mean": 0.1360196865071829,
-        "std": 0.1631250236754793,
+        "mean": 0.13598225898561322,
+        "std": 0.1631242833134773,
         "weight": 0.8
       },
       "turnover": {
-        "mean": 0.5814680811220311,
-        "std": 0.31522434195495885,
+        "mean": 0.5817280104212615,
+        "std": 0.31529775188845643,
         "weight": 0.8
       },
       "mcclellan": {
@@ -146,30 +146,22 @@
     }
   },
   "sector_bias": {
-    "Bất động sản": -0.02,
-    "Công nghiệp": 0.04,
     "Công nghệ thông tin": 0.06,
-    "Dịch vụ tiện ích": 0.0,
-    "Hàng tiêu dùng không thiết yếu": 0.05,
-    "Hàng tiêu dùng thiết yếu": 0.04,
-    "Nguyên vật liệu": 0.02,
-    "Năng lượng": 0.02,
-    "Tài chính": 0.05,
-    "Y tế": 0.01
+    "Hàng tiêu dùng thiết yếu": 0.03,
+    "Hàng tiêu dùng không thiết yếu": 0.04,
+    "Bất động sản": 0.03,
+    "Năng lượng": 0.03,
+    "Nguyên vật liệu": -0.05
   },
   "ticker_bias": {
-    "FPT": 0.08,
-    "HPG": 0.05,
-    "MWG": 0.06,
-    "VNM": 0.04,
-    "GAS": 0.03,
-    "POW": 0.02,
-    "VCB": 0.05,
-    "SSI": 0.04,
-    "VHM": 0.03,
-    "NVL": -0.05,
-    "TCB": 0.04,
-    "FRT": 0.03
+    "FPT": 0.07,
+    "MWG": 0.05,
+    "HPG": -0.05,
+    "VHM": 0.04,
+    "VNM": 0.03,
+    "GAS": 0.05,
+    "POW": -0.03,
+    "SSI": 0.04
   },
   "calibration": {
     "on_run": 0,
@@ -192,7 +184,7 @@
     "risk_off_drawdown_floor": 0.03765736205513479,
     "market_score_soft_floor": 0.6,
     "market_score_hard_floor": 0.3,
-    "leader_min_rsi": 53.144999999999996,
+    "leader_min_rsi": 52.8175,
     "leader_min_mom_norm": 0.7524509803921569,
     "leader_require_ma20": 1,
     "leader_require_ma50": 1,
@@ -275,7 +267,7 @@
     "momentum_unit": 0.12
   },
   "sizing": {
-    "softmax_tau": 0.13429260253906358,
+    "softmax_tau": 0.1364074707031261,
     "add_share": 0.5,
     "new_share": 0.5,
     "min_lot": 100,
@@ -290,7 +282,7 @@
     "qty_min_lot": 100,
     "min_notional_per_order": 2000000.0,
     "cov_lookback_days": 250,
-    "cov_reg": 0.00043299845223568724,
+    "cov_reg": 0.00043325281998856806,
     "risk_parity_floor": 0.2,
     "dynamic_caps": {
       "enable": 0,
@@ -309,7 +301,7 @@
     "min_names_target": 10,
     "market_index_symbol": "VNINDEX",
     "risk_per_trade_frac": 0.005,
-    "default_stop_atr_mult": 0.641025641025641,
+    "default_stop_atr_mult": 0.6359300476947536,
     "tranche_frac": 0.25,
     "mean_variance_calibration": {
       "enable": 1,
@@ -358,18 +350,18 @@
     },
     "watchlist": {
       "enable": 1,
-      "min_priority": 0.35,
+      "min_priority": 0.339,
       "micro_window": 3
     },
     "suggestions_top_n": 3,
     "ttl_bucket_state": {
       "current": "medium",
-      "sigma": 0.009463654144655973
+      "sigma": 0.014202147679808616
     },
     "ttl_bucket_thresholds": {
       "p75": 0.008520943182664994,
       "p95": 0.017155706018678753,
-      "latest": 0.009463654144655973
+      "latest": 0.014202147679808616
     },
     "ttl_minutes_baseline": {
       "base": 12,
