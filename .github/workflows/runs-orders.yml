@@ -31,6 +31,19 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # Ensure full history so rebase works reliably
+          fetch-depth: 0
+
+      - name: Sync branch (pre-run)
+        shell: bash
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git fetch origin "$BRANCH_NAME"
+          # Try to rebase to latest remote before generating orders
+          git rebase "origin/$BRANCH_NAME" || { echo 'Pre-run rebase failed; continuing'; }
 
       - name: Determine pending run stamps
         id: pending
