@@ -27,13 +27,13 @@
     "base_new": 0.4,
     "trim_th": -0.05,
     "q_add": 0.0,
-    "q_new": 0.9625,
+    "q_new": 0.9605263157894737,
     "min_liq_norm": 0.49019607843137253,
-    "near_ceiling_pct": 0.958299078056007,
+    "near_ceiling_pct": 0.9566193856614802,
     "tp_pct": 0.0,
     "sl_pct": 0.0,
-    "tp_atr_mult": 0.9917355371900827,
-    "sl_atr_mult": 0.6611570247933884,
+    "tp_atr_mult": 0.9884678747940691,
+    "sl_atr_mult": 0.6589785831960461,
     "tp_floor_pct": 0.03,
     "tp_cap_pct": 0.1,
     "sl_floor_pct": 0.02,
@@ -95,7 +95,7 @@
     "add_max_neutral_cap": 1
   },
   "regime_model": {
-    "intercept": 2.0566472402100726,
+    "intercept": 2.056456106484796,
     "threshold": 0.8,
     "components": {
       "trend": {
@@ -114,8 +114,8 @@
         "weight": 1.2
       },
       "drawdown": {
-        "mean": 0.4370525784158397,
-        "std": 0.2908905213606489,
+        "mean": 0.4370109824622941,
+        "std": 0.29083867076393555,
         "weight": 0.95
       },
       "volatility": {
@@ -124,13 +124,13 @@
         "weight": 1.05
       },
       "index_return": {
-        "mean": 0.13614143030411036,
-        "std": 0.16315534546163946,
+        "mean": 0.1361108204351686,
+        "std": 0.16314370400818345,
         "weight": 0.8
       },
       "turnover": {
-        "mean": 0.5801511060059292,
-        "std": 0.31635571595089435,
+        "mean": 0.5801684346258779,
+        "std": 0.3163245878281572,
         "weight": 0.8
       },
       "mcclellan": {
@@ -146,33 +146,21 @@
     }
   },
   "sector_bias": {
-    "Bất động sản": 0.02,
-    "Công nghiệp": 0.04,
-    "Công nghệ thông tin": 0.08,
-    "Dịch vụ tiện ích": 0.06,
-    "Hàng tiêu dùng không thiết yếu": -0.06,
+    "Tài chính": 0.03,
+    "Công nghiệp": 0.02,
     "Hàng tiêu dùng thiết yếu": 0.02,
-    "Nguyên vật liệu": 0.06,
-    "Năng lượng": 0.05,
-    "Tài chính": 0.04,
-    "Y tế": 0.0
+    "Bất động sản": -0.03
   },
   "ticker_bias": {
-    "FPT": 0.08,
-    "HPG": 0.08,
-    "VCB": 0.05,
-    "TCB": 0.05,
-    "MBB": 0.04,
-    "ACB": 0.04,
-    "VHM": 0.04,
-    "POW": 0.04,
-    "GAS": 0.03,
-    "SSI": 0.03,
-    "VND": 0.03,
-    "GMD": 0.03,
+    "VCB": 0.04,
+    "HPG": 0.04,
+    "FPT": 0.04,
     "VNM": 0.03,
-    "TCM": -0.06,
-    "STK": -0.06
+    "MWG": 0.03,
+    "SSI": 0.02,
+    "GAS": 0.02,
+    "NVL": -0.03,
+    "DIG": -0.03
   },
   "calibration": {
     "on_run": 0,
@@ -195,7 +183,7 @@
     "risk_off_drawdown_floor": 0.03765736205513479,
     "market_score_soft_floor": 0.6,
     "market_score_hard_floor": 0.3,
-    "leader_min_rsi": 54.085,
+    "leader_min_rsi": 53.965,
     "leader_min_mom_norm": 0.7524509803921569,
     "leader_require_ma20": 1,
     "leader_require_ma50": 1,
@@ -278,7 +266,7 @@
     "momentum_unit": 0.12
   },
   "sizing": {
-    "softmax_tau": 0.13240432739257924,
+    "softmax_tau": 0.1370117187500011,
     "add_share": 0.5,
     "new_share": 0.5,
     "min_lot": 100,
@@ -293,7 +281,7 @@
     "qty_min_lot": 100,
     "min_notional_per_order": 2000000.0,
     "cov_lookback_days": 250,
-    "cov_reg": 0.0004324922298987818,
+    "cov_reg": 0.0004324907260972042,
     "risk_parity_floor": 0.2,
     "dynamic_caps": {
       "enable": 0,
@@ -312,7 +300,7 @@
     "min_names_target": 10,
     "market_index_symbol": "VNINDEX",
     "risk_per_trade_frac": 0.005,
-    "default_stop_atr_mult": 0.6611570247933884,
+    "default_stop_atr_mult": 0.6589785831960461,
     "tranche_frac": 0.25,
     "mean_variance_calibration": {
       "enable": 1,
@@ -367,12 +355,12 @@
     "suggestions_top_n": 3,
     "ttl_bucket_state": {
       "current": "low",
-      "sigma": 0.008336913584182145
+      "sigma": 0.008039452984566358
     },
     "ttl_bucket_thresholds": {
       "p75": 0.008457346579413173,
       "p95": 0.017155706018678753,
-      "latest": 0.008336913584182145
+      "latest": 0.008039452984566358
     },
     "ttl_minutes_baseline": {
       "base": 12,
