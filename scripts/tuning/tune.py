@@ -86,12 +86,15 @@ def main() -> int:
     calibrate_fill_prob.calibrate(write=True)
     calibrate_watchlist.calibrate(write=True)
 
-    # Run AI overrides calibrator (Codex) — fail-soft to keep pipeline robust in CI
+    # Run AI overrides calibrator (Codex)
     try:
         from scripts.tuning.calibrators import calibrate_tilts
         calibrate_tilts.calibrate(write=True)
+    except SystemExit as exc:
+        # Surface clear error; unified tune requires Codex when enabled
+        raise
     except Exception as exc:
-        print(f"[tune] Skipping AI overrides calibrator (non-fatal): {type(exc).__name__}: {exc}")
+        raise SystemExit(f"AI overrides calibrator failed: {exc}") from exc
 
     # Surface final overlay path for downstream automation (GitHub Action persists when appropriate)
     src = OUT_DIR / 'orders' / 'policy_overrides.json'

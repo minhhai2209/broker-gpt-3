@@ -173,15 +173,11 @@ def ensure_intraday_latest(tickers: List[str], outdir: str = 'out/intraday', win
     latest_path = outdir / 'latest.csv'
     if rows:
         pd.DataFrame(rows).to_csv(latest_path, index=False)
-    else:
-        # Best-effort in CI: do not fail when intraday is unavailable.
-        # Snapshot builder will fall back to daily EOD prices.
-        if not latest_path.exists():
-            try:
-                pd.DataFrame(columns=['Ticker','Ts','Price','RSI14','TimeVN']).to_csv(latest_path, index=False)
-            except Exception:
-                pass
-        print("[warn] intraday latest snapshot unavailable; continuing with EOD fallbacks")
+    elif not latest_path.exists():
+        raise RuntimeError(
+            "Intraday snapshot missing and upstream API returned no data; "
+            "run scripts/collect_intraday.collect_intraday to seed caches or rerun later when the market is active." 
+        )
 
 
 def ensure_intraday_latest_df(tickers: List[str], window_minutes: int = 12*60) -> pd.DataFrame:
