@@ -31,11 +31,14 @@ def _strip_json_comments(text: str) -> str:
 
 
 def main() -> int:
+    print('[tune] START unified tuning pipeline')
     # Clean out/
     if OUT_DIR.exists():
+        print('[tune] Removing previous out/ directory')
         shutil.rmtree(OUT_DIR)
 
     # Merge baseline + overlay and set band for presets builder
+    print('[tune] Merging baseline + overlays via ensure_policy_override_file()')
     from scripts.engine.config_io import ensure_policy_override_file
     from scripts.build_presets_all import set_daily_band_pct
     pol_path = ensure_policy_override_file()
@@ -49,6 +52,7 @@ def main() -> int:
 
     # Build artifacts
     from scripts.engine.pipeline import ensure_pipeline_artifacts
+    print('[tune] Building pipeline artifacts')
     ensure_pipeline_artifacts()
 
     # Run calibrators (write runtime overrides)
@@ -66,10 +70,11 @@ def main() -> int:
         calibrate_liquidity,
         calibrate_dynamic_caps,
         calibrate_ttl_minutes,
-        calibrate_fill_prob,
-        calibrate_watchlist,
+    calibrate_fill_prob,
+    calibrate_watchlist,
     )
 
+    print('[tune] Running calibrators')
     calibrate_regime_components.calibrate(write=True)
     calibrate_regime.calibrate(horizon=63, write=True)
     calibrate_market_filter.calibrate(write=True)
@@ -87,14 +92,9 @@ def main() -> int:
     calibrate_watchlist.calibrate(write=True)
 
     # Run AI overrides calibrator (Codex)
-    try:
-        from scripts.tuning.calibrators import calibrate_tilts
-        calibrate_tilts.calibrate(write=True)
-    except SystemExit as exc:
-        # Surface clear error; unified tune requires Codex when enabled
-        raise
-    except Exception as exc:
-        raise SystemExit(f"AI overrides calibrator failed: {exc}") from exc
+    print('[tune] Running AI overrides calibrator (Codex)')
+    from scripts.tuning.calibrators import calibrate_tilts
+    calibrate_tilts.calibrate(write=True)
 
     # Surface final overlay path for downstream automation (GitHub Action persists when appropriate)
     src = OUT_DIR / 'orders' / 'policy_overrides.json'
@@ -104,6 +104,7 @@ def main() -> int:
     dst = CFG_DIR / 'policy_overrides.json'
     shutil.copyfile(src, dst)
     print(f"[tune] Unified overlay ready at {src} and published to {dst}")
+    print('[tune] DONE')
     return 0
 
 
