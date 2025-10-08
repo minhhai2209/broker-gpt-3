@@ -10,9 +10,39 @@ from typing import Dict, List, Iterator
 
 import pandas as pd
 
-from scripts.utils import to_float, hose_tick_size
+from scripts.utils import to_float, hose_tick_size, detect_session_phase_now_vn, round_to_tick
 
 LOT_SIZE = 100
+
+
+def _pricing_in_session_now() -> bool:
+    """Local-only notion of session for pricing adjustments.
+
+    Treats morning, lunch, afternoon, and ATC as "in session" for the purpose
+    of aligning limit prices to the current market. This function is private to
+    orders IO and does NOT alter other modules' session semantics.
+    """
+    try:
+        phase = str(detect_session_phase_now_vn()).strip().lower()
+    except Exception:
+        # If phase detection fails, stay conservative and do not adjust.
+        return False
+    return phase in {"morning", "lunch", "afternoon", "atc"}
+
+
+def _adjust_limit_to_market(side: str, limit: float, market: float | None) -> float:
+    """Clamp limit price to market during pricing session.
+
+    - BUY: if limit > market, use market
+    - SELL: if limit < market, use market
+    Only applies when _pricing_in_session_now() is True and market is available.
+    """
+    if market is None or not _pricing_in_session_now():
+        return float(limit)
+    if side == 'BUY':
+        return float(market) if float(limit) > float(market) else float(limit)
+    # SELL
+    return float(market) if float(limit) < float(market) else float(limit)
 
 
 @contextmanager
@@ -177,11 +207,13 @@ def print_orders(orders, snapshot: pd.DataFrame) -> str:
         market_price = None
         if o.ticker in snap.index:
             market_price = to_float(snap.loc[o.ticker].get("Price")) or to_float(snap.loc[o.ticker].get("P"))
+        # Use effective limit for display when pricing session rules apply
+        limit_eff = _adjust_limit_to_market(o.side, float(o.limit_price), market_price)
         mp_str = f"{market_price:.2f}" if market_price is not None else "NA"
-        line = f"{o.ticker} — LO — {o.quantity} — Giá đặt: {o.limit_price:.2f} (nghìn) — Giá thị trường: {mp_str} (nghìn) — {o.note}"
+        line = f"{o.ticker} — LO — {o.quantity} — Giá đặt: {limit_eff:.2f} (nghìn) — Giá thị trường: {mp_str} (nghìn) — {o.note}"
         lines.append(line)
-        if o.side == "BUY": total_buy += o.quantity * o.limit_price
-        else: total_sell += o.quantity * o.limit_price
+        if o.side == "BUY": total_buy += o.quantity * limit_eff
+        else: total_sell += o.quantity * limit_eff
     lines += ["", "BẢNG TỔNG HỢP TIỀN:", f"• Tổng mua: {total_buy:.0f} (nghìn)", f"• Tổng bán: {total_sell:.0f} (nghìn)", f"• Net (mua − bán): {total_buy - total_sell:.0f} (nghìn)", "• Gợi ý: nếu cần xem bằng VND, nhân 1.000 ngoài phạm vi prompt."]
     return "\n".join(lines)
 
@@ -235,6 +267,8 @@ def write_orders_csv(
             pre_row = _as_series(pre, t) if enrich else None
             if snap_row is not None:
                 market = to_float(snap_row.get("Price")) or to_float(snap_row.get("P"))
+            # Adjust limit to market during pricing session without affecting other modules
+            limit_eff = _adjust_limit_to_market(side, limit, market)
             prio_raw = 0.0
             prio_net = 0.0
             if enrich:
@@ -246,7 +280,7 @@ def write_orders_csv(
                     ticker=t,
                     side=side,
                     qty=qty,
-                    limit=limit,
+                    limit=limit_eff,
                     market=market,
                     tick=tick,
                     ceil_tick=ceil_tick,
@@ -267,7 +301,7 @@ def write_orders_csv(
                 prio_net = prio_raw * max(0.0, 1.0 - tc)
                 if slip_frac > 0.0:
                     prio_net = prio_net / (1.0 + slip_frac)
-            rows.append([t, side, qty, f"{limit:.2f}", prio_net, prio_raw])
+            rows.append([t, side, qty, f"{limit_eff:.2f}", prio_net, prio_raw])
         # Sort BUY first, then by net priority (desc). Column not written.
         rows.sort(
             key=lambda r: (
@@ -532,6 +566,8 @@ def write_orders_csv_enriched(
             market = None
             if snap_row is not None:
                 market = to_float(snap_row.get('Price')) or to_float(snap_row.get('P'))
+            # Adjust limit to market during pricing session
+            limit_eff = _adjust_limit_to_market(side, limit, market)
             tick = hose_tick_size(market if market is not None else limit)
             ceil_tick = to_float(pre_row.get('BandCeiling_Tick')) or to_float(pre_row.get('BandCeilingRaw')) if pre_row is not None else None
             floor_tick = to_float(pre_row.get('BandFloor_Tick')) or to_float(pre_row.get('BandFloorRaw')) if pre_row is not None else None
@@ -540,7 +576,7 @@ def write_orders_csv_enriched(
                 ticker=t,
                 side=side,
                 qty=qty,
-                limit=limit,
+                limit=limit_eff,
                 market=market,
                 tick=tick,
                 ceil_tick=ceil_tick,
@@ -612,7 +648,7 @@ def write_orders_csv_enriched(
                 t,
                 side,
                 qty,
-                f"{limit:.2f}",
+                f"{limit_eff:.2f}",
                 (f"{market:.2f}" if market is not None else ''),
                 f"{fill_prob_price:.3f}",
                 f"{fill_rate:.3f}",
