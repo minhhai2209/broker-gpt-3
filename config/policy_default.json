@@ -406,6 +406,9 @@
     "risk_per_trade_frac": 0.005,
     "default_stop_atr_mult": 2.15,
     "tranche_frac": 0.25,
+    // Max lots for the first non-partial NEW entry (caps initial size);
+    // leftover redistribution or subsequent adds may increase later.
+    "new_first_tranche_lots": 1,
     // Grid for calibrating mean-variance hyper-parameters (if enabled)
     "mean_variance_calibration": {
       "enable": 1,

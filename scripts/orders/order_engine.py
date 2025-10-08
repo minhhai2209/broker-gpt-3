@@ -3775,8 +3775,14 @@ def build_orders(
             else:
                 qty = max(min_qty, qty)
         else:
+            # Cap first tranche size for non-partial NEW entries by configured lots
+            try:
+                first_tranche_lots = int(float(sizing.get('new_first_tranche_lots', 1) or 1))
+            except Exception:
+                first_tranche_lots = 1
+            first_tranche_lots = max(1, first_tranche_lots)
             if qty >= lot:
-                qty = lot
+                qty = min(qty, first_tranche_lots * lot)
             elif qty > 0:
                 qty = 0
         if market_price is not None and limit > float(market_price) + 1e-9:

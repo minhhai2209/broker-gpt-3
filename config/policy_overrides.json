@@ -302,6 +302,7 @@
     "risk_per_trade_frac": 0.005,
     "default_stop_atr_mult": 0.6568144499178983,
     "tranche_frac": 0.25,
+    "new_first_tranche_lots": 2,
     "mean_variance_calibration": {
       "enable": 1,
       "risk_alpha": [

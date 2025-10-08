@@ -422,6 +422,8 @@ class Sizing(BaseModel):
     tranche_frac: float = Field(default=0.25, ge=0.0, le=1.0)
     qty_min_lot: int = Field(default=100, ge=100)
     min_notional_per_order: float = Field(default=2_000_000.0, ge=1_000_000.0)
+    # Max lots for the very first entry of a NEW position (non-partial). Default 1.
+    new_first_tranche_lots: int = Field(default=1, ge=1)
     mean_variance_calibration: Optional[MeanVarianceCalibration] = None
 
     @model_validator(mode="after")
