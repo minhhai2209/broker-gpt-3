@@ -100,7 +100,10 @@ def main() -> int:
     src = OUT_DIR / 'orders' / 'policy_overrides.json'
     if not src.exists():
         raise SystemExit('Missing out/orders/policy_overrides.json after tuning')
-    print(f"[tune] Unified overlay ready at {src}")
+    # Always publish to repo config for audit/CI (carry over _meta)
+    dst = CFG_DIR / 'policy_overrides.json'
+    shutil.copyfile(src, dst)
+    print(f"[tune] Unified overlay ready at {src} and published to {dst}")
     return 0
 
 
