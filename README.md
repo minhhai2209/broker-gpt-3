@@ -82,6 +82,9 @@ Policy & cấu hình
 - Baseline: `config/policy_default.json` (nguồn sự thật, cố định; không bị workflow ghi đè).
 - Overlays: `config/policy_nightly_overrides.json` (do calibrators sinh; commit riêng) và `config/policy_ai_overrides.json` (do tuner sinh; ghi đè trực tiếp overlay AI hiện tại).
 - Runtime merge: engine hợp nhất thứ tự baseline → nightly → ai → legacy (nếu có) và ghi policy runtime vào `out/orders/policy_overrides.json`. Khi publish trên nhánh `main`, CI sẽ đồng bộ bản mong muốn vào `config/policy_overrides.json` để phục vụ audit/rollback.
+ - Machine‑generated snapshot: `out/orders/policy_overrides.json` được sinh tự động cho mỗi lần chạy/tune và có trường `"_meta"` như:
+   `{ "_meta": { "machine_generated": true, "generated_by": "broker-gpt runtime merge", "generated_at": "..." }, ... }`.
+   Không chỉnh tay file này — mọi chỉnh sửa sẽ bị ghi đè. Thay vào đó, cập nhật các overlay trong `config/`.
 
 Tài liệu chi tiết
 - Kiến trúc, pipeline, nhận diện market regime, thuật toán quyết định lệnh, calibrations, chi tiết merge policy: xem `SYSTEM_DESIGN.md`.

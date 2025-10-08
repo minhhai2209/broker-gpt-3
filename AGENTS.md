@@ -20,6 +20,9 @@ Overlay policy (baseline bất biến)
 - AI overlay: `config/policy_ai_overrides.json` do tuner sinh; ghi đè trực tiếp overlay AI hiện tại.
 - Runtime merge: engine hợp nhất baseline → nightly → ai → legacy (nếu có) thành `out/orders/policy_overrides.json` và dùng cho phiên chạy.
 
+Generated artifacts
+- `out/orders/policy_overrides.json` là file MACHINE‑GENERATED cho mỗi phiên/tune; engine thêm `"_meta".machine_generated = true` và timestamp. Tuyệt đối không chỉnh tay; mọi thay đổi sẽ bị ghi đè. Nếu cần thay đổi, cập nhật overlay tại `config/` và để engine hợp nhất ở runtime.
+
 ## Phân chia tài liệu (Docs structure)
 - `README.md`: chỉ tập trung vào cách sử dụng (install, chạy nhanh, I/O, lệnh tiện ích, server usage cơ bản, FAQ). Không chứa chi tiết kỹ thuật/thuật toán; nếu cần, đặt link trỏ sang SYSTEM_DESIGN.md.
 - `SYSTEM_DESIGN.md`: kiến trúc, pipeline, thuật toán/quy tắc ra quyết định, calibrations, execution diagnostics, policy overlays, lộ trình tích hợp (API, async runner). Đây là nơi chứa toàn bộ chi tiết kỹ thuật.
