@@ -60,6 +60,35 @@ function ensureAuthFromEnvIfMissing() {
   }
 }
 
+function ensureConfigTomlFromRepo() {
+  // Mirrors the behavior in .github/workflows/tuning.yml: fail fast if repo config is missing.
+  const repoConfigPath = path.join(process.cwd(), '.codex', 'config.toml');
+  if (!fs.existsSync(repoConfigPath)) {
+    console.error('::error::.codex/config.toml not found in repo; aborting per fail-fast policy');
+    process.exit(2);
+  }
+
+  const home = os.homedir() || process.env.HOME || process.env.USERPROFILE;
+  if (!home) {
+    console.error('[codex-postinstall] HOME not set; cannot locate ~/.codex for config.toml');
+    process.exit(1);
+  }
+
+  const codexDir = path.join(home, '.codex');
+  const destConfigPath = path.join(codexDir, 'config.toml');
+  try {
+    fs.mkdirSync(codexDir, { recursive: true });
+    // Force overwrite to keep local config in sync with repo baseline
+    const content = fs.readFileSync(repoConfigPath);
+    fs.writeFileSync(destConfigPath, content, { mode: 0o600 });
+    try { fs.chmodSync(destConfigPath, 0o600); } catch (_) { /* best-effort on non-POSIX */ }
+    console.log(`[codex-postinstall] Installed config to ${destConfigPath}`);
+  } catch (err) {
+    console.error('[codex-postinstall] Failed to install ~/.codex/config.toml:', err && err.message ? err.message : String(err));
+    process.exit(1);
+  }
+}
+
 function installGlobalCodexWithEnv(extraEnv = {}) {
   const env = { ...process.env, ...extraEnv };
   return run('npm', ['install', '-g', '@openai/codex@latest'], { env });
@@ -69,6 +98,8 @@ function main() {
   // Always attempt to populate auth.json if missing and env var is provided
   // (this runs regardless of Codex presence).
   ensureAuthFromEnvIfMissing();
+  // Always install/refresh config.toml from the repo; fail-fast if missing
+  ensureConfigTomlFromRepo();
 
   if (codexAvailable()) {
     return;

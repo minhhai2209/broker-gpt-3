@@ -47,10 +47,16 @@ Ghi chú cập nhật (2025-10): baseline + overlays (không ghi đè baseline)
   - `out/orders/policy_overrides.json`: artefact hợp nhất sau mỗi lần chạy tuner (bao gồm calibrators + AI).
   - `config/policy_overrides.json`: bản đã publish, chỉ được GitHub Action trên nhánh `main` cập nhật từ artefact ở trên.
 - Runtime merge: hàm `ensure_policy_override_file()` hợp nhất baseline với bản publish (nếu có) và ghi kết quả runtime vào `out/orders/policy_overrides.json`.
-- Engine hợp nhất các lớp cấu hình theo đúng thứ tự nhưng không còn bước lọc/whitelist tự động; tuner phải tự tuân thủ phạm vi override mong muốn. Calibrators có thể ghi các khóa rộng hơn (thresholds/sizing/market_filter…).
+ - Engine hợp nhất các lớp cấu hình theo đúng thứ tự nhưng không còn bước lọc/whitelist tự động; tuner phải tự tuân thủ phạm vi override mong muốn. Calibrators có thể ghi các khóa rộng hơn (thresholds/sizing/market_filter…).
 
+Developer tooling (Codex bootstrap)
+- Postinstall: `scripts/postinstall-codex-global.js` chạy trong `npm install` để đảm bảo môi trường local/CI nhất quán:
+  - Kiểm tra/cài `@openai/codex` toàn cục (retry với `NPM_CONFIG_PREFIX=$HOME/.npm-global`).
+  - Sao chép `.codex/config.toml` trong repo → `~/.codex/config.toml` (quyền `0600`). Thiếu file repo → in `::error::` và thoát `exit 2` (fail‑fast đúng chính sách CI).
+  - Nếu có `CODEX_AUTH_JSON` trong env, ghi `~/.codex/auth.json` (`0600`); nếu job bắt buộc auth mà biến trống, bước CI sẽ fail.
+  - Nếu không tìm thấy `codex` trên PATH sau cài đặt, script kết thúc với lỗi và in hướng dẫn bổ sung PATH.
 
-Policy của Broker GPT là tập hợp các tham số chiến lược chi phối cách engine đánh giá tín hiệu và quản trị rủi ro. Hệ thống tổ chức cấu hình này thành hai tầng: mặc định (baseline) và điều chỉnh hằng ngày (overrides). Mục đích là giữ ổn định chiến lược lõi nhưng vẫn cho phép tinh chỉnh linh hoạt theo diễn biến thị trường ngắn hạn. 
+ Policy của Broker GPT là tập hợp các tham số chiến lược chi phối cách engine đánh giá tín hiệu và quản trị rủi ro. Hệ thống tổ chức cấu hình này thành hai tầng: mặc định (baseline) và điều chỉnh hằng ngày (overrides). Mục đích là giữ ổn định chiến lược lõi nhưng vẫn cho phép tinh chỉnh linh hoạt theo diễn biến thị trường ngắn hạn. 
 
 - Policy mặc định: Được định nghĩa trong file config/policy_default.json. Đây là nguồn sự thật chứa toàn bộ tham số chiến lược cơ bản, kết tinh từ nghiên cứu dài hạn. Ví dụ, trong policy mặc định có: trọng số mô hình điểm cho các yếu tố (xu hướng, động lượng, thanh khoản, beta, v.v.), các ngưỡng kỹ thuật như base_add, base_new (điểm tối thiểu để mua bổ sung/mua mới), ngưỡng trim_th để cắt giảm vị thế khi điểm yếu, các ngưỡng chốt lời (tp_pct) và cắt lỗ (sl_pct), tham số vi mô về khớp lệnh (bước giá HOSE, lô 100, phí giao dịch), giới hạn rủi ro (tỷ trọng tối đa cho một mã, một ngành), v.v. Hầu hết các giá trị trong policy_default là cố định, chỉ thay đổi khi điều chỉnh chiến lược lớn hoặc sau quá trình backtest dài hạn【28†L32-L40】.
 

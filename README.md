@@ -11,7 +11,7 @@ Mục tiêu README
 Yêu cầu hệ thống
 - Python 3.10+ (khuyến nghị 3.11)
 - macOS/Linux/WSL (terminal)
-- (Chỉ cho lệnh `tune-ai`/`policy`) Node.js 18+ với npm để cài Codex CLI
+- (Chỉ cho lệnh `tune`/`policy`) Node.js 18+ với npm để cài Codex CLI
 
 Cài đặt
 ```bash
@@ -19,11 +19,16 @@ python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Ghi chú Codex CLI (cho `tune-ai`/`policy`)
-- Repo khai báo `@openai/codex` và có script `postinstall` cài global: `npm install -g @openai/codex`. Nhờ Automatic setup, Codex Cloud/CI sẽ tự chạy `npm install` và thực thi bước này.
-- Nếu môi trường không cho phép cài global, script sẽ thử lại với user prefix `~/.npm-global` và hướng dẫn thêm `PATH` tương ứng.
-- Trình tuner yêu cầu `codex` là binary global trên PATH; nếu thiếu sẽ fail‑fast kèm hướng dẫn cài đặt.
-- Nếu chạy cục bộ mà thiếu Node/npm, nhiệm vụ cần Codex sẽ fail‑fast kèm hướng dẫn cài Node.js (>=18).
+- Nếu dự định dùng `tune`/`policy`: chạy thêm `npm install` (một lần) để bootstrap Codex CLI và cấu hình `~/.codex/config.toml` qua postinstall.
+
+Ghi chú Codex CLI (cho `tune`/`policy`)
+- Repo khai báo `@openai/codex` và có script postinstall (`scripts/postinstall-codex-global.js`). Khi chạy `npm install`:
+  - Kiểm tra/cài Codex CLI toàn cục (`npm install -g @openai/codex@latest`), fallback `NPM_CONFIG_PREFIX=$HOME/.npm-global` nếu cần.
+  - Sao chép `.codex/config.toml` từ repo → `~/.codex/config.toml` và đặt quyền `0600`.
+  - Thiếu `.codex/config.toml` trong repo → in `::error::` và thoát `exit 2` (fail‑fast, phù hợp CI policy).
+  - Nếu biến `CODEX_AUTH_JSON` có mặt, ghi `~/.codex/auth.json` (0600). Nếu job bắt buộc auth mà thiếu biến này, CI step sẽ fail.
+- Tuner yêu cầu `codex` có trên PATH; nếu không có sau postinstall, script sẽ fail‑fast và in hướng dẫn bổ sung `PATH`.
+- Nếu chạy cục bộ mà thiếu Node/npm, các lệnh cần Codex sẽ fail‑fast; cài Node.js (>=18) rồi chạy `npm install` một lần để bootstrap.
 
 Chuẩn bị danh mục (inputs)
 - Thư mục: `in/portfolio/`
@@ -50,7 +55,7 @@ Kết quả chính (out/)
 Lệnh tiện ích
 - `./broker.sh orders` — chạy Order Engine (mặc định).
 - `./broker.sh tests` — chạy test; bật coverage: `BROKER_COVERAGE=1 ./broker.sh tests`.
-- `./broker.sh tune` — chạy toàn bộ calibrators + AI (Codex) và xuất policy hợp nhất ở `out/orders/policy_overrides.json` (GitHub Action trên nhánh `main` mới ghi đè `config/policy_overrides.json`).
+- `./broker.sh tune` — chạy calibrators + AI (Codex). Policy runtime ghi ở `out/orders/policy_overrides.json`. Khi publish, GitHub Action trên nhánh `main` sẽ đồng bộ sang `config/policy_overrides.json`.
 - `./broker.sh server` — chạy API server cục bộ (Flask) phục vụ extension/ứng dụng (mặc định `PORT=8787`). Lưu ý: server luôn tắt auto‑policy (PolicyScheduler). Việc refresh policy được thực hiện bởi CI hoặc lệnh `./broker.sh policy` khi cần.
 
   
@@ -74,10 +79,9 @@ Môi trường (env)
   - Các biến cấu hình CI riêng cho workflow AI (ví dụ `BROKER_CX_GEN_ROUNDS`) không ảnh hưởng hành vi engine.
 
 Policy & cấu hình
-- Baseline: `config/policy_default.json` (nguồn sự thật, có chú thích đầy đủ).
-- Overlay (duy nhất):
-  - `out/orders/policy_overrides.json` — kết quả mới nhất từ `./broker.sh tune`; pipeline CI trên nhánh `main` sẽ sao chép sang `config/policy_overrides.json` khi cần publish.
-  - Runtime: engine tạo bản hợp nhất tại `out/orders/policy_overrides.json` từ baseline + overlay duy nhất.
+- Baseline: `config/policy_default.json` (nguồn sự thật, cố định; không bị workflow ghi đè).
+- Overlays: `config/policy_nightly_overrides.json` (do calibrators sinh; commit riêng) và `config/policy_ai_overrides.json` (do tuner sinh; ghi đè trực tiếp overlay AI hiện tại).
+- Runtime merge: engine hợp nhất thứ tự baseline → nightly → ai → legacy (nếu có) và ghi policy runtime vào `out/orders/policy_overrides.json`. Khi publish trên nhánh `main`, CI sẽ đồng bộ bản mong muốn vào `config/policy_overrides.json` để phục vụ audit/rollback.
 
 Tài liệu chi tiết
 - Kiến trúc, pipeline, nhận diện market regime, thuật toán quyết định lệnh, calibrations, chi tiết merge policy: xem `SYSTEM_DESIGN.md`.

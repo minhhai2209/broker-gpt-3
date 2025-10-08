@@ -25,6 +25,14 @@ Overlay policy (baseline bất biến)
 - `SYSTEM_DESIGN.md`: kiến trúc, pipeline, thuật toán/quy tắc ra quyết định, calibrations, execution diagnostics, policy overlays, lộ trình tích hợp (API, async runner). Đây là nơi chứa toàn bộ chi tiết kỹ thuật.
 - `AGENTS.md`: Way of Work, tiêu chuẩn CI/Fail‑fast, quy tắc dữ liệu & contract, convention khi đóng góp. Đồng thời duy trì quy ước phân chia tài liệu này.
 
+## Tooling & CI (Codex)
+- Postinstall (Node): chạy `scripts/postinstall-codex-global.js` sau `npm install` để:
+  - Cài/kiểm tra Codex CLI toàn cục (`codex --version`), fallback `NPM_CONFIG_PREFIX=$HOME/.npm-global` nếu cần.
+  - Sao chép `.codex/config.toml` từ repo → `~/.codex/config.toml` với quyền `0600`.
+  - Thiếu `.codex/config.toml` trong repo → in `::error::` và thoát `exit 2` (fail‑fast).
+  - Ghi `~/.codex/auth.json` chỉ khi có `CODEX_AUTH_JSON` trong env; nếu job bắt buộc auth mà thiếu, CI step phải tự fail (xem `.github/workflows/tuning.yml`).
+- GitHub Actions `tuning.yml` phản chiếu đúng các bước trên để đảm bảo môi trường CI và local nhất quán.
+
 ## Khẩu vị đầu tư
 - Ưu tiên chốt lời và cắt lỗ sớm, có thể thực hiện theo từng phần để khóa lợi nhuận hoặc hạn chế rủi ro dần.
 - Khi điều kiện thuận lợi, giải ngân bằng các lệnh mua nhỏ, tránh dồn vào một giao dịch quá lớn.
