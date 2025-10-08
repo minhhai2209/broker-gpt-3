@@ -71,18 +71,8 @@ jobs:
       - name: Install Codex CLI
         run: |
           set -euo pipefail
-          echo "Installing Codex CLI (best-effort)"
-          if ! npm install -g @openai/codex@latest; then
-            echo "Global install failed; retry with user prefix"
-            export NPM_CONFIG_PREFIX="$HOME/.npm-global"
-            mkdir -p "$NPM_CONFIG_PREFIX/bin"
-            if ! npm install -g @openai/codex@latest; then
-              echo "Codex install failed; continuing (AI calibrator is fail-soft)"
-            fi
-            echo "Add user npm bin to PATH"
-            echo "$NPM_CONFIG_PREFIX/bin" >> $GITHUB_PATH
-          fi
-          codex --version || true
+          npm install -g @openai/codex@latest
+          codex --version
 
       - name: Configure Codex auth from secret
         env:
