@@ -57,7 +57,7 @@ jobs:
     timeout-minutes: 60
     env:
       BROKER_CX_GEN_ROUNDS: ${{ inputs.rounds || '1' }}
-      BROKER_CX_REASONING: low
+      BROKER_CX_REASONING: high
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
