@@ -159,8 +159,8 @@ run_policy() {
   commit_and_push_policy
 }
 
-# Local AI tuning without auto push; writes config/policy_ai_overrides.json
-# Unified tune (AI + calibrators) -> writes config/policy_overrides.json
+# Unified tune (calibrators + AI) -> writes out/orders/policy_overrides.json and publishes to config/policy_overrides.json
+# Note: legacy config/policy_ai_overrides.json is no longer generated (engine still merges it if present for back-compat).
 run_tune() {
   ensure_venv
   echo "[tune] Using: $PY_BIN"
