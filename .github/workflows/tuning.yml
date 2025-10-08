@@ -113,15 +113,6 @@ jobs:
           echo "Running unified tune, rounds=$BROKER_CX_GEN_ROUNDS"
           ./broker.sh tune
 
-      - name: Generate orders from sample portfolio (best-effort)
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-          echo "Generating orders (best-effort)"
-          ./broker.sh orders
-          echo "Listing out/orders/ (if any)"
-          ls -la out/orders || true
-
       - name: Commit and push published overlay (main)
         if: ${{ github.ref == 'refs/heads/main' }}
         env:
