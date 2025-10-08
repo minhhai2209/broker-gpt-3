@@ -107,6 +107,17 @@ jobs:
             fi
           fi
 
+      - name: Snapshot previous overlay for diff
+        run: |
+          set -euo pipefail
+          mkdir -p workflow-debug
+          if [ -f config/policy_overrides.json ]; then
+            cp -f config/policy_overrides.json workflow-debug/policy_overrides.prev.json
+            echo "Saved previous overlay to workflow-debug/policy_overrides.prev.json"
+          else
+            echo "::notice::No previous config/policy_overrides.json found (first run?)"
+          fi
+
       - name: Run unified tune
         env:
           BROKER_CX_GEN_ROUNDS: "1"
@@ -116,11 +127,73 @@ jobs:
           echo "Running unified tune, rounds=$BROKER_CX_GEN_ROUNDS" | tee workflow-debug/tune_run.log
           ./broker.sh tune 2>&1 | tee -a workflow-debug/tune_run.log
 
+      - name: Show overlay diff (old vs new)
+        run: |
+          set -euo pipefail
+          NEW="config/policy_overrides.json"
+          OLD="workflow-debug/policy_overrides.prev.json"
+          if [ -f "$NEW" ] && [ -f "$OLD" ]; then
+            echo "=== Diff: config/policy_overrides.json (new) vs previous ==="
+            diff -u "$OLD" "$NEW" || true
+          else
+            echo "Overlay diff skipped (missing $NEW or $OLD)"
+          fi
+
+      - name: Run orders against sample portfolio
+        run: |
+          set -euo pipefail
+          mkdir -p workflow-debug
+          echo "Running orders against portfolio (sample if present)" | tee workflow-debug/orders_run.log
+          ./broker.sh orders 2>&1 | tee -a workflow-debug/orders_run.log
+
+      - name: Print orders outputs
+        run: |
+          set -euo pipefail
+          echo "=== Orders summary files ==="
+          ls -l out/orders || { echo "out/orders missing"; exit 1; }
+          if [ -f out/orders/orders_print.txt ]; then
+            echo "--- BEGIN out/orders/orders_print.txt ---"
+            cat out/orders/orders_print.txt
+            echo "--- END out/orders/orders_print.txt ---"
+          fi
+          if [ -f out/orders/orders_final.csv ]; then
+            echo "--- HEAD out/orders/orders_final.csv ---"
+            head -n 50 out/orders/orders_final.csv
+            echo "--- TAIL out/orders/orders_final.csv ---"
+            tail -n 50 out/orders/orders_final.csv
+          fi
+          if [ -f out/orders/orders_analysis.txt ]; then
+            echo "--- BEGIN out/orders/orders_analysis.txt ---"
+            sed -n '1,200p' out/orders/orders_analysis.txt
+            echo "--- END out/orders/orders_analysis.txt ---"
+          fi
+
       - name: Print tune log on failure
         if: ${{ failure() }}
         run: |
           echo "=== tune_run.log (tail) ==="
           tail -n 200 workflow-debug/tune_run.log || echo "tune_run.log missing"
+
+      - name: Print Codex policy error on failure
+        if: ${{ failure() }}
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          DEBUG_DIR="${GITHUB_WORKSPACE}/out/debug"
+          echo "=== Searching for Codex policy error logs in $DEBUG_DIR ==="
+          if [ -d "$DEBUG_DIR" ]; then
+            LATEST_FILE=$(ls -1t "$DEBUG_DIR"/codex_policy_error_*.txt 2>/dev/null | head -n1 || true)
+            if [ -n "${LATEST_FILE:-}" ] && [ -f "$LATEST_FILE" ]; then
+              echo "--- BEGIN $LATEST_FILE ---"
+              cat "$LATEST_FILE"
+              echo "--- END $LATEST_FILE ---"
+            else
+              echo "No codex_policy_error_*.txt found in $DEBUG_DIR"
+            fi
+          else
+            echo "Debug directory not found: $DEBUG_DIR"
+          fi
 
 
       - name: Commit and push published overlay (main)
@@ -145,13 +218,4 @@ jobs:
           done
           echo "::error::Failed to push after retries"; exit 1
 
-      - name: Upload artifacts
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: tuning-artifacts-unified
-          path: |
-            workflow-debug/tune_run.log
-            out/
-            config/policy_overrides.json
-            out/orders/policy_overrides.json
+      # Artifact upload removed per policy: avoid artifacts; surface diagnostics in logs.
