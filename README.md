@@ -75,7 +75,6 @@ API server (tùy chọn)
 
 Môi trường (env)
 - Repo loại bỏ hầu hết biến môi trường “hành vi”. Mặc định chỉ còn:
-  - `POLICY_FILE` (tùy chọn): chỉ rõ đường dẫn policy nguồn để merge runtime.
   - `PORT` (server): cổng HTTP, mặc định 8787.
   - Các biến cấu hình CI riêng cho workflow AI (ví dụ `BROKER_CX_GEN_ROUNDS`) không ảnh hưởng hành vi engine.
 

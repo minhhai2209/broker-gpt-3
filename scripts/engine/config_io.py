@@ -5,7 +5,6 @@ Implementation details are separated to keep order_engine.py focused.
 """
 
 from pathlib import Path
-import os
 from typing import Dict, Any, Iterable
 
 import pandas as pd
@@ -60,16 +59,14 @@ def ensure_policy_override_file() -> Path:
     verbatim to preserve formatting.
     """
     dest = OUT_ORDERS_DIR / "policy_overrides.json"
-    policy_path_env = os.environ.get("POLICY_FILE", "").strip()
-
-    # 0) If a complete baseline exists (policy_default.json) and no POLICY_FILE override is provided,
+    # 0) If a complete baseline exists (policy_default.json),
     # deep‑merge it with zero or more overlay files (if present):
     #   - config/policy_nightly_overrides.json (output of nightly calibrations)
     #   - config/policy_ai_overrides.json (output of AI tuner)
     #   - config/policy_overrides.json (legacy/compat)
     # AI-generated overlays are written verbatim; calibrators may also write broader tuned sections.
     default_baseline = BASE_DIR / "config" / "policy_default.json"
-    if not policy_path_env and default_baseline.exists():
+    if default_baseline.exists():
         import json
         OUT_ORDERS_DIR.mkdir(parents=True, exist_ok=True)
         try:
@@ -107,17 +104,10 @@ def ensure_policy_override_file() -> Path:
         print(f"Prepared runtime policy by merging baseline + overlays -> {dest}")
         return dest
 
-    # 1) Legacy path retained for backward compatibility and tests:
+    # 1) Legacy path retained for config-based workflows:
     # Choose a base policy and optionally merge policy_for_calibration.json
     src_path: Path | None = None
-    if policy_path_env:
-        p = Path(policy_path_env)
-        if not p.is_absolute():
-            p = BASE_DIR / p
-        if not p.exists():
-            raise SystemExit(f"POLICY_FILE not found: {p}")
-        src_path = p
-    elif OVERRIDE_SRC.exists():
+    if OVERRIDE_SRC.exists():
         src_path = OVERRIDE_SRC
     elif dest.exists():
         return dest

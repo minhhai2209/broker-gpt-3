@@ -29,73 +29,29 @@ class TestConfigMergeDefaults(unittest.TestCase):
     def _dest(self) -> Path:
         return config_io.OUT_ORDERS_DIR / "policy_overrides.json"
 
-    def test_merge_sibling_defaults_with_env_policy(self):
-        base_dir = Path(self.tmp.name)
-        # Create a minimal base policy (missing optional calibrated keys)
-        base_policy = base_dir / "my_policy.json"
-        base_policy.write_text(json.dumps({
-            "buy_budget_frac": 0.12,
+    def test_merge_overlays_in_order(self):
+        base = config_io.BASE_DIR / 'config'
+        base.mkdir(parents=True, exist_ok=True)
+        (base / 'policy_default.json').write_text(json.dumps({
+            "buy_budget_frac": 0.10,
             "add_max": 1,
             "new_max": 1,
-            "weights": {"w_trend": 0, "w_momo": 0, "w_mom_ret": 0, "w_liq": 0, "w_vol_guard": 0, "w_beta": 0, "w_sector": 0, "w_sector_sent": 0, "w_ticker_sent": 0, "w_roe": 0, "w_earnings_yield": 0, "w_rs": 0},
-            "thresholds": {"base_add": 0.1, "base_new": 0.1, "trim_th": -0.1, "q_add": 0.5, "q_new": 0.5, "min_liq_norm": 0.0, "near_ceiling_pct": 0.98, "tp_pct": 0.0, "sl_pct": 1.0, "tp_trim_frac": 0.3, "exit_on_ma_break": 0, "cooldown_days": 0},
-            "pricing": {"risk_on_buy": ["Aggr"], "risk_on_sell": ["Cons"], "risk_off_buy": ["Cons"], "risk_off_sell": ["MR"], "atr_fallback_buy_mult": 0.25, "atr_fallback_sell_mult": 0.25},
-            "sizing": {
-                "softmax_tau": 0.6,
-                "add_share": 0.5,
-                "new_share": 0.5,
-                "min_lot": 100,
-                "risk_weighting": "score_softmax",
-                "risk_alpha": 1.0,
-                "max_pos_frac": 0.5,
-                "max_sector_frac": 0.8,
-                "reuse_sell_proceeds_frac": 0.0,
-                "risk_blend": 1.0,
-                "min_ticket_k": 0.0,
-                "cov_lookback_days": 60,
-                "cov_reg": 0.0005,
-                "risk_parity_floor": 0.2,
-                "dynamic_caps": {"enable": 0, "pos_min": 0.1, "pos_max": 0.2, "sector_min": 0.3, "sector_max": 0.4, "blend": 1.0, "override_static": 0},
-                "allocation_model": "softmax",
-                "bl_rf_annual": 0.03,
-                "bl_mkt_prem_annual": 0.06,
-                "bl_alpha_scale": 0.02,
-                "risk_blend_eta": 0.0,
-                "min_names_target": 0,
-                "market_index_symbol": "VNINDEX",
-                "risk_per_trade_frac": 0.0,
-                "default_stop_atr_mult": 2.0,
-                "mean_variance_calibration": {
-                    "enable": 0,
-                    "risk_alpha": [1.0],
-                    "cov_reg": [0.0005],
-                    "bl_alpha_scale": [0.02],
-                    "lookback_days": 120,
-                    "test_horizon_days": 30,
-                    "min_history_days": 180
-                }
-            },
+            "weights": {},
+            "thresholds": {"base_add": 0.1, "base_new": 0.1, "trim_th": 0, "q_add": 0.5, "q_new": 0.5, "min_liq_norm": 0.0, "near_ceiling_pct": 0.98, "tp_pct": 0.0, "sl_pct": 1.0, "tp_trim_frac": 0.3, "exit_on_ma_break": 0, "cooldown_days": 0},
+            "pricing": {"risk_on_buy": [], "risk_on_sell": [], "risk_off_buy": [], "risk_off_sell": [], "atr_fallback_buy_mult": 0.25, "atr_fallback_sell_mult": 0.25},
+            "sizing": {"add_share": 0.5, "new_share": 0.5, "cov_lookback_days": 60, "cov_reg": 0.0005, "risk_parity_floor": 0.2, "market_index_symbol": "VNINDEX", "default_stop_atr_mult": 2.0, "risk_per_trade_frac": 0.0},
             "market_filter": {"risk_off_trend_floor": 0.0, "risk_off_breadth_floor": 0.4, "risk_off_drawdown_floor": 0.2, "market_score_soft_floor": 0.55, "market_score_hard_floor": 0.35, "leader_min_rsi": 55.0, "leader_min_mom_norm": 0.6, "leader_require_ma20": 1, "leader_require_ma50": 1, "leader_max": 2},
-            "regime_model": {"intercept": 0.0, "threshold": 0.5, "components": {"trend": {"mean": 0.5, "std": 0.2, "weight": 1.0}}},
-            "sector_bias": {}, "ticker_bias": {}
-        }), encoding="utf-8")
-        # Sibling defaults with optional calibrated keys
-        sib_defaults = base_dir / "policy_for_calibration.json"
-        sib_defaults.write_text(json.dumps({
-            "thresholds": {"tp_atr_mult": 1.8, "sl_atr_mult": 1.2},
-            "market_filter": {"index_atr_soft_pct": 0.8, "index_atr_hard_pct": 0.95}
-        }), encoding="utf-8")
+            "regime_model": {"intercept": 0.0, "threshold": 0.5, "components": {}},
+            "sector_bias": {},
+            "ticker_bias": {}
+        }), encoding='utf-8')
+        (base / 'policy_nightly_overrides.json').write_text('{"buy_budget_frac": 0.11}', encoding='utf-8')
+        (base / 'policy_ai_overrides.json').write_text('{"buy_budget_frac": 0.12}', encoding='utf-8')
 
-        with patch.dict(os.environ, {"POLICY_FILE": str(base_policy)}, clear=False):
-            path = config_io.ensure_policy_override_file()
-
+        path = config_io.ensure_policy_override_file()
         self.assertEqual(path, self._dest())
-        obj = json.loads(self._dest().read_text(encoding="utf-8"))
-        # Confirm merge applied
-        self.assertEqual(obj["thresholds"].get("tp_atr_mult"), 1.8)
-        self.assertEqual(obj["thresholds"].get("sl_atr_mult"), 1.2)
-        self.assertEqual(obj["market_filter"].get("index_atr_soft_pct"), 0.8)
-        self.assertEqual(obj["market_filter"].get("index_atr_hard_pct"), 0.95)
+        obj = json.loads(self._dest().read_text(encoding='utf-8'))
+        self.assertEqual(obj["buy_budget_frac"], 0.12)
 
     def test_merge_defaults_from_config_dir(self):
         # Write config base and defaults
