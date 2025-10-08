@@ -56,7 +56,7 @@ Kết quả chính (out/)
 Lệnh tiện ích
 - `./broker.sh orders` — chạy Order Engine (mặc định).
 - `./broker.sh tests` — chạy test; bật coverage: `BROKER_COVERAGE=1 ./broker.sh tests`.
-- `./broker.sh tune` — chạy calibrators + AI (Codex). Policy runtime ghi ở `out/orders/policy_overrides.json`. Khi publish, GitHub Action trên nhánh `main` sẽ đồng bộ sang `config/policy_overrides.json`.
+- `./broker.sh tune` — chạy calibrators + AI (Codex). Kết quả hợp nhất ghi `out/orders/policy_overrides.json` và được publish sang `config/policy_overrides.json` (tuner copy) để phục vụ audit/rollback.
 - `./broker.sh server` — chạy API server cục bộ (Flask) phục vụ extension/ứng dụng (mặc định `PORT=8787`). Server KHÔNG có cron/scheduler nội bộ; việc refresh policy do GitHub Actions hoặc lệnh `./broker.sh policy` thực hiện.
 
   
@@ -80,11 +80,15 @@ Môi trường (env)
 
 Policy & cấu hình
 - Baseline: `config/policy_default.json` (nguồn sự thật, cố định; không bị workflow ghi đè).
-- Overlays: `config/policy_nightly_overrides.json` (do calibrators sinh; commit riêng) và `config/policy_ai_overrides.json` (do tuner sinh; ghi đè trực tiếp overlay AI hiện tại).
-- Runtime merge: engine hợp nhất thứ tự baseline → nightly → ai → legacy (nếu có) và ghi policy runtime vào `out/orders/policy_overrides.json`. Khi publish trên nhánh `main`, CI sẽ đồng bộ bản mong muốn vào `config/policy_overrides.json` để phục vụ audit/rollback.
+- Overlays: `config/policy_nightly_overrides.json` (tuỳ chọn, do calibrators sinh; commit riêng) và unified overlay `config/policy_overrides.json` (hiện hành, do tuner publish).
+- Back‑compat: `config/policy_ai_overrides.json` trước đây do tuner sinh; hiện không còn được tạo mặc định, nhưng nếu tồn tại engine vẫn merge.
+- Runtime merge: engine hợp nhất baseline → nightly (nếu có) → ai (nếu có) → `config/policy_overrides.json` (legacy) và ghi policy runtime vào `out/orders/policy_overrides.json`. Khi publish trên nhánh `main`, CI giữ `config/policy_overrides.json` làm bản audit.
  - Machine‑generated snapshot: `out/orders/policy_overrides.json` được sinh tự động cho mỗi lần chạy/tune và có trường `"_meta"` như:
    `{ "_meta": { "machine_generated": true, "generated_by": "broker-gpt runtime merge", "generated_at": "..." }, ... }`.
-   Không chỉnh tay file này — mọi chỉnh sửa sẽ bị ghi đè. Thay vào đó, cập nhật các overlay trong `config/`.
+  Không chỉnh tay file này — mọi chỉnh sửa sẽ bị ghi đè. Thay vào đó, cập nhật các overlay trong `config/`.
+
+FAQ (ngắn)
+- Vì sao giá đặt trong file lệnh đôi khi bằng giá thị trường? Trong phiên (bao gồm nghỉ trưa), nếu BUY có `LimitPrice` > giá thị trường, hệ thống kẹp về giá thị trường; SELL nếu `LimitPrice` < giá thị trường cũng kẹp về giá thị trường. Quy tắc này chỉ áp ở lớp xuất lệnh, không thay đổi khái niệm “in‑session” ở các module khác.
 
 Tài liệu chi tiết
 - Kiến trúc, pipeline, nhận diện market regime, thuật toán quyết định lệnh, calibrations, chi tiết merge policy: xem `SYSTEM_DESIGN.md`.

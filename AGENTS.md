@@ -16,9 +16,10 @@
 
 Overlay policy (baseline bất biến)
 - Baseline: `config/policy_default.json` không bị workflow ghi đè.
-- Nightly overlay: `config/policy_nightly_overrides.json` do calibrators sinh; commit riêng.
-- AI overlay: `config/policy_ai_overrides.json` do tuner sinh; ghi đè trực tiếp overlay AI hiện tại.
-- Runtime merge: engine hợp nhất baseline → nightly → ai → legacy (nếu có) thành `out/orders/policy_overrides.json` và dùng cho phiên chạy.
+- Nightly overlay (tùy chọn): `config/policy_nightly_overrides.json` do calibrators sinh; commit riêng khi có thay đổi.
+- Unified overlay (hiện hành): `config/policy_overrides.json` do unified tuner publish (đã hợp nhất các điều chỉnh); lưu trong repo để audit/rollback.
+- Back‑compat: `config/policy_ai_overrides.json` trước đây do tuner sinh; hiện pipeline không tạo nữa nhưng engine vẫn MERGE nếu file tồn tại.
+- Runtime merge: engine hợp nhất baseline → nightly (nếu có) → ai (nếu có) → legacy `config/policy_overrides.json` thành `out/orders/policy_overrides.json` và dùng cho phiên chạy.
 
 Generated artifacts
 - `out/orders/policy_overrides.json` là file MACHINE‑GENERATED cho mỗi phiên/tune; engine thêm `"_meta".machine_generated = true` và timestamp. Tuyệt đối không chỉnh tay; mọi thay đổi sẽ bị ghi đè. Nếu cần thay đổi, cập nhật overlay tại `config/` và để engine hợp nhất ở runtime.
@@ -31,11 +32,13 @@ Generated artifacts
 ## Tooling & CI (Codex)
 - Postinstall (Node): chạy `scripts/postinstall-codex-global.js` sau `npm install` để:
   - Cài/kiểm tra Codex CLI toàn cục (`codex --version`), fallback `NPM_CONFIG_PREFIX=$HOME/.npm-global` nếu cần.
-  - Sao chép `.codex/config.toml` từ repo → `~/.codex/config.toml` với quyền `0600`.
-  - Thiếu `.codex/config.toml` trong repo → in `::error::` và thoát `exit 2` (fail‑fast).
-  - Ghi `~/.codex/auth.json` chỉ khi có `CODEX_AUTH_JSON` trong env; nếu job bắt buộc auth mà thiếu, CI step phải tự fail (xem `.github/workflows/tuning.yml`).
-- GitHub Actions `tuning.yml` phản chiếu đúng các bước trên để đảm bảo môi trường CI và local nhất quán.
-  - Loại bỏ biến môi trường tuỳ biến flow cho Codex (reasoning/rounds). Calibrator cố định `reasoning_effort=high` và 1 vòng để giảm biến thiên.
+  - Sao chép `.codex/config.toml` từ repo → `~/.codex/config.toml` với quyền `0600` (thiếu → fail‑fast `exit 2`).
+  - `~/.codex/auth.json` chỉ được ghi khi có `CODEX_AUTH_JSON` trong env (local: có thì ghi, không thì bỏ qua; CI: step cấu hình trong workflow sẽ fail‑fast nếu secret thiếu).
+- GitHub Actions `.github/workflows/tuning.yml` (hiện hành):
+  - Chạy unified tune → tạo `out/orders/policy_overrides.json` và publish sang `config/policy_overrides.json`.
+  - Chạy `./broker.sh orders` để sinh lệnh từ sample portfolio; in `orders_print.txt` và head/tail `orders_final.csv` vào log.
+  - In diff giữa overlay mới và snapshot cũ vào log; khi fail in thêm tail log + file lỗi Codex `out/debug/codex_policy_error_*.txt`.
+  - Không upload artifact; commit & push `config/policy_overrides.json` sau khi hoàn tất (nhánh `main`).
 
 ## Khẩu vị đầu tư
 - Ưu tiên chốt lời và cắt lỗ sớm, có thể thực hiện theo từng phần để khóa lợi nhuận hoặc hạn chế rủi ro dần.
