@@ -57,7 +57,7 @@ Lệnh tiện ích
 - `./broker.sh orders` — chạy Order Engine (mặc định).
 - `./broker.sh tests` — chạy test; bật coverage: `BROKER_COVERAGE=1 ./broker.sh tests`.
 - `./broker.sh tune` — chạy calibrators + AI (Codex). Policy runtime ghi ở `out/orders/policy_overrides.json`. Khi publish, GitHub Action trên nhánh `main` sẽ đồng bộ sang `config/policy_overrides.json`.
-- `./broker.sh server` — chạy API server cục bộ (Flask) phục vụ extension/ứng dụng (mặc định `PORT=8787`). Lưu ý: server luôn tắt auto‑policy (PolicyScheduler). Việc refresh policy được thực hiện bởi CI hoặc lệnh `./broker.sh policy` khi cần.
+- `./broker.sh server` — chạy API server cục bộ (Flask) phục vụ extension/ứng dụng (mặc định `PORT=8787`). Server KHÔNG có cron/scheduler nội bộ; việc refresh policy do GitHub Actions hoặc lệnh `./broker.sh policy` thực hiện.
 
   
 

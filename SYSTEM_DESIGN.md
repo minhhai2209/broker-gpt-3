@@ -283,7 +283,7 @@ Broker GPT không hoạt động độc lập mà cần dữ liệu thị trư�
 
 Nhìn chung, để chạy tốt, hệ thống yêu cầu kết nối mạng để gọi API và cần các file dữ liệu tĩnh (industry_map, có thể fundamentals) được chuẩn bị. Các lỗi thường gặp như thiếu dữ liệu đều được engine phát hiện sớm (ví dụ thiếu lịch sử sẽ dừng và báo để chạy lại cho đủ dữ liệu).
 
-Backend API Server (Flask) và Policy Scheduler
+Backend API Server (Flask) (không còn Scheduler)
 
 Broker GPT cung cấp một API server (Flask) chạy cục bộ nhằm hỗ trợ tích hợp với frontend (ví dụ một extension trình duyệt Chrome hoặc ứng dụng UI). Mã server nằm trong scripts/api/server.py. Khi khởi động bằng lệnh ./broker.sh server, ứng dụng Flask sẽ chạy trên cổng mặc định 8787 (có thể cấu hình qua biến môi trường PORT)【38†L155-L161】.
 
@@ -292,13 +292,13 @@ Các endpoint chính mà server cung cấp (HTTP REST API) gồm:
 - POST /portfolio/reset: xóa toàn bộ các file CSV trong `in/portfolio/`, giúp bắt đầu một phiên upload danh mục mới. Endpoint này đơn thuần dọn thư mục và báo về danh sách file đã xóa【F:scripts/api/server.py†L251-L258】【F:scripts/api/server.py†L335-L340】.
 - POST /portfolio/upload: tiếp nhận một file danh mục (JSON `{name, content}`) và ghi đúng nội dung vào `in/portfolio/<name>.csv`. Hàm `write_csv_exact` thực hiện normalize tên file, ghi binary và trả về đường dẫn relative + kích thước bytes để frontend biết đã lưu thành công【F:scripts/api/server.py†L261-L274】【F:scripts/api/server.py†L341-L354】.
 - POST /done: chạy `./broker.sh orders` trên toàn bộ CSV đang có. Server kiểm tra `in/portfolio/` phải có ít nhất một file, sau đó chạy pipeline, gom danh sách file đầu vào/đầu ra và trả về log của lệnh vừa thực thi trong phần `run.out`【F:scripts/api/server.py†L295-L361】.
-- GET /policy/status: trả về `{"auto_run": false}` vì PolicyScheduler hiện không được khởi tạo; trường này giúp client nhận biết server không còn tự động refresh policy theo lịch【F:scripts/api/server.py†L329-L333】.
+
 
 Do `/done` chạy trực tiếp pipeline, request có thể kéo dài vài phút khi engine thu thập dữ liệu hoặc tái xây dựng cache. Khi hoàn tất, response chứa danh sách file kết quả trong `out/orders/` để frontend tải về ngay mà không cần chờ workflow nền. Trong trường hợp pipeline lỗi (exit code ≠ 0), trường `status` sẽ là `error` và `run.out` bao gồm log chi tiết giúp người vận hành xử lý.
 
 Server cũng hỗ trợ request OPTIONS cho các endpoint trên (phục vụ CORS preflight).
 
-Policy Scheduler: Mã nguồn vẫn giữ lớp `PolicyScheduler` để phục vụ các kịch bản tự động refresh policy trong tương lai, nhưng cấu hình hiện tại khởi tạo `POLICY_SCHEDULER = None` nên không có thread nền nào chạy【F:scripts/api/server.py†L235-L333】. Khi cần cập nhật policy, người vận hành sử dụng `./broker.sh policy` thủ công hoặc rely vào workflow CI trên nhánh `main`; API server không tự phát lệnh.
+Không còn Policy Scheduler trong codebase. Làm mới policy chỉ thực hiện qua GitHub Actions (workflow tuning/publish) hoặc thủ công bằng lệnh `./broker.sh policy`.
 
 Frontend (Extension) và Luồng Tương Tác Người Dùng
 
