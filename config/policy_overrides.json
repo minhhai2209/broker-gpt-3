@@ -151,21 +151,8 @@
       }
     }
   },
-  "sector_bias": {
-    "Công nghệ thông tin": 0.05,
-    "Tài chính": 0.03,
-    "Hàng tiêu dùng thiết yếu": 0.02,
-    "Bất động sản": -0.05
-  },
-  "ticker_bias": {
-    "FPT": 0.06,
-    "HPG": 0.04,
-    "VCB": 0.04,
-    "VNM": 0.03,
-    "MWG": 0.03,
-    "NVL": -0.05,
-    "PDR": -0.05
-  },
+  "sector_bias": {},
+  "ticker_bias": {},
   "calibration": {
     "on_run": 0,
     "regime_components": 0,
@@ -270,7 +257,7 @@
     "momentum_unit": 0.12
   },
   "sizing": {
-    "softmax_tau": 0.12840118408203235,
+    "softmax_tau": 0.1288543701171886,
     "add_share": 0.5,
     "new_share": 0.5,
     "min_lot": 100,
