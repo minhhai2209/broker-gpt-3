@@ -21,7 +21,7 @@ Fail-fast
 
 from pathlib import Path
 import json, re
-from typing import Dict
+from typing import Dict, Tuple
 
 import numpy as np
 import pandas as pd
@@ -29,6 +29,8 @@ import pandas as pd
 BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / 'out'
 ORDERS_DIR = OUT_DIR / 'orders'
+DEFAULTS_PATH = BASE_DIR / 'config' / 'policy_default.json'
+CONFIG_PATH = BASE_DIR / 'config' / 'policy_overrides.json'
 
 
 def _load_json(p: Path) -> Dict:
@@ -39,12 +41,45 @@ def _load_json(p: Path) -> Dict:
     return json.loads(raw)
 
 
+def _resolve_policy_paths() -> Tuple[Dict, Path]:
+    """Return overlay policy object and path to update, with defaults for targets.
+
+    - Read calibration_targets from policy_default.json (source of truth), and
+      allow overlay to override if it provides its own calibration_targets.
+    - Choose overlay path in priority order: out/orders/policy_overrides.json,
+      else config/policy_overrides.json. Create parent if missing.
+    """
+    defaults = {}
+    if DEFAULTS_PATH.exists():
+        try:
+            defaults = _load_json(DEFAULTS_PATH)
+        except Exception:
+            defaults = {}
+    # Pick overlay policy path
+    pol_path = ORDERS_DIR / 'policy_overrides.json'
+    if not pol_path.exists():
+        pol_path = CONFIG_PATH
+    if pol_path.exists():
+        overlay = _load_json(pol_path)
+    else:
+        overlay = {}
+        pol_path.parent.mkdir(parents=True, exist_ok=True)
+    # Merge calibration targets shallowly: defaults -> overlay
+    def_targets = (defaults.get('calibration_targets') or {}).get('thresholds') or {}
+    ov_targets = (overlay.get('calibration_targets') or {}).get('thresholds') or {}
+    targets = {**def_targets, **ov_targets}
+    overlay.setdefault('calibration_targets', {})
+    overlay['calibration_targets'].setdefault('thresholds', {})
+    # Store merged targets back for transparency (optional)
+    overlay['calibration_targets']['thresholds'].update(targets)
+    return overlay, pol_path
+
+
 def calibrate(*, write: bool = False) -> float:
     snap_p = OUT_DIR / 'snapshot.csv'
     pre_p = OUT_DIR / 'presets_all.csv'
-    pol_p = ORDERS_DIR / 'policy_overrides.json'
-    if not (snap_p.exists() and pre_p.exists() and pol_p.exists()):
-        raise SystemExit('Missing snapshot/presets/policy files for near_ceiling calibration')
+    if not (snap_p.exists() and pre_p.exists()):
+        raise SystemExit('Missing snapshot/presets files for near_ceiling calibration')
     snap = pd.read_csv(snap_p)
     pre = pd.read_csv(pre_p)
     if 'Ticker' not in snap.columns or 'Price' not in snap.columns:
@@ -61,10 +96,17 @@ def calibrate(*, write: bool = False) -> float:
     r = r[r > 0]
     if r.empty:
         raise SystemExit('Insufficient ceiling/price data')
-    thr = float(np.quantile(r.to_numpy(), 0.98))
+    # Resolve quantile target (default 0.98) from calibration_targets.thresholds.near_ceiling_q
+    overlay, pol_p = _resolve_policy_paths()
+    try:
+        q = float(((overlay.get('calibration_targets') or {}).get('thresholds') or {}).get('near_ceiling_q', 0.98))
+    except Exception as exc:
+        raise SystemExit(f'invalid calibration_targets.thresholds.near_ceiling_q: {exc}') from exc
+    q = max(0.0, min(1.0, q))
+    thr = float(np.quantile(r.to_numpy(), q))
     thr = max(0.90, min(0.999, thr))
     if write:
-        pol = _load_json(pol_p)
+        pol = overlay if overlay else {}
         th = dict(pol.get('thresholds', {}) or {})
         th['near_ceiling_pct'] = float(thr)
         pol['thresholds'] = th
@@ -75,4 +117,3 @@ def calibrate(*, write: bool = False) -> float:
 if __name__ == '__main__':
     v = calibrate(write=True)
     print(f"near_ceiling_pct={v:.3f}")
-

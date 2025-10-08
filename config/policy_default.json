@@ -460,12 +460,18 @@
   },
   // Guidance targets for formula-based calibrators
   "calibration_targets": {
+    "thresholds": {
+      // Near-ceiling quantile for Price/BandCeiling. Higher = stricter near-ceiling gate
+      // Use high percentile to avoid over-filtering during strong tapes.
+      "near_ceiling_q": 0.99
+    },
     "market_filter": {
       "idx_drop_q": 0.1,
       "vol_ann_q": 0.95,
       "trend_floor_q": 0.1,
-      "atr_soft_q": 0.8,
-      "atr_hard_q": 0.95,
+      // Calibrate ATR guard on high percentiles to avoid premature budget cuts
+      "atr_soft_q": 0.90,
+      "atr_hard_q": 0.97,
       "ms_soft_q": 0.6,
       "ms_hard_q": 0.35,
       "dd_floor_q": 0.8,
