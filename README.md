@@ -28,6 +28,7 @@ Ghi chú Codex CLI (cho `tune`/`policy`)
   - Thiếu `.codex/config.toml` trong repo → in `::error::` và thoát `exit 2` (fail‑fast, phù hợp CI policy).
   - Nếu biến `CODEX_AUTH_JSON` có mặt, ghi `~/.codex/auth.json` (0600). Nếu job bắt buộc auth mà thiếu biến này, CI step sẽ fail.
 - Tuner yêu cầu `codex` có trên PATH; nếu không có sau postinstall, script sẽ fail‑fast và in hướng dẫn bổ sung `PATH`.
+- Không còn biến môi trường để chọn “reasoning effort” hay số vòng phân tích cho Codex: hệ thống mặc định `reasoning_effort=high` và 1 vòng (ổn định, dễ tái lập).
 - Nếu chạy cục bộ mà thiếu Node/npm, các lệnh cần Codex sẽ fail‑fast; cài Node.js (>=18) rồi chạy `npm install` một lần để bootstrap.
 
 Chuẩn bị danh mục (inputs)

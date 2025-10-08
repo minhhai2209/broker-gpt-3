@@ -35,6 +35,7 @@ Generated artifacts
   - Thiếu `.codex/config.toml` trong repo → in `::error::` và thoát `exit 2` (fail‑fast).
   - Ghi `~/.codex/auth.json` chỉ khi có `CODEX_AUTH_JSON` trong env; nếu job bắt buộc auth mà thiếu, CI step phải tự fail (xem `.github/workflows/tuning.yml`).
 - GitHub Actions `tuning.yml` phản chiếu đúng các bước trên để đảm bảo môi trường CI và local nhất quán.
+  - Loại bỏ biến môi trường tuỳ biến flow cho Codex (reasoning/rounds). Calibrator cố định `reasoning_effort=high` và 1 vòng để giảm biến thiên.
 
 ## Khẩu vị đầu tư
 - Ưu tiên chốt lời và cắt lỗ sớm, có thể thực hiện theo từng phần để khóa lợi nhuận hoặc hạn chế rủi ro dần.

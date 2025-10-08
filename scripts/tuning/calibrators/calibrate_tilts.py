@@ -27,6 +27,7 @@ CONFIG_DIR = BASE_DIR / 'config'
 ANALYSIS_FILENAME = 'analysis_round.txt'
 OUTPUT_FILENAME = 'policy_overrides.generated.json'
 ALLOWED_KEYS = {'sector_bias', 'ticker_bias'}
+REASONING_EFFORT = 'high'  # fixed; avoid env-driven variants
 
 
 def _strip_json_comments(text: str) -> str:
@@ -35,10 +36,6 @@ def _strip_json_comments(text: str) -> str:
     text = re.sub(r"(^|\s)#.*$", "", text, flags=re.M)
     return text
 
-
-def _resolve_reasoning_effort() -> str:
-    override = os.getenv('BROKER_CX_REASONING', '').strip()
-    return override if override else 'high'
 
 
 def _read_text(path: Path) -> str:
@@ -87,7 +84,8 @@ def calibrate(*, write: bool = True) -> Dict:
     if not codex_bin:
         raise SystemExit('Missing Codex CLI. Install with: npm install -g @openai/codex@latest')
 
-    max_rounds = int(os.getenv('BROKER_CX_GEN_ROUNDS', '1'))
+    # Fixed number of rounds to avoid env-driven variability.
+    max_rounds = 1
     analysis_accum = ''
 
     for round_idx in range(1, max_rounds + 1):
@@ -99,7 +97,7 @@ def calibrate(*, write: bool = True) -> Dict:
             '--full-auto',
             '--model', 'gpt-5',
             '-c', 'tools.web_search=true',
-            '-c', f'reasoning_effort={_resolve_reasoning_effort()}',
+            '-c', f'reasoning_effort={REASONING_EFFORT}',
             '-',
         ]
         with tempfile.TemporaryDirectory(prefix='codex_isolated_') as tmp_cwd:

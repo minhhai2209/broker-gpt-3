@@ -3,10 +3,6 @@ name: Unified Tuning (AI + Calibrations)
 on:
   workflow_dispatch:
     inputs:
-      rounds:
-        description: "Number of Codex analysis rounds (1-3)"
-        required: false
-        default: "1"
       python-version:
         description: "Python version"
         required: false
@@ -24,11 +20,6 @@ on:
       - 'config/policy_overrides.json'
   workflow_call:
     inputs:
-      rounds:
-        description: "Number of Codex analysis rounds (1-3)"
-        required: false
-        type: string
-        default: "1"
       python-version:
         description: "Python version"
         required: false
@@ -56,8 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      BROKER_CX_GEN_ROUNDS: ${{ inputs.rounds || '1' }}
-      BROKER_CX_REASONING: high
+      # No env-driven variants for Codex analysis; reasoning effort and rounds fixed in code.
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
