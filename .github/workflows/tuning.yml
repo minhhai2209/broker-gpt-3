@@ -112,15 +112,15 @@ jobs:
           BROKER_CX_GEN_ROUNDS: "1"
         run: |
           set -euo pipefail
-          mkdir -p out
-          echo "Running unified tune, rounds=$BROKER_CX_GEN_ROUNDS"
-          ./broker.sh tune 2>&1 | tee out/tune_run.log
+          mkdir -p workflow-debug
+          echo "Running unified tune, rounds=$BROKER_CX_GEN_ROUNDS" | tee workflow-debug/tune_run.log
+          ./broker.sh tune 2>&1 | tee -a workflow-debug/tune_run.log
 
       - name: Print tune log on failure
         if: ${{ failure() }}
         run: |
           echo "=== tune_run.log (tail) ==="
-          tail -n 200 out/tune_run.log || echo "tune_run.log missing"
+          tail -n 200 workflow-debug/tune_run.log || echo "tune_run.log missing"
 
 
       - name: Commit and push published overlay (main)
@@ -151,6 +151,7 @@ jobs:
         with:
           name: tuning-artifacts-unified
           path: |
+            workflow-debug/tune_run.log
             out/
             config/policy_overrides.json
             out/orders/policy_overrides.json

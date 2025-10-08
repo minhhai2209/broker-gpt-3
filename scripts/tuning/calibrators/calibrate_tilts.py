@@ -110,7 +110,7 @@ def calibrate(*, write: bool = True) -> Dict:
                 input=prompt.encode('utf-8'),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                check=True,
+                check=False,
                 cwd=tmp_cwd,
             )
             text = proc.stdout.decode('utf-8', errors='replace')
@@ -118,7 +118,13 @@ def calibrate(*, write: bool = True) -> Dict:
             ts = datetime.now(timezone.utc).astimezone().strftime('%Y%m%d_%H%M%S')
             debug_dir = OUT_DIR / 'debug'
             debug_dir.mkdir(parents=True, exist_ok=True)
-            (debug_dir / f'codex_policy_raw_{ts}_r{round_idx}.txt').write_text(text, encoding='utf-8')
+            raw_path = debug_dir / f'codex_policy_raw_{ts}_r{round_idx}.txt'
+            raw_path.write_text(text, encoding='utf-8')
+            if proc.returncode != 0:
+                err_path = debug_dir / f'codex_policy_error_{ts}_r{round_idx}.txt'
+                err_path.write_text(text, encoding='utf-8')
+                print(f"[codex] Command failed (exit {proc.returncode}); raw output saved to {err_path}")
+                raise SystemExit(f"Codex CLI failed with exit code {proc.returncode}; see {err_path}")
             analysis_text = _read_text(analysis_file_path)
             # Track latest analysis
             (debug_dir / 'codex_analysis_latest.txt').write_text(analysis_text, encoding='utf-8')
