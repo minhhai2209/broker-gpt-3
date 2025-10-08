@@ -152,14 +152,20 @@
     }
   },
   "sector_bias": {
-    "Dịch vụ tiện ích": 0.03,
-    "Hàng tiêu dùng thiết yếu": 0.03,
-    "Y tế": 0.02,
-    "Công nghệ thông tin": 0.02,
-    "Bất động sản": -0.05,
-    "Tài chính": -0.02
+    "Công nghệ thông tin": 0.05,
+    "Tài chính": 0.03,
+    "Hàng tiêu dùng thiết yếu": 0.02,
+    "Bất động sản": -0.05
   },
-  "ticker_bias": {},
+  "ticker_bias": {
+    "FPT": 0.06,
+    "HPG": 0.04,
+    "VCB": 0.04,
+    "VNM": 0.03,
+    "MWG": 0.03,
+    "NVL": -0.05,
+    "PDR": -0.05
+  },
   "calibration": {
     "on_run": 0,
     "regime_components": 0,
