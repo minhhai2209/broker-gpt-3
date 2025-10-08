@@ -152,6 +152,10 @@ run_policy() {
   git pull
   # Run unified tuner to refresh config/policy_overrides.json
   "$PY_BIN" -u -m scripts.tuning.tune
+  # Persist runtime overlay (with _meta) to repo config for commit
+  if [[ -f out/orders/policy_overrides.json ]]; then
+    cp out/orders/policy_overrides.json config/policy_overrides.json
+  fi
   commit_and_push_policy
 }
 
