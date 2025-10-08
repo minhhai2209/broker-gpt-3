@@ -131,25 +131,18 @@ jobs:
           test -f config/policy_overrides.json || { echo '::error::config/policy_overrides.json missing after tune'; exit 2; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Skip if no content change to avoid unnecessary pushes
-          git add -N config/policy_overrides.json || true
-          if git diff --quiet -- config/policy_overrides.json; then
-            echo "No changes in config/policy_overrides.json; skipping push"
-            exit 0
-          fi
-          # Try a clean rebase; on failure, align to remote and continue without failing the workflow
-          if ! git fetch origin "$BRANCH_NAME"; then echo "fetch failed; continuing"; fi
-          if ! git rebase "origin/$BRANCH_NAME"; then
-            echo "Rebase failed; resetting to remote and continuing (non-fatal)"
-            git rebase --abort || true
-            git reset --hard "origin/$BRANCH_NAME" || true
-          fi
+          git fetch origin "$BRANCH_NAME"
+          git rebase "origin/$BRANCH_NAME" || { echo 'Rebase failed, trying to continue'; }
           git add config/policy_overrides.json
           git commit -m "chore(policy): update unified policy_overrides via tuning" || echo "No changes to commit"
-          # Push best-effort; do not fail the job on push errors
-          if ! git push origin "$BRANCH_NAME"; then
-            echo "Push failed; proceeding without push (non-fatal)"
-          fi
+          for i in 1 2 3; do
+            if git push origin "$BRANCH_NAME"; then exit 0; fi
+            echo "Push failed, retry $i/3 after rebase"
+            git fetch origin "$BRANCH_NAME"
+            git rebase "origin/$BRANCH_NAME" || true
+            sleep 2
+          done
+          echo "::error::Failed to push after retries"; exit 1
 
       - name: Upload artifacts
         if: ${{ always() }}
