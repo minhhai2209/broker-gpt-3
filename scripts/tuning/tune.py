@@ -78,6 +78,8 @@ def main() -> int:
         calibrate_fill_prob,
         calibrate_watchlist,
     )
+    # New deterministic calibrators (generic / reusable)
+    from scripts.tuning.calibrators import calibrate_budget_topk, calibrate_execution_fill
 
     print('[tune] Running calibrators')
     calibrate_regime_components.calibrate(write=True)
@@ -87,6 +89,9 @@ def main() -> int:
     calibrate_leader_gates.calibrate(write=True)
     calibrate_risk_limits.calibrate(write=True)
     calibrate_sizing.calibrate(write=True)
+    # Generic breadth/budget + execution acceptance before thresholds top‑K gating
+    calibrate_budget_topk.calibrate(write=True)
+    calibrate_execution_fill.calibrate(write=True)
     calibrate_thresholds.calibrate(write=True)
     calibrate_softmax_tau.calibrate(write=True)
     calibrate_near_ceiling.calibrate(write=True)
