@@ -33,13 +33,13 @@
     "base_new": 0.4,
     "trim_th": -0.05,
     "q_add": 0.0,
-    "q_new": 0.9558823529411765,
-    "min_liq_norm": 0.45098039215686275,
-    "near_ceiling_pct": 0.9915527091072115,
+    "q_new": 0.9589041095890412,
+    "min_liq_norm": 0.4411764705882353,
+    "near_ceiling_pct": 0.9374834437086093,
     "tp_pct": 0.0,
     "sl_pct": 0.0,
-    "tp_atr_mult": 1.0135135135135134,
-    "sl_atr_mult": 0.6756756756756757,
+    "tp_atr_mult": 1.015228426395939,
+    "sl_atr_mult": 0.676818950930626,
     "tp_floor_pct": 0.03,
     "tp_cap_pct": 0.1,
     "sl_floor_pct": 0.02,
@@ -101,12 +101,12 @@
     "add_max_neutral_cap": 1
   },
   "regime_model": {
-    "intercept": 2.1374568918277403,
+    "intercept": 2.1375927807938746,
     "threshold": 0.79,
     "components": {
       "trend": {
-        "mean": 0.42745631728175276,
-        "std": 0.3597419792734481,
+        "mean": 0.4274634544291777,
+        "std": 0.35975211781942196,
         "weight": 1.55
       },
       "momentum": {
@@ -125,18 +125,18 @@
         "weight": 0.95
       },
       "volatility": {
-        "mean": 0.5060983337079811,
-        "std": 0.2708057378520281,
+        "mean": 0.5060649168324589,
+        "std": 0.27083341899180263,
         "weight": 1.05
       },
       "index_return": {
-        "mean": 0.135982259077131,
-        "std": 0.162823327484779,
+        "mean": 0.13605562194543805,
+        "std": 0.16290944569288868,
         "weight": 0.8
       },
       "turnover": {
-        "mean": 0.581091267028159,
-        "std": 0.3157915481902615,
+        "mean": 0.5814984895969537,
+        "std": 0.3160218074553082,
         "weight": 0.8
       },
       "mcclellan": {
@@ -189,7 +189,7 @@
     "risk_off_drawdown_floor": 0.03765736205513479,
     "market_score_soft_floor": 0.6,
     "market_score_hard_floor": 0.3,
-    "leader_min_rsi": 55.1025,
+    "leader_min_rsi": 55.83,
     "leader_min_mom_norm": 0.7524509803921569,
     "leader_require_ma20": 1,
     "leader_require_ma50": 1,
@@ -262,7 +262,8 @@
     "slip_pct_min": 0.002,
     "slip_atr_mult": 0.5,
     "slip_ticks_min": 1,
-    "flash_k_atr": 1.5
+    "flash_k_atr": 1.5,
+    "fill": {}
   },
   "regime_scales": {
     "vol_ann_unit": 0.45,
@@ -272,7 +273,7 @@
     "momentum_unit": 0.12
   },
   "sizing": {
-    "softmax_tau": 0.10876312255859485,
+    "softmax_tau": 0.10861206054687611,
     "add_share": 0.5,
     "new_share": 0.5,
     "min_lot": 100,
@@ -287,7 +288,7 @@
     "qty_min_lot": 100,
     "min_notional_per_order": 2000000.0,
     "cov_lookback_days": 250,
-    "cov_reg": 0.00043379117834221247,
+    "cov_reg": 0.00043414107156818896,
     "risk_parity_floor": 0.2,
     "dynamic_caps": {
       "enable": 0,
@@ -306,7 +307,7 @@
     "min_names_target": 10,
     "market_index_symbol": "VNINDEX",
     "risk_per_trade_frac": 0.005,
-    "default_stop_atr_mult": 0.6756756756756757,
+    "default_stop_atr_mult": 0.676818950930626,
     "tranche_frac": 0.25,
     "new_first_tranche_lots": 2,
     "mean_variance_calibration": {
@@ -356,18 +357,18 @@
     },
     "watchlist": {
       "enable": 1,
-      "min_priority": 0.358,
+      "min_priority": 0.357,
       "micro_window": 3
     },
     "suggestions_top_n": 3,
     "ttl_bucket_state": {
       "current": "low",
-      "sigma": 0.007611136801610897
+      "sigma": 0.006519822098436171
     },
     "ttl_bucket_thresholds": {
       "p75": 0.008591156599099328,
       "p95": 0.018826036126701216,
-      "latest": 0.007611136801610897
+      "latest": 0.006519822098436171
     },
     "ttl_minutes_baseline": {
       "base": 12,
@@ -417,5 +418,6 @@
       "enp_total_target": 9,
       "sector_limit_target": 0.35
     }
-  }
+  },
+  "rationale": "Giữ nguyên cấu hình cơ sở; chưa áp dụng bias theo ngành/mã. Bối cảnh: giữa tháng 10, thị trường VN bước vào mùa KQKD quý 3 và chịu ảnh hưởng từ kỳ vọng lãi suất toàn cầu; không ghi nhận sự kiện bất thường buộc điều chỉnh khẩn. TTL: hiệu lực 10 phiên giao dịch kể từ 2025-10-09 (VN). Tác động tới rủi ro: duy trì ngân sách mua và giới hạn thêm/mở mới theo mặc định, tránh gia tăng rủi ro thực thi; lớp execution giữ nguyên (fill tuân thủ clamp mặc định)."
 }
