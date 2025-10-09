@@ -150,6 +150,13 @@ def _normalise_execution(raw: Any) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
     if "fill" in execution:
         fill_raw = _ensure_dict(execution["fill"], "execution.fill")
+        # Provide an explicit diagnostic for a common mistake: nesting under a 'base' alias.
+        if "base" in fill_raw:
+            raise SystemExit(
+                "Unsupported alias 'execution.fill.base'; use flat execution.fill keys: "
+                "horizon_s, window_sigma_s, window_vol_s, target_prob, max_chase_ticks, "
+                "cancel_ratio_per_min, joiner_factor, no_cross"
+            )
         fill_out: Dict[str, Any] = {}
         for key, value in fill_raw.items():
             if key not in ALLOWED_EXECUTION_FILL:
@@ -290,6 +297,23 @@ Yêu cầu:
 - Tuyệt đối KHÔNG ghi thêm khóa ngoài whitelist.
 - Nếu không cần thay đổi, vẫn ghi rationale và đặt khóa rỗng (hoặc bỏ qua) theo chuẩn JSON object.
 
+ Ràng buộc QUAN TRỌNG cho execution.fill:
+ - Không được lồng thêm cấp alias như "base"; mọi khóa phải phẳng dưới execution.fill.
+ - Danh sách khóa hợp lệ của execution.fill: horizon_s, window_sigma_s, window_vol_s, target_prob, max_chase_ticks, cancel_ratio_per_min, joiner_factor, no_cross.
+ - Ví dụ hợp lệ:
+   "execution": {{
+     "fill": {{
+       "horizon_s": 75,
+       "window_sigma_s": 75,
+       "window_vol_s": 120,
+       "target_prob": 0.55,
+       "max_chase_ticks": 2,
+       "cancel_ratio_per_min": 0.15,
+       "joiner_factor": 0.25,
+       "no_cross": true
+     }}
+   }}
+
 Thời điểm (VN): {now_str}
 
 Schema tham chiếu (rút gọn):
@@ -360,4 +384,3 @@ def calibrate(*, write: bool = True, raw_overrides: Dict[str, Any] | None = None
 
 
 __all__ = ["calibrate"]
-

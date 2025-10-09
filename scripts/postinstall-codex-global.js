@@ -14,48 +14,99 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+function ts() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+const PREFIX = `[codex-postinstall ${ts()} pid:${process.pid}]`;
+function info(msg) { console.log(`${PREFIX} ${msg}`); }
+function warn(msg) { console.warn(`${PREFIX} WARN: ${msg}`); }
+function error(msg) { console.error(`${PREFIX} ERROR: ${msg}`); }
+
+function statSafe(p) {
+  try { return fs.statSync(p); } catch (_) { return null; }
+}
+
+function modeStr(mode) {
+  if (typeof mode !== 'number') return 'n/a';
+  return '0' + (mode & 0o7777).toString(8);
+}
+
+function runCapture(cmd, args, opts = {}) {
+  const start = Date.now();
+  const res = spawnSync(cmd, args, { shell: false, encoding: 'utf-8', ...opts });
+  const dur = Date.now() - start;
+  const out = {
+    ok: res.status === 0,
+    status: res.status,
+    signal: res.signal || null,
+    stdout: res.stdout || '',
+    stderr: res.stderr || '',
+    duration_ms: dur,
+    error: res.error || null,
+  };
+  info(`run: ${cmd} ${args.join(' ')} [status=${out.status} dur=${out.duration_ms}ms]`);
+  if (out.stdout) process.stdout.write(`${PREFIX} stdout: ${out.stdout}`);
+  if (out.stderr) process.stderr.write(`${PREFIX} stderr: ${out.stderr}`);
+  if (out.error) error(`spawn error: ${out.error && out.error.message ? out.error.message : String(out.error)}`);
+  return out;
+}
+
 function run(cmd, args, opts = {}) {
-  const res = spawnSync(cmd, args, { stdio: 'inherit', shell: false, ...opts });
-  return res.status === 0;
+  const res = runCapture(cmd, args, { stdio: 'pipe', ...opts });
+  return res.ok;
 }
 
 function existsOnPath(bin) {
-  const res = spawnSync(process.platform === 'win32' ? 'where' : 'command', [process.platform === 'win32' ? bin + '.cmd' : '-v', bin], { stdio: 'ignore', shell: false });
-  return res.status === 0;
+  if (process.platform === 'win32') {
+    const res = runCapture('where', [`${bin}.cmd`]);
+    return res.ok;
+  }
+  const res = runCapture('command', ['-v', bin]);
+  return res.ok;
 }
 
 function codexAvailable() {
-  return existsOnPath('codex') && run('codex', ['--version']);
+  const onPath = existsOnPath('codex');
+  info(`check codex on PATH: ${onPath}`);
+  if (!onPath) return false;
+  const ver = runCapture('codex', ['--version']);
+  return ver.ok;
 }
 
 function ensureAuthFromEnvIfMissing() {
   const home = os.homedir() || process.env.HOME || process.env.USERPROFILE;
   if (!home) {
-    console.warn('[codex-postinstall] Could not resolve home directory; skip ~/.codex/auth.json bootstrap');
+    warn('Could not resolve home directory; skip ~/.codex/auth.json bootstrap');
     return;
   }
 
   const codexDir = path.join(home, '.codex');
   const authPath = path.join(codexDir, 'auth.json');
 
-  if (fs.existsSync(authPath)) {
-    return; // already present; nothing to do
-  }
+  const authExists = fs.existsSync(authPath);
+  info(`auth path: ${authPath} exists=${authExists}`);
+  if (authExists) return; // already present; nothing to do
 
   const secret = process.env.CODEX_AUTH_JSON;
   if (!secret || String(secret).trim().length === 0) {
-    // Env not provided; silently skip per relaxed policy.
+    info('CODEX_AUTH_JSON not set; skipping auth.json creation');
     return;
   }
 
   try {
+    info(`creating ${codexDir}`);
     fs.mkdirSync(codexDir, { recursive: true });
     // Write exactly the provided content without trailing newline, restrict permissions
+    const bytes = Buffer.byteLength(String(secret), 'utf-8');
     fs.writeFileSync(authPath, String(secret), { mode: 0o600 });
     try { fs.chmodSync(authPath, 0o600); } catch (_) { /* best-effort on non-POSIX */ }
-    console.log(`[codex-postinstall] Wrote auth to ${authPath}`);
+    const st = statSafe(authPath);
+    info(`wrote auth to ${authPath} size=${bytes}B mode=${st ? modeStr(st.mode) : 'n/a'}`);
   } catch (err) {
-    console.error('[codex-postinstall] Failed to write ~/.codex/auth.json:', err && err.message ? err.message : String(err));
+    error(`Failed to write ~/.codex/auth.json: ${err && err.message ? err.message : String(err)}\n${err && err.stack ? err.stack : ''}`);
     process.exit(1);
   }
 }
@@ -63,38 +114,54 @@ function ensureAuthFromEnvIfMissing() {
 function ensureConfigTomlFromRepo() {
   // Mirrors the behavior in .github/workflows/tuning.yml: fail fast if repo config is missing.
   const repoConfigPath = path.join(process.cwd(), '.codex', 'config.toml');
+  info(`repo config candidate: ${repoConfigPath}`);
   if (!fs.existsSync(repoConfigPath)) {
-    console.error('::error::.codex/config.toml not found in repo; aborting per fail-fast policy');
+    error('::error::.codex/config.toml not found in repo; aborting per fail-fast policy');
     process.exit(2);
   }
 
   const home = os.homedir() || process.env.HOME || process.env.USERPROFILE;
   if (!home) {
-    console.error('[codex-postinstall] HOME not set; cannot locate ~/.codex for config.toml');
+    error('HOME not set; cannot locate ~/.codex for config.toml');
     process.exit(1);
   }
 
   const codexDir = path.join(home, '.codex');
   const destConfigPath = path.join(codexDir, 'config.toml');
   try {
+    info(`ensure ~/.codex dir: ${codexDir}`);
     fs.mkdirSync(codexDir, { recursive: true });
     // Force overwrite to keep local config in sync with repo baseline
     const content = fs.readFileSync(repoConfigPath);
+    info(`read repo config bytes=${content.length}`);
     fs.writeFileSync(destConfigPath, content, { mode: 0o600 });
     try { fs.chmodSync(destConfigPath, 0o600); } catch (_) { /* best-effort on non-POSIX */ }
-    console.log(`[codex-postinstall] Installed config to ${destConfigPath}`);
+    const st = statSafe(destConfigPath);
+    info(`installed config to ${destConfigPath} size=${content.length}B mode=${st ? modeStr(st.mode) : 'n/a'}`);
   } catch (err) {
-    console.error('[codex-postinstall] Failed to install ~/.codex/config.toml:', err && err.message ? err.message : String(err));
+    error(`Failed to install ~/.codex/config.toml: ${err && err.message ? err.message : String(err)}\n${err && err.stack ? err.stack : ''}`);
     process.exit(1);
   }
 }
 
 function installGlobalCodexWithEnv(extraEnv = {}) {
   const env = { ...process.env, ...extraEnv };
-  return run('npm', ['install', '-g', '@openai/codex@latest'], { env });
+  info(`attempting npm global install @openai/codex@latest with env delta keys=[${Object.keys(extraEnv).join(', ')}]`);
+  const res = runCapture('npm', ['install', '-g', '@openai/codex@latest'], { env });
+  return res.ok;
 }
 
 function main() {
+  info('=== BEGIN codex postinstall ===');
+  info(`node: ${process.version} platform: ${process.platform} arch: ${process.arch}`);
+  info(`cwd: ${process.cwd()}`);
+  info(`shell: ${process.env.SHELL || 'n/a'}`);
+  info(`PATH: ${process.env.PATH}`);
+  const whichNode = runCapture(process.platform === 'win32' ? 'where' : 'which', ['node']);
+  const whichNpm = runCapture(process.platform === 'win32' ? 'where' : 'which', ['npm']);
+  const npmPrefix = runCapture('npm', ['config', 'get', 'prefix']);
+  const npmBinG = runCapture('npm', ['bin', '-g']);
+
   // Always attempt to populate auth.json if missing and env var is provided
   // (this runs regardless of Codex presence).
   ensureAuthFromEnvIfMissing();
@@ -102,23 +169,27 @@ function main() {
   ensureConfigTomlFromRepo();
 
   if (codexAvailable()) {
+    info('codex already available; skipping installation');
+    info('=== END codex postinstall (noop) ===');
     return;
   }
 
   // Codex is missing and needs installation; proceed with install attempts.
 
   // First attempt: default global prefix
+  info('codex not found; starting installation attempts');
   if (!installGlobalCodexWithEnv()) {
     // Retry with user-level prefix without mutating global npm config
     const home = os.homedir() || process.env.HOME || process.env.USERPROFILE;
     if (!home) {
-      console.error('[codex-postinstall] HOME not set; cannot retry with user prefix');
+      error('HOME not set; cannot retry with user prefix');
     } else {
       const userPrefix = `${home}/.npm-global`;
       const env = { NPM_CONFIG_PREFIX: userPrefix };
-      console.warn(`[codex-postinstall] Retrying global install with user prefix at ${userPrefix}`);
+      warn(`Retrying global install with user prefix at ${userPrefix}`);
+      info(`will add PATH hint if installation succeeds (prefix/bin)`);
       if (!installGlobalCodexWithEnv(env)) {
-        console.error('[codex-postinstall] Global installation failed with user prefix');
+        error('Global installation failed with user prefix');
       }
       // Try to run codex from that prefix explicitly to validate
       if (!codexAvailable()) {
@@ -126,16 +197,16 @@ function main() {
         const binPath = `${userPrefix}/bin/codex`;
         const ok = run(binPath, ['--version']);
         if (!ok) {
-          console.error('[codex-postinstall] Codex CLI still not available on PATH after installation attempts.');
-          console.error('[codex-postinstall] Ensure your npm global bin is on PATH, or install manually:');
-          console.error('  npm install -g @openai/codex@latest');
+          error('Codex CLI still not available on PATH after installation attempts.');
+          error('Ensure your npm global bin is on PATH, or install manually:');
+          error('  npm install -g @openai/codex@latest');
           process.exit(1);
           return;
         } else {
           // Not on PATH, but installed; print guidance
-          console.warn(`[codex-postinstall] Codex installed at ${binPath} but not found on PATH.`);
-          console.warn('[codex-postinstall] Add the following to your shell profile to use `codex` globally:');
-          console.warn(`  export PATH=\"${userPrefix}/bin:$PATH\"`);
+          warn(`Codex installed at ${binPath} but not found on PATH.`);
+          warn('Add the following to your shell profile to use `codex` globally:');
+          warn(`  export PATH=\"${userPrefix}/bin:$PATH\"`);
         }
         return;
       }
@@ -143,9 +214,12 @@ function main() {
   }
 
   if (!codexAvailable()) {
-    console.error('[codex-postinstall] Codex CLI not found after installation.');
+    error('Codex CLI not found after installation.');
     process.exit(1);
   }
+  const ver = runCapture('codex', ['--version']);
+  if (ver.ok) info('codex installation verified');
+  info('=== END codex postinstall ===');
 }
 
 main();
