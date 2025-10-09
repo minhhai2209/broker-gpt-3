@@ -20,3 +20,4 @@ scratch/
 # Python virtual environment
 venv/
 # config/policy_overrides.json
+config/policy_ai_overrides.json
