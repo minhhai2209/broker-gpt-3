@@ -81,6 +81,7 @@ Môi trường (env)
 Policy & cấu hình
 - Baseline: `config/policy_default.json` (nguồn sự thật, cố định; không bị workflow ghi đè).
 - Overlays: `config/policy_nightly_overrides.json` (tuỳ chọn, do calibrators sinh; commit riêng) và unified overlay `config/policy_overrides.json` (hiện hành, do tuner publish).
+- ❗ `config/policy_overrides.json` là artefact được sinh tự động sau mỗi lần tune/calibration. Không chỉnh tay, không tạo PR chỉnh tay, và không yêu cầu agent sửa trực tiếp file này — mọi thay đổi sẽ bị lần tune kế tiếp ghi đè và phá vỡ audit trail. Muốn thay đổi hành vi, cập nhật baseline/overlays hợp lệ hoặc chạy lại pipeline.
 - Back‑compat: `config/policy_ai_overrides.json` trước đây do tuner sinh; hiện không còn được tạo mặc định, nhưng nếu tồn tại engine vẫn merge.
 - Runtime merge: engine hợp nhất baseline → nightly (nếu có) → ai (nếu có) → `config/policy_overrides.json` (legacy) và ghi policy runtime vào `out/orders/policy_overrides.json`. Khi publish trên nhánh `main`, CI giữ `config/policy_overrides.json` làm bản audit.
  - Machine‑generated snapshot: `out/orders/policy_overrides.json` được sinh tự động cho mỗi lần chạy/tune và có trường `"_meta"` như:
