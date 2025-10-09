@@ -33,13 +33,13 @@
     "base_new": 0.4,
     "trim_th": -0.05,
     "q_add": 0.0,
-    "q_new": 0.9615384615384616,
+    "q_new": 0.9594594594594594,
     "min_liq_norm": 0.45098039215686275,
-    "near_ceiling_pct": 0.9370189701897017,
+    "near_ceiling_pct": 0.992008599208482,
     "tp_pct": 0.0,
     "sl_pct": 0.0,
-    "tp_atr_mult": 0.9852216748768473,
-    "sl_atr_mult": 0.6568144499178983,
+    "tp_atr_mult": 1.0291595197255574,
+    "sl_atr_mult": 0.686106346483705,
     "tp_floor_pct": 0.03,
     "tp_cap_pct": 0.1,
     "sl_floor_pct": 0.02,
@@ -101,12 +101,12 @@
     "add_max_neutral_cap": 1
   },
   "regime_model": {
-    "intercept": 2.129692574799677,
+    "intercept": 2.1373479690560857,
     "threshold": 0.79,
     "components": {
       "trend": {
-        "mean": 0.4256150043477519,
-        "std": 0.3590807023458834,
+        "mean": 0.42745631728175276,
+        "std": 0.3597419792734481,
         "weight": 1.55
       },
       "momentum": {
@@ -120,23 +120,23 @@
         "weight": 1.2
       },
       "drawdown": {
-        "mean": 0.44590968187299124,
-        "std": 0.2920954276260401,
+        "mean": 0.4466636564509421,
+        "std": 0.2922524026097536,
         "weight": 0.95
       },
       "volatility": {
-        "mean": 0.5065549071130979,
-        "std": 0.2709085570178791,
+        "mean": 0.5061066879268615,
+        "std": 0.27079912253481475,
         "weight": 1.05
       },
       "index_return": {
-        "mean": 0.1356121673552462,
-        "std": 0.16279843798725066,
+        "mean": 0.13594335452575604,
+        "std": 0.16278394574124266,
         "weight": 0.8
       },
       "turnover": {
-        "mean": 0.5809040123243548,
-        "std": 0.316111463807642,
+        "mean": 0.5796529915724162,
+        "std": 0.31689668142399957,
         "weight": 0.8
       },
       "mcclellan": {
@@ -151,8 +151,16 @@
       }
     }
   },
-  "sector_bias": {},
-  "ticker_bias": {},
+  "sector_bias": {
+    "Hàng tiêu dùng thiết yếu": 0.03,
+    "Dịch vụ tiện ích": 0.02,
+    "Bất động sản": -0.04
+  },
+  "ticker_bias": {
+    "VNM": 0.03,
+    "POW": 0.02,
+    "VHM": -0.03
+  },
   "calibration": {
     "on_run": 0,
     "regime_components": 0,
@@ -168,25 +176,25 @@
     "dynamic_caps": 0
   },
   "market_filter": {
-    "risk_off_index_drop_pct": 0.3491002267676364,
+    "risk_off_index_drop_pct": 0.3484877041695573,
     "risk_off_trend_floor": 0.0,
     "risk_off_breadth_floor": 0.48,
     "risk_off_drawdown_floor": 0.03765736205513479,
     "market_score_soft_floor": 0.6,
     "market_score_hard_floor": 0.3,
-    "leader_min_rsi": 54.042500000000004,
+    "leader_min_rsi": 55.46,
     "leader_min_mom_norm": 0.7524509803921569,
     "leader_require_ma20": 1,
     "leader_require_ma50": 1,
     "leader_max": 2,
-    "index_atr_soft_pct": 0.9002100840336135,
-    "index_atr_hard_pct": 0.970063025210084,
+    "index_atr_soft_pct": 0.9002096436058701,
+    "index_atr_hard_pct": 0.970062893081761,
     "guard_new_scale_cap": 0.4,
     "atr_soft_scale_cap": 0.5,
     "severe_drop_mult": 1.5,
-    "idx_chg_smoothed_hard_drop": 0.3491002267676364,
-    "trend_norm_hard_floor": -0.3616207839546208,
-    "vol_ann_hard_ceiling": 0.26608499119066753,
+    "idx_chg_smoothed_hard_drop": 0.3484877041695573,
+    "trend_norm_hard_floor": -0.36045671543390895,
+    "vol_ann_hard_ceiling": 0.2660216407795225,
     "us_epu_soft_pct": null,
     "us_epu_hard_pct": null,
     "dxy_soft_pct": null,
@@ -231,7 +239,7 @@
       "cross": 0.9,
       "near_ceiling": 0.05,
       "min": 0.05,
-      "decay_scale_min_ticks": 17.8
+      "decay_scale_min_ticks": 17.1
     },
     "slippage_model": {
       "alpha_bps": 5.0,
@@ -257,7 +265,7 @@
     "momentum_unit": 0.12
   },
   "sizing": {
-    "softmax_tau": 0.1288543701171886,
+    "softmax_tau": 0.1231140136718761,
     "add_share": 0.5,
     "new_share": 0.5,
     "min_lot": 100,
@@ -272,7 +280,7 @@
     "qty_min_lot": 100,
     "min_notional_per_order": 2000000.0,
     "cov_lookback_days": 250,
-    "cov_reg": 0.00043369466794741665,
+    "cov_reg": 0.00043362855849769755,
     "risk_parity_floor": 0.2,
     "dynamic_caps": {
       "enable": 0,
@@ -291,7 +299,7 @@
     "min_names_target": 10,
     "market_index_symbol": "VNINDEX",
     "risk_per_trade_frac": 0.005,
-    "default_stop_atr_mult": 0.6568144499178983,
+    "default_stop_atr_mult": 0.686106346483705,
     "tranche_frac": 0.25,
     "new_first_tranche_lots": 2,
     "mean_variance_calibration": {
@@ -318,9 +326,9 @@
   },
   "orders_ui": {
     "ttl_minutes": {
-      "base": 8,
-      "soft": 6,
-      "hard": 5
+      "base": 14,
+      "soft": 11,
+      "hard": 8
     },
     "ttl_bucket_minutes": {
       "low": {
@@ -341,18 +349,18 @@
     },
     "watchlist": {
       "enable": 1,
-      "min_priority": 0.361,
+      "min_priority": 0.377,
       "micro_window": 3
     },
     "suggestions_top_n": 3,
     "ttl_bucket_state": {
-      "current": "high",
-      "sigma": 0.022499575604567574
+      "current": "low",
+      "sigma": 0.003991438193771524
     },
     "ttl_bucket_thresholds": {
       "p75": 0.008591156599099328,
       "p95": 0.018826036126701216,
-      "latest": 0.022499575604567574
+      "latest": 0.003991438193771524
     },
     "ttl_minutes_baseline": {
       "base": 12,
