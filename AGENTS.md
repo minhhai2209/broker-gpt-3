@@ -48,3 +48,4 @@ Generated artifacts
 Policy biên tập:
 - Khi thêm chi tiết kỹ thuật mới, cập nhật `SYSTEM_DESIGN.md` và chỉ bổ sung gạch đầu dòng/link tối thiểu ở `README.md` nếu ảnh hưởng tới cách dùng.
 - Nếu `README.md` bị “phình” bởi nội dung kỹ thuật, tách/chuyển sang `SYSTEM_DESIGN.md` và rút gọn còn phần hướng dẫn sử dụng.
+- Đây là công cụ phục vụ cá nhân, chỉ quan tâm trạng thái HEAD hiện tại; không cần lưu tài liệu hoặc ghi chú về mã cũ đã bị thay thế.

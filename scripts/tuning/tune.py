@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-"""
-Unified tuning entrypoint.
+"""Unified tuning entrypoint.
 
 Steps
 - Clean out/ to avoid stale artifacts
-- Build merged runtime policy (baseline + optional single overlay) and set daily band
+- Run Codex-driven AI overrides (pre-phase) to publish config/policy_ai_overrides.json
+- Build merged runtime policy (baseline + overlays) and set daily band
 - Build pipeline artifacts
-- Run all calibrators (writing to out/orders/policy_overrides.json)
-- Run AI overrides calibrator (Codex) to update sector/ticker biases
+- Run numeric calibrators (writing to out/orders/policy_overrides.json)
 - Leave unified overlay in out/orders/policy_overrides.json for CI to persist if desired
 """
 
@@ -37,7 +36,13 @@ def main() -> int:
         print('[tune] Removing previous out/ directory')
         shutil.rmtree(OUT_DIR)
 
-    # Merge baseline + overlay and set band for presets builder
+    # Run AI pre-phase before merging overlays
+    print('[tune] Running AI overrides calibrator (Codex pre-phase)')
+    from scripts.tuning.calibrators import calibrate_ai_overrides
+
+    calibrate_ai_overrides.calibrate(write=True)
+
+    # Merge baseline + overlays and set band for presets builder
     print('[tune] Merging baseline + overlays via ensure_policy_override_file()')
     from scripts.engine.config_io import ensure_policy_override_file
     from scripts.build_presets_all import set_daily_band_pct
@@ -70,8 +75,8 @@ def main() -> int:
         calibrate_liquidity,
         calibrate_dynamic_caps,
         calibrate_ttl_minutes,
-    calibrate_fill_prob,
-    calibrate_watchlist,
+        calibrate_fill_prob,
+        calibrate_watchlist,
     )
 
     print('[tune] Running calibrators')
@@ -90,11 +95,6 @@ def main() -> int:
     calibrate_ttl_minutes.calibrate(write=True)
     calibrate_fill_prob.calibrate(write=True)
     calibrate_watchlist.calibrate(write=True)
-
-    # Run AI overrides calibrator (Codex)
-    print('[tune] Running AI overrides calibrator (Codex)')
-    from scripts.tuning.calibrators import calibrate_tilts
-    calibrate_tilts.calibrate(write=True)
 
     # Surface final overlay path for downstream automation (GitHub Action persists when appropriate)
     src = OUT_DIR / 'orders' / 'policy_overrides.json'

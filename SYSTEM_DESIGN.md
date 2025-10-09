@@ -45,7 +45,7 @@ Ghi chú cập nhật (2025-10): baseline + overlays (không ghi đè baseline)
 - Baseline: `config/policy_default.json` là nguồn sự thật, ổn định.
 - Unified overlay (publish): `config/policy_overrides.json` do unified tuner tạo và publish (đã bao gồm điều chỉnh từ calibrators/AI) để phục vụ audit/rollback.
 - Runtime artefact: `out/orders/policy_overrides.json` là kết quả hợp nhất tại thời điểm chạy để engine sử dụng.
-- Back‑compat: nếu tồn tại `config/policy_nightly_overrides.json` và/hoặc `config/policy_ai_overrides.json`, engine vẫn merge (tương thích ngược); pipeline hiện không sinh `policy_ai_overrides.json` nữa.
+- AI pre-phase: trước khi merge, bước Codex `calibrate_ai_overrides` luôn chạy và ghi `config/policy_ai_overrides.json`. File này chỉ chứa các khóa whitelisted, được clamp về guardrail (buy_budget_frac 0.02–0.30, add/new_max 0–20, bias ±0.20, execution.fill, calibration_targets.*…) và kèm rationale. Audit NDJSON (`out/debug/policy_ai_overrides_audit.ndjson`) lưu mọi thay đổi với timestamp/source="codex".
 - Runtime merge: `ensure_policy_override_file()` hợp nhất baseline → nightly (nếu có) → ai (nếu có) → unified publish (`config/policy_overrides.json`) rồi ghi kết quả vào `out/orders/policy_overrides.json`.
 - Engine hợp nhất các lớp cấu hình theo đúng thứ tự nhưng không còn bước lọc/whitelist tự động; tuner phải tự tuân thủ phạm vi override mong muốn. Calibrators có thể ghi các khóa rộng hơn (thresholds/sizing/market_filter…).
 
@@ -66,14 +66,16 @@ Developer tooling (Codex bootstrap)
 
 - Policy mặc định: Được định nghĩa trong file config/policy_default.json. Đây là nguồn sự thật chứa toàn bộ tham số chiến lược cơ bản, kết tinh từ nghiên cứu dài hạn. Ví dụ, trong policy mặc định có: trọng số mô hình điểm cho các yếu tố (xu hướng, động lượng, thanh khoản, beta, v.v.), các ngưỡng kỹ thuật như base_add, base_new (điểm tối thiểu để mua bổ sung/mua mới), ngưỡng trim_th để cắt giảm vị thế khi điểm yếu, các ngưỡng chốt lời (tp_pct) và cắt lỗ (sl_pct), tham số vi mô về khớp lệnh (bước giá HOSE, lô 100, phí giao dịch), giới hạn rủi ro (tỷ trọng tối đa cho một mã, một ngành), v.v. Hầu hết các giá trị trong policy_default là cố định, chỉ thay đổi khi điều chỉnh chiến lược lớn hoặc sau quá trình backtest dài hạn【28†L32-L40】.
 
-- Policy overrides (điều chỉnh hàng ngày): Unified tuner tạo `out/orders/policy_overrides.json` rồi publish sang `config/policy_overrides.json`. File publish phục vụ audit/rollback; bản runtime luôn được dựng lại từ baseline + overlays tại thời điểm chạy. Override cho phép ghi đè một số ít tham số so với mặc định nhằm tùy biến chiến lược theo diễn biến thị trường. Cụ thể, các khóa được phép override gồm
+- Policy overrides (điều chỉnh hàng ngày): Unified tuner tạo `out/orders/policy_overrides.json` rồi publish sang `config/policy_overrides.json`. File publish phục vụ audit/rollback; bản runtime luôn được dựng lại từ baseline + overlays tại thời điểm chạy. Override cho phép ghi đè một số ít tham số so với mặc định nhằm tùy biến chiến lược theo diễn biến thị trường. Cụ thể, các khóa được phép override (được Codex clamp tự động trước khi ghi file) gồm
 
   - buy_budget_frac – Tỷ lệ ngân sách dành cho lệnh mua trên tổng NAV. Tham số này điều chỉnh mức độ “risk-on/risk-off” chung (mua nhiều hay hạn chế mua).
   - add_max và new_max – Số lệnh mua tối đa cho danh mục hiện tại (add_max) và cho mã mới (new_max) mà engine được phép đề xuất trong phiên. Điều chỉnh hai giá trị này sẽ kiểm soát nhịp độ giải ngân (mua bổ sung thêm bao nhiêu mã đang có, và mua mới tối đa bao nhiêu mã mới)【28†L34-L37】.
   - sector_bias và ticker_bias – Hệ số thiên lệch (bias) cho một số ngành hoặc mã cụ thể. Mỗi bias là một giá trị trong khoảng [-0.20 .. +0.20] áp dụng lên điểm tín hiệu của ngành/mã đó. Bias dương nghĩa là ưu tiên (tăng điểm để khuyến khích mua), bias âm nghĩa là thận trọng (giảm điểm để hạn chế mua). Tham số này cho phép phản ánh tin tức đặc biệt: ví dụ tin tốt về một ngành -> tăng nhẹ điểm của ngành đó, tin xấu -> giảm điểm ngành đó【28†L35-L38】. Mỗi bias thường đi kèm một giải thích (rationale) để phục vụ audit.
   - rationale – Chuỗi mô tả ngắn gọn lý do cho các điều chỉnh trên (bắt buộc phải có mỗi khi override để phục vụ audit).
+  - calibration_targets.* – Codex chỉ định các quantile/target mà calibrators sẽ sử dụng (ví dụ `liquidity.adtv_multiple`, `market_filter.idx_drop_q`, `dynamic_caps.enp_total_target`…), không trực tiếp viết ngưỡng cuối cùng. Các giá trị này vẫn bị clamp theo guardrail baseline.
+  - execution.fill.* – Bộ tham số mới phục vụ ước lượng xác suất khớp POF cho lệnh mua mới: `horizon_s`, `window_sigma_s`, `window_vol_s`, `target_prob`, `max_chase_ticks`, `cancel_ratio_per_min`, `joiner_factor`, `no_cross`.
 
-Các khóa trên là phạm vi override mục tiêu mà tuner được hướng dẫn bám sát. Overlay AI hiện được ghi thẳng ra file nên nếu phát sinh khóa ngoài danh sách này, engine vẫn sẽ merge – do đó việc tuân thủ whitelist phụ thuộc vào prompt và quy trình review thay vì guardrails tự động. Cách tiếp cận này giữ cấu hình đơn giản nhưng vẫn nhấn mạnh tính ổn định dài hạn của baseline.
+Các khóa trên là phạm vi override mục tiêu mà tuner được hướng dẫn bám sát. Bước Codex pre-phase thực thi whitelist/clamp và ghi audit nên nếu phát sinh khóa ngoài danh sách, calibrator sẽ fail-fast. Điều này giữ cấu hình linh hoạt nhưng vẫn bảo toàn triết lý baseline.
 
 Quy trình hợp nhất cấu hình: Mỗi lần engine chạy, nó sẽ hợp nhất policy mặc định và override để tạo ra cấu hình chiến lược runtime cho phiên đó. Hàm ensure_policy_override_file() trong scripts/engine/config_io.py đảm nhiệm việc này. Cơ chế như sau:
 
@@ -92,6 +94,11 @@ Execution update (2025‑10‑08)
   - BUY: nếu limit > market → dùng market.
   - SELL: nếu limit < market → dùng market.
 - Quy tắc chỉ áp ở lớp xuất lệnh; không thay đổi khái niệm “in‑session” của các module khác.
+
+Execution update (2025‑10‑09)
+- `execution.fill.*` trong policy cho phép Codex đặt guardrail cho hành vi “bám sát giá” của lệnh mua mới: cửa sổ quan sát sigma/volume, target_prob mong muốn, số tick tối đa được phép nhích (max_chase_ticks) và cờ `no_cross`. Các giá trị này được clamp ở bước AI pre-phase để tránh cấu hình cực đoan. Cấu trúc phải tuân thủ schema phẳng (`execution.fill.{key}`); mọi khóa ngoài whitelist sẽ khiến pipeline dừng.
+- Order engine sử dụng bộ tham số trên để ước lượng xác suất khớp nhanh (POF) dựa trên mô hình Brownian đơn giản và proxy thanh khoản (ATR, ADTV). Engine thử đặt giá tại best bid, sau đó nhích tối đa `max_chase_ticks` tick nhưng vẫn tôn trọng `no_cross`. Nếu mọi phương án đều cho POF < target_prob thì lệnh bị bỏ qua, đồng thời `_track_filter` ghi lý do `fill_prob_below_target` và `regime.new_buy_fill_diag` lưu toàn bộ thống kê (H, C, d_ticks, OBI…).
+- Các phép tính dựa trên dữ liệu sẵn có (ATR%, ADTV, tick size). Khi thiếu dữ liệu, engine fallback về giá policy nhưng vẫn ghi nhận trạng thái `insufficient_data` để audit.
 
 CI cập nhật (2025‑10‑08)
 - Workflow `tuning.yml` in tail log và file lỗi Codex `out/debug/codex_policy_error_*.txt` khi fail; không upload artifact.
