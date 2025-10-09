@@ -146,6 +146,7 @@ class MarketRegime:
     ttl_overrides: Dict[str, int] = field(default_factory=dict)
     tp_sl_map: Dict[str, Dict[str, object]] = field(default_factory=dict)
     position_state: Dict[str, Dict[str, object]] = field(default_factory=dict)
+    new_buy_fill_diag: List[Dict[str, object]] = field(default_factory=list)
 
 
 def get_market_regime(session_summary: pd.DataFrame, sector_strength: pd.DataFrame, tuning: Dict) -> MarketRegime:
@@ -1462,6 +1463,185 @@ def pick_limit_price(ticker: str, side: str, snap_row: pd.Series, preset_row: Op
     limit_price = clip_to_band(limit_price, floor_tick, ceil_tick)
     return float(f"{limit_price:.2f}")
 
+
+_VN_SESSION_SECONDS = 4.25 * 3600.0
+_DEPTH_RATIO = 0.015  # fraction of average daily volume assumed at top of book
+
+
+def _estimate_new_buy_fill_env(
+    snap_row: pd.Series,
+    metrics_row: Optional[pd.Series],
+    lot: int,
+    fill_cfg: Dict[str, object],
+) -> Optional[Dict[str, float]]:
+    price = to_float(snap_row.get("Price")) or to_float(snap_row.get("P"))
+    if price is None or price <= 0:
+        return None
+    tick = None
+    if metrics_row is not None:
+        tick = to_float(metrics_row.get("TickSizeHOSE_Thousand"))
+    if tick is None or tick <= 0:
+        tick = hose_tick_size(price)
+    if tick is None or tick <= 0:
+        return None
+    bid = max(tick, price - tick)
+    ask = max(bid + tick, price + tick)
+    avg_turnover_k = None
+    atr_pct = None
+    if metrics_row is not None:
+        avg_turnover_k = to_float(metrics_row.get("AvgTurnover20D_k"))
+        atr_pct = to_float(metrics_row.get("ATR14_Pct"))
+    avg_volume_shares = 0.0
+    if avg_turnover_k is not None and price > 0:
+        avg_volume_shares = max(float(avg_turnover_k) / float(price), 0.0)
+    vol_rate = 0.0
+    if _VN_SESSION_SECONDS > 0:
+        vol_rate = max(0.0, avg_volume_shares / _VN_SESSION_SECONDS)
+    base_depth = max(float(lot), avg_volume_shares * _DEPTH_RATIO)
+    bid_vol1 = max(base_depth, float(lot))
+    ask_vol1 = max(base_depth, float(lot))
+    atr_ticks = 0.0
+    if atr_pct is not None and price > 0:
+        try:
+            atr_thousand = float(atr_pct) / 100.0 * float(price)
+            atr_ticks = atr_thousand / tick if tick > 0 else 0.0
+        except Exception:
+            atr_ticks = 0.0
+    sigma_per_sec = 0.0
+    if atr_ticks > 0 and _VN_SESSION_SECONDS > 0:
+        sigma_per_sec = atr_ticks / math.sqrt(_VN_SESSION_SECONDS)
+    window_sigma = max(int(fill_cfg.get("window_sigma_s", 45) or 45), 1)
+    floor_sigma = tick / math.sqrt(float(window_sigma))
+    sigma_ticks = max(sigma_per_sec, floor_sigma)
+    if sigma_ticks <= 0:
+        sigma_ticks = floor_sigma if floor_sigma > 0 else tick
+    cancel_ratio = float(fill_cfg.get("cancel_ratio_per_min", 0.30) or 0.0)
+    joiner_factor = float(fill_cfg.get("joiner_factor", 0.05) or 0.0)
+    horizon_s = max(int(fill_cfg.get("horizon_s", 60) or 60), 1)
+    return {
+        "price": float(price),
+        "tick": float(tick),
+        "bid": float(bid),
+        "ask": float(ask),
+        "bidVol1": float(bid_vol1),
+        "askVol1": float(ask_vol1),
+        "sigma_ticks": float(sigma_ticks),
+        "vol_rate": float(vol_rate),
+        "cancel_ratio": float(cancel_ratio),
+        "joiner_factor": float(joiner_factor),
+        "horizon_s": float(horizon_s),
+    }
+
+
+def _pof_new_buy(limit_price: float, env: Dict[str, float]) -> Tuple[float, float, float, float, float]:
+    tick = env["tick"]
+    horizon = max(env.get("horizon_s", 60.0), 1.0)
+    sigma_ticks = max(env.get("sigma_ticks", tick), 1e-9)
+    bid = env["bid"]
+    ask = env["ask"]
+    mid = (bid + ask) / 2.0
+    d_ticks = max(0.0, (mid - limit_price) / max(tick, 1e-9))
+    denom = sigma_ticks * math.sqrt(max(horizon, 1e-6))
+    if denom <= 0:
+        hit = 0.0
+    else:
+        z = d_ticks / denom
+        phi_z = 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))
+        hit = max(0.0, min(1.0, 2.0 * (1.0 - phi_z)))
+    bid_vol1 = max(env.get("bidVol1", 0.0), 0.0)
+    ask_vol1 = max(env.get("askVol1", 0.0), 0.0)
+    depth_sum = max(bid_vol1 + ask_vol1, 1e-6)
+    obi = max(-1.0, min(1.0, (bid_vol1 - ask_vol1) / depth_sum))
+    phi_bid = max(0.1, min(0.9, 0.5 + 0.4 * obi))
+    vol_rate = max(env.get("vol_rate", 0.0), 0.0)
+    evol_bid = max(0.0, vol_rate * horizon * phi_bid)
+    cancel_ratio = max(0.0, min(1.0, env.get("cancel_ratio", 0.0)))
+    joiner_factor = max(0.0, env.get("joiner_factor", 0.0))
+    cancel_factor = max(0.0, min(1.0, cancel_ratio * horizon / 60.0))
+    queue_ahead = bid_vol1 * max(0.0, 1.0 - cancel_factor) + (vol_rate * joiner_factor * horizon)
+    queue_ahead = max(queue_ahead, 1.0)
+    queue_prob = max(0.0, min(1.0, evol_bid / queue_ahead))
+    return hit * queue_prob, hit, queue_prob, d_ticks, obi
+
+
+def _apply_new_buy_execution(
+    ticker: str,
+    base_limit: float,
+    market_price: Optional[float],
+    snap_row: pd.Series,
+    metrics_row: Optional[pd.Series],
+    lot: int,
+    fill_cfg: Dict[str, object],
+) -> Tuple[Optional[float], Optional[Dict[str, object]]]:
+    if not fill_cfg:
+        return base_limit, None
+    env = _estimate_new_buy_fill_env(snap_row, metrics_row, lot, fill_cfg)
+    diag: Dict[str, object] = {
+        "ticker": ticker,
+        "base_limit": float(base_limit),
+        "market_price": None if market_price is None else float(market_price),
+        "candidates": [],
+    }
+    target_prob = float(fill_cfg.get("target_prob", 0.0) or 0.0)
+    diag["target_prob"] = target_prob
+    if env is None:
+        diag["status"] = "insufficient_data"
+        return base_limit, diag
+    diag.update({
+        "tick": env["tick"],
+        "bid": env["bid"],
+        "ask": env["ask"],
+        "sigma_ticks": env["sigma_ticks"],
+        "vol_rate": env["vol_rate"],
+        "cancel_ratio": env["cancel_ratio"],
+        "joiner_factor": env["joiner_factor"],
+        "horizon_s": env["horizon_s"],
+    })
+    start_limit = min(base_limit, env["bid"])
+    if market_price is not None:
+        start_limit = min(start_limit, float(market_price))
+    tick = env["tick"]
+    max_steps = int(fill_cfg.get("max_chase_ticks", 0) or 0)
+    no_cross = bool(fill_cfg.get("no_cross", True))
+    best = None
+    for step in range(max_steps + 1):
+        candidate = start_limit + step * tick
+        if market_price is not None and candidate > float(market_price):
+            candidate = float(market_price)
+        if no_cross and candidate >= env["ask"]:
+            if step == 0:
+                candidate = min(start_limit, env["bid"])
+            else:
+                break
+        candidate = round_to_tick(candidate, tick)
+        pof, hit, queue, d_ticks, obi = _pof_new_buy(candidate, env)
+        cand_diag = {
+            "step": step,
+            "limit": candidate,
+            "pof": pof,
+            "hit": hit,
+            "queue": queue,
+            "d_ticks": d_ticks,
+            "obi": obi,
+        }
+        diag["candidates"].append(cand_diag)
+        if best is None or pof > best["pof"]:
+            best = {"step": step, "limit": candidate, "pof": pof}
+        if pof >= target_prob and target_prob > 0:
+            diag["status"] = "accepted"
+            diag["selected_step"] = step
+            diag["selected_limit"] = candidate
+            diag["selected_pof"] = pof
+            return candidate, diag
+    if best is not None:
+        diag["best_step"] = best["step"]
+        diag["best_limit"] = best["limit"]
+        diag["best_pof"] = best["pof"]
+    if target_prob > 0:
+        diag["status"] = "skipped"
+        return None, diag
+    diag["status"] = "fallback"
+    return base_limit, diag
 
 def _market_tone_sentence(regime: MarketRegime) -> str:
     """Construct a qualitative market tone based on regime diagnostics."""
@@ -3608,6 +3788,7 @@ def build_orders(
     notes: Dict[str, str] = {}
     min_lot = int(float(sizing['min_lot']))
     lot = max(min_lot, 1)
+    fill_cfg = dict((getattr(regime, 'execution', {}) or {}).get('fill') or {})
 
     def _apply_caps_and_qty(t: str, budget_k: float, limit_price: float) -> int:
         # Base qty from budget
@@ -3760,6 +3941,16 @@ def build_orders(
         limit = pick_limit_price(t, "BUY", s, p, m, regime)
         market_price = to_float(s.get("Price")) or to_float(s.get("P"))
         budget = float(new_alloc.get(t, 0.0))
+        limit_adj, diag = _apply_new_buy_execution(t, limit, market_price, s, m, lot, fill_cfg)
+        if diag:
+            regime.new_buy_fill_diag.append(diag)
+        if limit_adj is None:
+            note = "fill prob below target"
+            if isinstance(diag, dict) and 'best_pof' in diag:
+                note = f"bestPOF={diag['best_pof']:.2f}<target={diag.get('target_prob',0.0):.2f}"
+            _track_filter(t, "fill_prob_below_target", note, side="BUY")
+            continue
+        limit = float(limit_adj)
         qty = _apply_caps_and_qty(t, budget, limit)
         is_partial = t in new_partial_names
         floor_lot_local = int(partial_floor_map_state.get(t, state_local.get('partial_entry_floor_lot', 1)) or 1)
@@ -3898,6 +4089,13 @@ def build_orders(
                     summary_chunks.append(f"{key}={cnt[key]}")
             if summary_chunks:
                 analysis_lines.append("Diagnostics summary: " + ", ".join(summary_chunks))
+        if getattr(regime, 'new_buy_fill_diag', None):
+            diag_list = list(regime.new_buy_fill_diag)
+            skipped = sum(1 for d in diag_list if isinstance(d, dict) and d.get('status') == 'skipped')
+            accepted = sum(1 for d in diag_list if isinstance(d, dict) and d.get('status') == 'accepted')
+            analysis_lines.append(
+                f"[execution] new_buy fill diag: accepted={accepted} skipped={skipped} total={len(diag_list)}"
+            )
             analysis_lines.append("Diagnostics warnings: " + ", ".join(sorted(set(str(x) for x in dw))))
         else:
             analysis_lines.append("Diagnostics warnings: -")
