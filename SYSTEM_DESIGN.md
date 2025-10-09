@@ -44,6 +44,7 @@ Ghi chú cập nhật (2025-10): baseline + overlays (không ghi đè baseline)
 
 - Baseline: `config/policy_default.json` là nguồn sự thật, ổn định.
 - Unified overlay (publish): `config/policy_overrides.json` do unified tuner tạo và publish (đã bao gồm điều chỉnh từ calibrators/AI) để phục vụ audit/rollback.
+- 🚫 Không chỉnh tay hoặc yêu cầu chỉnh tay `config/policy_overrides.json`. File này luôn được tạo lại bởi quy trình calibration/tuning nên mọi sửa đổi thủ công sẽ bị wipe ở lần chạy tiếp theo và gây mất dấu audit. Muốn thay đổi giá trị, cập nhật baseline/overlays hợp lệ hoặc chạy lại tuner.
 - Runtime artefact: `out/orders/policy_overrides.json` là kết quả hợp nhất tại thời điểm chạy để engine sử dụng.
 - AI pre-phase: trước khi merge, bước Codex `calibrate_ai_overrides` luôn chạy và ghi `config/policy_ai_overrides.json`. File này chỉ chứa các khóa whitelisted, được clamp về guardrail (buy_budget_frac 0.02–0.30, add/new_max 0–20, bias ±0.20, execution.fill, calibration_targets.*…) và kèm rationale. Audit NDJSON (`out/debug/policy_ai_overrides_audit.ndjson`) lưu mọi thay đổi với timestamp/source="codex".
 - Runtime merge: `ensure_policy_override_file()` hợp nhất baseline → nightly (nếu có) → ai (nếu có) → unified publish (`config/policy_overrides.json`) rồi ghi kết quả vào `out/orders/policy_overrides.json`.
@@ -96,7 +97,7 @@ Execution update (2025‑10‑08)
 - Quy tắc chỉ áp ở lớp xuất lệnh; không thay đổi khái niệm “in‑session” của các module khác.
 
 Execution update (2025‑10‑09)
-- `execution.fill.*` trong policy cho phép Codex đặt guardrail cho hành vi “bám sát giá” của lệnh mua mới: cửa sổ quan sát sigma/volume, target_prob mong muốn, số tick tối đa được phép nhích (max_chase_ticks) và cờ `no_cross`. Các giá trị này được clamp ở bước AI pre-phase để tránh cấu hình cực đoan.
+- `execution.fill.*` trong policy cho phép Codex đặt guardrail cho hành vi “bám sát giá” của lệnh mua mới: cửa sổ quan sát sigma/volume, target_prob mong muốn, số tick tối đa được phép nhích (max_chase_ticks) và cờ `no_cross`. Các giá trị này được clamp ở bước AI pre-phase để tránh cấu hình cực đoan. Cấu trúc phải tuân thủ schema phẳng (`execution.fill.{key}`); mọi khóa ngoài whitelist sẽ khiến pipeline dừng.
 - Order engine sử dụng bộ tham số trên để ước lượng xác suất khớp nhanh (POF) dựa trên mô hình Brownian đơn giản và proxy thanh khoản (ATR, ADTV). Engine thử đặt giá tại best bid, sau đó nhích tối đa `max_chase_ticks` tick nhưng vẫn tôn trọng `no_cross`. Nếu mọi phương án đều cho POF < target_prob thì lệnh bị bỏ qua, đồng thời `_track_filter` ghi lý do `fill_prob_below_target` và `regime.new_buy_fill_diag` lưu toàn bộ thống kê (H, C, d_ticks, OBI…).
 - Các phép tính dựa trên dữ liệu sẵn có (ATR%, ADTV, tick size). Khi thiếu dữ liệu, engine fallback về giá policy nhưng vẫn ghi nhận trạng thái `insufficient_data` để audit.
 

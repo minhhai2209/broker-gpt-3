@@ -55,6 +55,20 @@ class TestCalibrateAIOverrides(TestCase):
         with self.assertRaises(SystemExit):
             calibrate_ai_overrides._normalise_overrides({"foo": 1})
 
+    def test_normalise_execution_rejects_base_alias(self):
+        raw = {
+            "execution": {
+                "fill": {
+                    "base": {
+                        "horizon_s": 75,
+                        "target_prob": 0.55,
+                        "max_chase_ticks": 2,
+                    }
+                }
+            }
+        }
+        with self.assertRaises(SystemExit):
+            calibrate_ai_overrides._normalise_overrides(raw)
     def test_write_ai_overrides_audit(self):
         with TemporaryDirectory() as tmp:
             base = Path(tmp)

@@ -2,8 +2,20 @@
 // Source of truth for engine defaults. Comments are allowed and stripped at runtime.
 // Do not change key names without updating schema, README, and tests.
 // Units: unless noted otherwise, prices are in THOUSANDS VND/share; fractions are 0..1.
+//
+// Codex calibrator guidance:
+// - Treat every value here as the centreline. When generating ai_overrides, only move whitelisted knobs
+//   within guardrails to reflect new information; never introduce new keys.
+// - If news requires a defensive stance, bias toward the lower bound of each guardrail (e.g. shrink
+//   buy_budget_frac toward 0.02, reduce add_max/new_max toward 0) instead of inventing custom caps.
+// - The baseline encodes a neutral-to-mildly constructive view of VN equities; overrides should remain
+//   incremental and reversible on the next tune cycle.
+// - Calibration targets defined later are high-level goals for deterministic calibrators. Codex provides
+//   target quantiles/levels, and the downstream calibrators compute the precise thresholds.
 {
   // Fraction of NAV allocated to BUY orders today (guardrailed 0.02..0.30; default 0.10)
+  // Codex override intent: tighten toward 0.02 in risk-off regimes; loosen modestly (≤ baseline + 0.05)
+  // only after price confirmation. Never exceed 0.30.
   "buy_budget_frac": 0.10,
   // Optional mapping for regime-aware budgets (risk_on/neutral/risk_off). Values clipped 0..0.30.
   "buy_budget_by_regime": {
@@ -12,8 +24,11 @@
     "risk_off": 0.0
   },
   // Max number of add-on BUY orders (adds to existing positions) that can be opened today (guardrailed 0..10)
+  // Codex overrides should respect the heuristic: add_max >= new_max when staying offensive, and both may
+  // drop to 0 for kill-switch scenarios triggered by severe news.
   "add_max": 6,
   // Max number of new positions that can be opened today (guardrailed 0..10)
+  // Use lower values (0–1) to slow expansion when liquidity/volatility deteriorates; avoid raising above 6.
   "new_max": 3,
 
   // Weights for conviction score components used to rank candidates
@@ -462,6 +477,10 @@
     "normalization_robust": 0
   },
   // Guidance targets for formula-based calibrators
+  // These values define the “desired landing zone” that deterministic calibrators aim for.
+  // Codex AI sets these targets when news or market context warrants adjustment.
+  // Keep changes proportional: move quantiles by tens of bps, not full percent unless
+  // facing crisis conditions backed by data + price confirmation.
   "calibration_targets": {
     "thresholds": {
       // Near-ceiling quantile for Price/BandCeiling. Higher = stricter near-ceiling gate
@@ -469,26 +488,40 @@
       "near_ceiling_q": 0.99
     },
     "market_filter": {
+      // idx_drop_q: percentile of index drawdown that triggers guardrails.
+      // Lowering this quantile makes the system more sensitive to market selloffs.
       "idx_drop_q": 0.1,
+      // vol_ann_q: annualised volatility percentile used to flip between regimes.
+      // If Codex perceives persistent stress, consider nudging toward 0.90–0.92 instead of drastic cuts.
       "vol_ann_q": 0.95,
+      // trend_floor_q: percentile floor for trend strength; raising this forces stronger confirmation before buying.
       "trend_floor_q": 0.1,
       // Calibrate ATR guard on high percentiles to avoid premature budget cuts
+      // Soft guard handles early warnings; hard guard is the absolute cutoff.
       "atr_soft_q": 0.90,
       "atr_hard_q": 0.97,
+      // Market strength (ms_*) quantiles control how aggressive breadth filters behave.
+      // Use soft to pre-emptively slow entries, hard to fully halt when leadership collapses.
       "ms_soft_q": 0.6,
       "ms_hard_q": 0.35,
+      // Drawdown floor ensures we taper exposure after major index drops even if other metrics are calm.
       "dd_floor_q": 0.8,
+      // Breadth guard rails: keep in the 0.35–0.45 zone under normal conditions.
+      // Adjust half-life only when structural regime shifts occur (e.g., multi-quarter rotations).
       "breadth_floor_q": 0.4,
       // Exponential half-life (days) for weighting breadth history toward recent data
       "breadth_floor_half_life_days": 126,
       // Hard clamps to avoid unrealistic guard thresholds in thin breadth regimes
       "breadth_floor_min": 0.32,
       "breadth_floor_max": 0.48,
+      // Leaders (top breadth cohort) need RSI/momentum above these quantiles to justify adds.
+      // Lower slightly when market structure is grinding but orderly; raise during frothy phases.
       "leader_rsi_q": 0.75,
       "leader_mom_q": 0.75
     },
     "liquidity": {
       // Notional guard: per‑order notional ≤ α × ADTV20 (α below)
+      // Codex can increase this (e.g., to 24) when liquidity confirmed improving, or drop toward 12 when tape is thin.
       "adtv_multiple": 20.0
     },
     "sizing": {
@@ -496,7 +529,9 @@
       "enp_target_new": 3.0
     },
     "dynamic_caps": {
+      // enp_total_target: total effective number of positions target; lower values shrink breadth exposure.
       "enp_total_target": 9,
+      // sector_limit_target: cap fraction for any single sector. Keep between 0.25 and 0.40 unless structural change confirmed.
       "sector_limit_target": 0.35
     }
   }
