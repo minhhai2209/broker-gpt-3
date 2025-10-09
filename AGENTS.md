@@ -18,11 +18,13 @@ Overlay policy (baseline bất biến)
 - Baseline: `config/policy_default.json` không bị workflow ghi đè.
 - Nightly overlay (tùy chọn): `config/policy_nightly_overrides.json` do calibrators sinh; commit riêng khi có thay đổi.
 - Unified overlay (hiện hành): `config/policy_overrides.json` do unified tuner publish (đã hợp nhất các điều chỉnh); lưu trong repo để audit/rollback.
+- **Không chỉnh tay `config/policy_overrides.json` và tuyệt đối không gợi ý chỉnh tay.** File này luôn được sinh bởi bước calibration/tuning; mọi thay đổi thủ công sẽ bị phiên chạy kế tiếp ghi đè, đồng thời phá vỡ audit trail.
 - Back‑compat: `config/policy_ai_overrides.json` trước đây do tuner sinh; hiện pipeline không tạo nữa nhưng engine vẫn MERGE nếu file tồn tại.
 - Runtime merge: engine hợp nhất baseline → nightly (nếu có) → ai (nếu có) → legacy `config/policy_overrides.json` thành `out/orders/policy_overrides.json` và dùng cho phiên chạy.
 
 Generated artifacts
 - `out/orders/policy_overrides.json` là file MACHINE‑GENERATED cho mỗi phiên/tune; engine thêm `"_meta".machine_generated = true` và timestamp. Tuyệt đối không chỉnh tay; mọi thay đổi sẽ bị ghi đè. Nếu cần thay đổi, cập nhật overlay tại `config/` và để engine hợp nhất ở runtime.
+- **Lưu ý bổ sung:** `config/policy_overrides.json` cũng là artefact do calibrators xuất bản. Không chỉnh tay hoặc đề xuất chỉnh tay file này; thay đổi phải đi qua quy trình tune/calibration.
 
 ## Phân chia tài liệu (Docs structure)
 - `README.md`: chỉ tập trung vào cách sử dụng (install, chạy nhanh, I/O, lệnh tiện ích, server usage cơ bản, FAQ). Không chứa chi tiết kỹ thuật/thuật toán; nếu cần, đặt link trỏ sang SYSTEM_DESIGN.md.
@@ -48,3 +50,4 @@ Generated artifacts
 Policy biên tập:
 - Khi thêm chi tiết kỹ thuật mới, cập nhật `SYSTEM_DESIGN.md` và chỉ bổ sung gạch đầu dòng/link tối thiểu ở `README.md` nếu ảnh hưởng tới cách dùng.
 - Nếu `README.md` bị “phình” bởi nội dung kỹ thuật, tách/chuyển sang `SYSTEM_DESIGN.md` và rút gọn còn phần hướng dẫn sử dụng.
+- Đây là công cụ phục vụ cá nhân, chỉ quan tâm trạng thái HEAD hiện tại; không cần lưu tài liệu hoặc ghi chú về mã cũ đã bị thay thế.

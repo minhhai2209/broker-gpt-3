@@ -254,11 +254,22 @@ class Pricing(BaseModel):
 
 
 class Execution(BaseModel):
+    class FillConfig(BaseModel):
+        horizon_s: int = Field(default=60, ge=10, le=600)
+        window_sigma_s: int = Field(default=45, ge=15, le=600)
+        window_vol_s: int = Field(default=90, ge=30, le=600)
+        target_prob: float = Field(default=0.60, ge=0.0, le=0.99)
+        max_chase_ticks: int = Field(default=1, ge=0, le=5)
+        cancel_ratio_per_min: float = Field(default=0.30, ge=0.0, le=0.95)
+        joiner_factor: float = Field(default=0.05, ge=0.0, le=1.0)
+        no_cross: bool = Field(default=True)
+
     stop_ttl_min: int = Field(default=3, ge=1)
     slip_pct_min: float = Field(default=0.002, ge=0.0)
     slip_atr_mult: float = Field(default=0.50, ge=0.0)
     slip_ticks_min: int = Field(default=1, ge=0)
     flash_k_atr: float = Field(default=1.50, ge=0.0)
+    fill: Optional[FillConfig] = None
 
 
 class MarketFilter(BaseModel):
