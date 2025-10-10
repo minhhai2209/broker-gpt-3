@@ -101,12 +101,12 @@
     "add_max_neutral_cap": 1
   },
   "regime_model": {
-    "intercept": 2.132115677536862,
+    "intercept": 2.172173344930824,
     "threshold": 0.79,
     "components": {
       "trend": {
-        "mean": 0.4296590413944657,
-        "std": 0.3610097188222526,
+        "mean": 0.4301923248121094,
+        "std": 0.3615432377762759,
         "weight": 1.55
       },
       "momentum": {
@@ -120,23 +120,23 @@
         "weight": 1.2
       },
       "drawdown": {
-        "mean": 0.44238756684686026,
-        "std": 0.2891558962086612,
+        "mean": 0.4429187585474561,
+        "std": 0.2899781612730959,
         "weight": 0.95
       },
       "volatility": {
-        "mean": 0.48915184761794045,
-        "std": 0.2782195220429298,
+        "mean": 0.49745736875048596,
+        "std": 0.2728427275154992,
         "weight": 1.05
       },
       "index_return": {
-        "mean": 0.13738898483169276,
-        "std": 0.16435406005954056,
+        "mean": 0.1376306126766505,
+        "std": 0.16444522210794538,
         "weight": 0.8
       },
       "turnover": {
-        "mean": 0.5835833234597396,
-        "std": 0.3159437663338974,
+        "mean": 0.5838747814121996,
+        "std": 0.31520621864074183,
         "weight": 0.8
       },
       "mcclellan": {
@@ -183,7 +183,7 @@
     "dynamic_caps": 0
   },
   "market_filter": {
-    "risk_off_index_drop_pct": 0.3484877041695573,
+    "risk_off_index_drop_pct": 0.3491002267676364,
     "risk_off_trend_floor": 0.0,
     "risk_off_breadth_floor": 0.48,
     "risk_off_drawdown_floor": 0.03765736205513479,
@@ -194,14 +194,14 @@
     "leader_require_ma20": 1,
     "leader_require_ma50": 1,
     "leader_max": 2,
-    "index_atr_soft_pct": 0.9002096436058701,
-    "index_atr_hard_pct": 0.970062893081761,
+    "index_atr_soft_pct": 0.9002100840336135,
+    "index_atr_hard_pct": 0.970063025210084,
     "guard_new_scale_cap": 0.4,
     "atr_soft_scale_cap": 0.5,
     "severe_drop_mult": 1.5,
-    "idx_chg_smoothed_hard_drop": 0.3484877041695573,
-    "trend_norm_hard_floor": -0.36045671543390645,
-    "vol_ann_hard_ceiling": 0.2660216407795225,
+    "idx_chg_smoothed_hard_drop": 0.3491002267676364,
+    "trend_norm_hard_floor": -0.3616207839546208,
+    "vol_ann_hard_ceiling": 0.26608499119066753,
     "us_epu_soft_pct": null,
     "us_epu_hard_pct": null,
     "dxy_soft_pct": null,
