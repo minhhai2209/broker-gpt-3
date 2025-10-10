@@ -35,7 +35,7 @@
     "q_add": 0.0,
     "q_new": 0.8933333333333333,
     "min_liq_norm": 0.2549019607843137,
-    "near_ceiling_pct": 0.9817270929466051,
+    "near_ceiling_pct": 0.9818896945726213,
     "tp_pct": 0.0,
     "sl_pct": 0.0,
     "tp_atr_mult": 1.0638297872340425,
@@ -101,12 +101,12 @@
     "add_max_neutral_cap": 1
   },
   "regime_model": {
-    "intercept": 2.1322264906064956,
+    "intercept": 2.1322335065361187,
     "threshold": 0.79,
     "components": {
       "trend": {
-        "mean": 0.42964476709961585,
-        "std": 0.3609895203065675,
+        "mean": 0.4296483356733283,
+        "std": 0.3609945553839473,
         "weight": 1.55
       },
       "momentum": {
@@ -125,18 +125,18 @@
         "weight": 0.95
       },
       "volatility": {
-        "mean": 0.48926880668226796,
-        "std": 0.278130624957969,
+        "mean": 0.48926045246338745,
+        "std": 0.27813620257492905,
         "weight": 1.05
       },
       "index_return": {
-        "mean": 0.1371472349860028,
-        "std": 0.16371471607007182,
+        "mean": 0.1371715611501228,
+        "std": 0.1637715739555877,
         "weight": 0.8
       },
       "turnover": {
-        "mean": 0.5826822352224068,
-        "std": 0.3157620593871408,
+        "mean": 0.582855521421894,
+        "std": 0.3157057432217541,
         "weight": 0.8
       },
       "mcclellan": {
@@ -189,7 +189,7 @@
     "risk_off_drawdown_floor": 0.03765736205513479,
     "market_score_soft_floor": 0.6,
     "market_score_hard_floor": 0.3,
-    "leader_min_rsi": 56.7725,
+    "leader_min_rsi": 57.1325,
     "leader_min_mom_norm": 0.7524509803921569,
     "leader_require_ma20": 1,
     "leader_require_ma50": 1,
@@ -282,7 +282,7 @@
     "momentum_unit": 0.12
   },
   "sizing": {
-    "softmax_tau": 0.0762847900390636,
+    "softmax_tau": 0.0790039062500011,
     "add_share": 0.5,
     "new_share": 0.5,
     "min_lot": 100,
@@ -297,7 +297,7 @@
     "qty_min_lot": 100,
     "min_notional_per_order": 2000000.0,
     "cov_lookback_days": 250,
-    "cov_reg": 0.00043427599413909,
+    "cov_reg": 0.00043435294982277793,
     "risk_parity_floor": 0.2,
     "dynamic_caps": {
       "enable": 0,
@@ -366,18 +366,18 @@
     },
     "watchlist": {
       "enable": 1,
-      "min_priority": 0.398,
+      "min_priority": 0.394,
       "micro_window": 3
     },
     "suggestions_top_n": 3,
     "ttl_bucket_state": {
       "current": "low",
-      "sigma": 0.007703359914329024
+      "sigma": 0.007536111095070025
     },
     "ttl_bucket_thresholds": {
       "p75": 0.008591156599099328,
       "p95": 0.018826036126701216,
-      "latest": 0.007703359914329024
+      "latest": 0.007536111095070025
     },
     "ttl_minutes_baseline": {
       "base": 12,
