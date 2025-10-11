@@ -168,12 +168,27 @@ def suggest_tuning(session_summary: pd.DataFrame, sector_strength: pd.DataFrame)
     """
     import re
 
-    ov_path = OUT_ORDERS_DIR / "policy_overrides.json"
+    runtime_path = OUT_ORDERS_DIR / "policy_runtime.json"
+    ov_path = runtime_path if runtime_path.exists() else OUT_ORDERS_DIR / "policy_overrides.json"
     if not ov_path.exists():
-        raise SystemExit("Missing out/orders/policy_overrides.json. Please generate a full override (no defaults).")
+        raise SystemExit(
+            "Missing out/orders/policy_overrides.json. Generate policy_overrides.json via ensure_policy_override_file()."
+        )
     raw = ov_path.read_text()
+    raw = _strip_json_comments(raw)
     raw = re.sub(r"/\*.*?\*/", "", raw, flags=re.S)
     raw = re.sub(r"(^|\s)//.*$", "", raw, flags=re.M)
     raw = re.sub(r"(^|\s)#.*$", "", raw, flags=re.M)
-    model = PolicyOverrides.model_validate_json(raw)
-    return model.model_dump()
+    import json as _json
+
+    try:
+        parsed = _json.loads(raw)
+    except Exception as exc:
+        raise SystemExit(f"Invalid runtime policy JSON: {exc}") from exc
+
+    runtime_overrides = parsed.pop("_runtime_overrides", None)
+    model = PolicyOverrides.model_validate(parsed)
+    data = model.model_dump()
+    if runtime_overrides is not None:
+        data["_runtime_overrides"] = runtime_overrides
+    return data
