@@ -9,11 +9,14 @@ Goals
 - Adapt horizon/window and microstructure knobs smoothly with volatility/turnover.
 
 Method
-1) Build regime and candidate list (classify_action == 'new' before quantile gates).
-2) For each NEW candidate, compute best POF across 0..max_chase_ticks steps with
-   no-cross at the inside, using the same primitives as the engine.
+1) Build regime and candidate list using conviction scores (pre-quantile gate) so we
+   can rank prospective NEWs without relying on previous hard filters.
+2) Evaluate the top slice by conviction (bounded window) and compute best POF across
+   0..max_chase_ticks steps with no-cross at the inside, using the same primitives as
+   the engine.
 3) With K = new_max from policy, set target_prob = quantile(P, 1 - K/|P|),
-   clamped to [0.20, 0.75]. If |P| == 0, leave target_prob unchanged.
+   clamp to [0.20, 0.75], and apply a distribution-aware floor so at least one
+   candidate can satisfy the acceptance test when microstructure allows.
 4) Set horizon/window from index_atr_percentile; joiner_factor from turnover percentile.
 
 Inputs

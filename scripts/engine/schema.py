@@ -277,6 +277,7 @@ class MarketFilter(BaseModel):
     risk_off_index_drop_pct: Optional[float] = Field(default=None, gt=0.0)
     risk_off_trend_floor: float
     risk_off_breadth_floor: float = Field(ge=0.0, le=1.0)
+    breadth_relax_margin: Optional[float] = Field(default=None, ge=0.0, le=0.2)
     market_score_soft_floor: float = Field(ge=0.0, le=1.0)
     market_score_hard_floor: float = Field(ge=0.0, le=1.0)
     leader_min_rsi: float

@@ -9,6 +9,9 @@ Principles
 - Do not look into realized fills; only use current cross‑section diagnostics
   and portfolio size. Calibrate mapping buy_budget_by_regime to generic values
   that the engine uses at runtime (no per‑run ad‑hoc knobs).
+- Provide a small, data-driven relaxation margin for the market breadth guard so
+  risk-on sessions with orderly volatility do not fail the breadth filter by a
+  few basis points. The guard still tightens automatically in stressed tapes.
 
 Inputs
 - out/orders/policy_overrides.json (or config/policy_overrides.json fallback)
@@ -106,6 +109,13 @@ def calibrate(*, write: bool = True) -> Dict[str, float]:
     # Risk factor from logistic probability
     risk_factor = _clip((risk_on_prob - 0.45) / 0.25, 0.0, 1.0)
 
+    # Breadth guard relaxation — enabled only when risk-on odds and volatility allow.
+    if risk_factor > 0.0:
+        base_relax = 0.005 + 0.015 * risk_factor  # 0.5%..2.0%
+        breadth_relax = _clip(base_relax * vol_penalty, 0.0, 0.03)
+    else:
+        breadth_relax = 0.0
+
     # NEW breadth target — adaptive with regime floors, clipped to [0..10]
     if getattr(regime, "risk_on", False):
         base_floor = 3  # ensure exploration even when at min_names_target
@@ -130,13 +140,21 @@ def calibrate(*, write: bool = True) -> Dict[str, float]:
         "risk_on": 0.15,
     }
 
-    out = {"new_max": k_new, "add_max": k_add, **{f"budget_{k}": v for k, v in budget_map.items()}}
+    out = {
+        "new_max": k_new,
+        "add_max": k_add,
+        "breadth_relax_margin": breadth_relax,
+        **{f"budget_{k}": v for k, v in budget_map.items()},
+    }
 
     if write:
         obj = pol
         obj["new_max"] = int(k_new)
         obj["add_max"] = int(k_add)
         obj["buy_budget_by_regime"] = dict(budget_map)
+        mf_conf = dict(obj.get("market_filter", {}) or {})
+        mf_conf["breadth_relax_margin"] = float(breadth_relax)
+        obj["market_filter"] = mf_conf
         _save_policy(obj)
     return out
 
