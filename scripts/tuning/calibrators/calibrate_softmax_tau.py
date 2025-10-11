@@ -35,6 +35,8 @@ from scripts.orders.order_engine import (
     classify_action,
 )
 
+from scripts.tuning.calibrators.policy_write import write_policy
+
 BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / 'out'
 DATA_DIR = BASE_DIR / 'data'
@@ -49,12 +51,6 @@ def _load_json() -> Dict:
     raw = re.sub(r"(^|\s)//.*$", "", raw, flags=re.M)
     raw = re.sub(r"(^|\s)#.*$", "", raw, flags=re.M)
     return json.loads(raw)
-
-
-def _save_json(obj: Dict) -> None:
-    target = ORDERS_PATH if ORDERS_PATH.exists() else CONFIG_PATH
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf-8')
 
 
 def _load(name: str) -> pd.DataFrame:
@@ -200,7 +196,12 @@ def calibrate(write: bool = False) -> Tuple[float, int, float, int, float]:
         sz = dict(obj.get('sizing', {}) or {})
         sz['softmax_tau'] = float(tau)
         obj['sizing'] = sz
-        _save_json(obj)
+        write_policy(
+            calibrator=__name__,
+            policy=obj,
+            orders_path=ORDERS_PATH,
+            config_path=CONFIG_PATH,
+        )
     return float(tau), int(n_add), float(enp_add), int(n_new), float(enp_new)
 
 

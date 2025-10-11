@@ -27,6 +27,7 @@ from typing import Any, Mapping
 import numpy as np
 import pandas as pd
 
+from scripts.tuning.calibrators.policy_write import write_policy
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / 'out'
@@ -74,11 +75,6 @@ def _resolve_policy_paths(policy_path: Path | None) -> tuple[dict[str, Any], dic
     # Fallback: create overrides file if none exist yet.
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     return defaults, {}, CONFIG_PATH
-
-
-def _save_policy(obj: Mapping[str, Any], path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf-8')
 
 
 def _load_history() -> pd.DataFrame:
@@ -241,7 +237,11 @@ def calibrate(*, write: bool = False, policy_path: Path | None = None) -> float:
         mf = _merge_dict(overlay.get('market_filter') if overlay else None, None)
         mf['risk_off_breadth_floor'] = float(floor)
         updated['market_filter'] = mf
-        _save_policy(updated, target_path)
+        write_policy(
+            calibrator=__name__,
+            policy=updated,
+            explicit_path=target_path,
+        )
 
     return float(floor)
 

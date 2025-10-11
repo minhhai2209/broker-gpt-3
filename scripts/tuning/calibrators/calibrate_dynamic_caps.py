@@ -25,6 +25,8 @@ from pathlib import Path
 import json
 import re
 
+from scripts.tuning.calibrators.policy_write import write_policy
+
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / 'out'
@@ -42,12 +44,6 @@ def _strip(text: str) -> str:
 def _load() -> dict:
     src = ORDERS_PATH if ORDERS_PATH.exists() else CONFIG_PATH
     return json.loads(_strip(src.read_text(encoding='utf-8')))
-
-
-def _save(obj: dict) -> None:
-    target = ORDERS_PATH if ORDERS_PATH.exists() else CONFIG_PATH
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf-8')
 
 
 def _clamp(x: float, lo: float, hi: float) -> float:
@@ -102,7 +98,12 @@ def calibrate(write: bool = False) -> tuple[float, float, float, float]:
         dyn['sector_max'] = float(sector_max_base)
         sizing['dynamic_caps'] = dyn
         obj['sizing'] = sizing
-        _save(obj)
+        write_policy(
+            calibrator=__name__,
+            policy=obj,
+            orders_path=ORDERS_PATH,
+            config_path=CONFIG_PATH,
+        )
     return float(pos_min_base), float(pos_max_base), float(sector_min_base), float(sector_max_base)
 
 
