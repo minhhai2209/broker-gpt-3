@@ -103,6 +103,7 @@ class TestNeutralAdaptiveEntry(unittest.TestCase):
                 'risk_off_index_drop_pct': 0.6,
                 'risk_off_trend_floor': -1.0,
                 'risk_off_breadth_floor': 0.0,
+                'breadth_relax_margin': 0.0,
                 'market_score_soft_floor': 0.2,
                 'market_score_hard_floor': 0.05,
                 'leader_min_rsi': 0.0,

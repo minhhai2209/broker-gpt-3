@@ -91,6 +91,7 @@ def make_regime(**overrides):
         'risk_off_index_drop_pct': 0.5,
         'risk_off_trend_floor': 0.0,
         'risk_off_breadth_floor': 0.4,
+        'breadth_relax_margin': 0.0,
         'market_score_soft_floor': 0.6,
         'market_score_hard_floor': 0.3,
         'leader_min_rsi': 50.0,
@@ -101,6 +102,12 @@ def make_regime(**overrides):
         'risk_off_drawdown_floor': 0.4,
         'index_atr_soft_pct': 0.8,
         'index_atr_hard_pct': 0.95,
+        'guard_new_scale_cap': 0.4,
+        'atr_soft_scale_cap': 0.5,
+        'severe_drop_mult': 1.5,
+        'idx_chg_smoothed_hard_drop': 0.5,
+        'trend_norm_hard_floor': -0.25,
+        'vol_ann_hard_ceiling': 0.6,
     }
     for k, v in overrides.items():
         setattr(regime, k, v)
@@ -142,4 +149,3 @@ class TestTradeSuggestions(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

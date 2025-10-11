@@ -126,6 +126,7 @@ class TestDiagnosticsAndOutputs(unittest.TestCase):
                 'risk_off_index_drop_pct': 0.5,
                 'risk_off_trend_floor': 0.0,
                 'risk_off_breadth_floor': 0.4,
+                'breadth_relax_margin': 0.0,
                 'market_score_soft_floor': 0.55,
                 'market_score_hard_floor': 0.35,
                 'leader_min_rsi': 50.0,
@@ -139,6 +140,9 @@ class TestDiagnosticsAndOutputs(unittest.TestCase):
                 'idx_chg_smoothed_hard_drop': 0.5,
                 'trend_norm_hard_floor': -0.25,
                 'vol_ann_hard_ceiling': 0.60,
+                'guard_new_scale_cap': 0.40,
+                'atr_soft_scale_cap': 0.50,
+                'severe_drop_mult': 1.50,
             },
             'pricing': {
                 'risk_on_buy': ["Aggr","Bal","Cons","MR","Break"],
