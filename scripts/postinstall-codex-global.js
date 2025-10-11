@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
   Ensures a global Codex CLI is available as `codex`.
-  - Tries `codex --version`; if missing, installs globally via `npm install -g @openai/codex@latest`.
+  - Tries `codex --version`; if missing, installs globally via `npm install -g @openai/codex`.
   - If installation is needed, ensure ~/.codex/auth.json exists; if missing, populate with $CODEX_AUTH_JSON (same contract as .github/workflows/tuning.yml).
   - On EACCES or missing PATH to global bin, retries with a user prefix using NPM_CONFIG_PREFIX=$HOME/.npm-global.
   - Verifies availability and fails fast if still not found.
@@ -146,8 +146,8 @@ function ensureConfigTomlFromRepo() {
 
 function installGlobalCodexWithEnv(extraEnv = {}) {
   const env = { ...process.env, ...extraEnv };
-  info(`attempting npm global install @openai/codex@latest with env delta keys=[${Object.keys(extraEnv).join(', ')}]`);
-  const res = runCapture('npm', ['install', '-g', '@openai/codex@latest'], { env });
+  info(`attempting npm global install @openai/codex with env delta keys=[${Object.keys(extraEnv).join(', ')}]`);
+  const res = runCapture('npm', ['install', '-g', '@openai/codex'], { env });
   return res.ok;
 }
 
@@ -199,7 +199,7 @@ function main() {
         if (!ok) {
           error('Codex CLI still not available on PATH after installation attempts.');
           error('Ensure your npm global bin is on PATH, or install manually:');
-          error('  npm install -g @openai/codex@latest');
+          error('  npm install -g @openai/codex');
           process.exit(1);
           return;
         } else {

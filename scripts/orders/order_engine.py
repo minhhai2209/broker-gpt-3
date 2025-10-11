@@ -34,6 +34,7 @@ from scripts.utils import (clip_to_band, detect_session_phase_now_vn,
                            hose_tick_size, load_universe_from_files,
                            round_to_tick, to_float)
 from scripts.engine.config_io import ensure_policy_override_file, suggest_tuning
+from scripts.aggregate_patches import aggregate_to_runtime, PatchMergeError
 from scripts.engine.pipeline import ensure_pipeline_artifacts
 from scripts.engine.volatility import garman_klass_sigma, percentile_thresholds
 from scripts.engine.schema import MarketFilter as _MarketFilter, NeutralAdaptive, Execution as _Execution
@@ -1877,6 +1878,8 @@ def decide_actions(
     session_summary: pd.DataFrame,
     tuning: Dict,
     prices_history: Optional[pd.DataFrame] = None,
+    *,
+    runtime_overrides: Optional[Dict[str, object]] = None,
 ):
     # Ensure tuning has centrally-provided policy sections when tests call this helper directly
     # Avoid any baseline reads; only use the runtime merged copy if augmentation is needed.
@@ -2129,7 +2132,13 @@ def decide_actions(
     act: Dict[str, str] = {}
     score: Dict[str, float] = {}
     feats_all: Dict[str, Dict[str, float]] = {}
-    debug_filters: Dict[str, List[str]] = {"market": [], "liquidity": [], "near_ceiling": [], "limit_gt_market": []}
+    debug_filters: Dict[str, List[str]] = {
+        "market": [],
+        "liquidity": [],
+        "near_ceiling": [],
+        "limit_gt_market": [],
+        "ml_gate": [],
+    }
     filtered_records: List[Dict[str, object]] = []
 
     def _note_filter(ticker: str, reason: str, note: str = "") -> None:
@@ -2896,6 +2905,83 @@ def decide_actions(
                 regime.buy_budget_frac = 0.0
             except Exception:
                 pass
+
+    # Apply runtime gating overrides (e.g., ML calibrator)
+    gate_context = runtime_overrides if isinstance(runtime_overrides, dict) else {}
+    gate_map = gate_context.get("gate") if isinstance(gate_context, dict) else {}
+    meta_map = gate_context.get("meta") if isinstance(gate_context, dict) else {}
+    ml_meta = None
+    if isinstance(meta_map, dict):
+        for candidate_key in ("cal_ml", "ml", "patch_ml"):
+            meta_candidate = meta_map.get(candidate_key)
+            if isinstance(meta_candidate, dict):
+                ml_meta = meta_candidate
+                break
+    gate_threshold = 0.65
+    if isinstance(ml_meta, dict) and ml_meta.get("p_gate") is not None:
+        try:
+            gate_threshold = float(ml_meta.get("p_gate"))
+        except Exception:
+            gate_threshold = 0.65
+    if isinstance(gate_map, dict) and gate_map:
+        for key, info in gate_map.items():
+            try:
+                ticker_up = str(key).upper()
+            except Exception:
+                continue
+            matched = [t for t in list(act.keys()) if str(t).upper() == ticker_up]
+            if not matched:
+                continue
+            if not isinstance(info, dict):
+                continue
+            block = False
+            reason = None
+            if "decision" in info:
+                decision = str(info.get("decision", "")).strip().lower()
+                if decision == "block":
+                    block = True
+                    reason = info.get("reason") or "decision_block"
+                elif decision == "allow":
+                    block = False
+            if not block and "allow" in info and isinstance(info.get("allow"), bool):
+                if not info.get("allow"):
+                    block = True
+                    reason = info.get("reason") or "allow_flag_false"
+            if not block and "p_succ" in info:
+                try:
+                    prob = float(info.get("p_succ"))
+                except Exception:
+                    prob = None
+                if prob is not None:
+                    try:
+                        local_gate = float(info.get("p_gate")) if info.get("p_gate") is not None else gate_threshold
+                    except Exception:
+                        local_gate = gate_threshold
+                    if prob < local_gate:
+                        block = True
+                        reason = f"p_succ {prob:.2f} < p_gate {local_gate:.2f}"
+            if block and not reason:
+                reason = "ml_gate_block"
+            if not block:
+                continue
+            blocked_now: List[str] = []
+            for ticker_actual in matched:
+                action_now = act.get(ticker_actual)
+                if action_now in {"new", "new_partial"}:
+                    del act[ticker_actual]
+                    partial_entry_set.discard(ticker_actual)
+                    partial_frac_map.pop(ticker_actual, None)
+                    partial_floor_map.pop(ticker_actual, None)
+                    partial_buffer_map.pop(ticker_actual, None)
+                    partial_enabled_map.pop(ticker_actual, None)
+                    blocked_now.append(ticker_actual)
+                elif action_now == "add":
+                    act[ticker_actual] = "hold"
+                    blocked_now.append(ticker_actual)
+            if blocked_now and reason:
+                for ticker_actual in blocked_now:
+                    debug_filters.setdefault("ml_gate", []).append(ticker_actual)
+                    _note_filter(ticker_actual, "ml_gate", reason)
 
     # Focus top-N add/new (respect neutral caps when active)
     add_names = [t for t, a in act.items() if a == "add"]
@@ -4199,11 +4285,15 @@ def run(simulate: bool = False, *, context: Optional[Dict[str, Any]] = None, fla
     OUT_ORDERS_DIR.mkdir(parents=True, exist_ok=True)
     # Ensure we have a runtime copy of the policy first; then derive static knobs (e.g., band)
     ensure_policy_override_file()
+    try:
+        runtime_path = aggregate_to_runtime()
+    except PatchMergeError as _exc_merge:
+        raise SystemExit(f"Failed to aggregate policy patches: {_exc_merge}") from _exc_merge
     # Read single policy source once (runtime merged copy)
     import json as _json, re as _re
-    pol_path = OUT_ORDERS_DIR / 'policy_overrides.json'
+    pol_path = runtime_path if runtime_path.exists() else OUT_ORDERS_DIR / 'policy_overrides.json'
     if not pol_path.exists():
-        raise SystemExit('Missing out/orders/policy_overrides.json after ensure_policy_override_file')
+        raise SystemExit('Missing runtime policy after aggregation')
     try:
         raw = pol_path.read_text(encoding='utf-8')
         raw = _re.sub(r"/\*.*?\*/", "", raw, flags=_re.S)
@@ -4268,6 +4358,7 @@ def run(simulate: bool = False, *, context: Optional[Dict[str, Any]] = None, fla
     # Metrics/snapshot already prepared; skip recomputation
 
     tuning = suggest_tuning(session_summary, sector_strength)
+    runtime_overrides = dict(tuning.pop("_runtime_overrides", {}) or {})
     actions, scores, feats_all, regime = decide_actions(
         portfolio,
         snapshot,
@@ -4277,6 +4368,7 @@ def run(simulate: bool = False, *, context: Optional[Dict[str, Any]] = None, fla
         sector_strength,
         session_summary,
         tuning,
+        runtime_overrides=runtime_overrides,
         prices_history=prices_history,
     )
     orders, notes, regime = build_orders(
