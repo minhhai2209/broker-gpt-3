@@ -25,6 +25,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 
+from scripts.tuning.calibrators.policy_write import write_policy
 BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / 'out'
 ORDERS_DIR = OUT_DIR / 'orders'
@@ -409,19 +410,22 @@ def calibrate(horizon: int = 21, write: bool = False) -> tuple[float, float, int
 
     pos_rate = float(y.mean()) if len(y) else 0.0
     if write:
-        import re, json
+        import re as _re
+        import json as _json
+
         target = ORDERS_DIR / 'policy_overrides.json'
-        # Prefer writing to runtime copy; if missing, fall back to config path
         if not target.exists():
             target = CONFIG_PATH
         text = target.read_text(encoding='utf-8')
-        text_nc = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
-        text_nc = re.sub(r"(^|\s)//.*$", "", text_nc, flags=re.M)
-        text_nc = re.sub(r"(^|\s)#.*$", "", text_nc, flags=re.M)
-        obj = json.loads(text_nc)
-        obj.setdefault('regime_model', {})['intercept'] = float(b)
-        obj.setdefault('regime_model', {})['threshold'] = float(thr)
-        target.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf-8')
+        text_nc = _re.sub(r"/\*.*?\*/", "", text, flags=_re.S)
+        text_nc = _re.sub(r"(^|\s)//.*$", "", text_nc, flags=_re.M)
+        text_nc = _re.sub(r"(^|\s)#.*$", "", text_nc, flags=_re.M)
+        obj = _json.loads(text_nc)
+        rm = dict(obj.get('regime_model', {}) or {})
+        rm['intercept'] = float(b)
+        rm['threshold'] = float(thr)
+        obj['regime_model'] = rm
+        write_policy(calibrator=__name__, policy=obj, explicit_path=target)
     return float(b), float(thr), int(len(y)), pos_rate, list(names)
 
 

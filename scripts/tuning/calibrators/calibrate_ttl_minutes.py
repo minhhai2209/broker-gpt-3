@@ -26,6 +26,8 @@ import pandas as pd
 
 from scripts.engine.volatility import garman_klass_sigma, percentile_thresholds
 
+from scripts.tuning.calibrators.policy_write import write_policy
+
 BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / 'out'
 ORDERS_DIR = OUT_DIR / 'orders'
@@ -115,7 +117,11 @@ def calibrate(*, write: bool = False) -> tuple[int, int, int]:
         ou['ttl_bucket_state'] = {'current': bucket, 'sigma': thresholds.get('latest')}
         ou['ttl_minutes_baseline'] = baseline
         pol['orders_ui'] = ou
-        pol_p.write_text(json.dumps(pol, ensure_ascii=False, indent=2), encoding='utf-8')
+        write_policy(
+            calibrator=__name__,
+            policy=pol,
+            explicit_path=pol_p,
+        )
     return int(base), int(soft), int(hard)
 
 

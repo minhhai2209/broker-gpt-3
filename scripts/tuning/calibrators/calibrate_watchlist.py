@@ -26,6 +26,8 @@ import json, re
 import numpy as np
 import pandas as pd
 
+from scripts.tuning.calibrators.policy_write import write_policy
+
 BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / 'out'
 ORDERS_DIR = OUT_DIR / 'orders'
@@ -105,7 +107,11 @@ def calibrate(*, write: bool = False) -> tuple[float, int]:
         ou['watchlist'] = wl
         pol['orders_ui'] = ou
         pol_p = ORDERS_DIR / 'policy_overrides.json'
-        pol_p.write_text(json.dumps(pol, ensure_ascii=False, indent=2), encoding='utf-8')
+        write_policy(
+            calibrator=__name__,
+            policy=pol,
+            explicit_path=pol_p,
+        )
     return float(min_prio), int(micro_window)
 
 

@@ -31,6 +31,8 @@ from typing import Dict, Tuple, List
 
 import pandas as pd
 
+from scripts.tuning.calibrators.policy_write import write_policy
+
 BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / 'out'
 ORDERS_DIR = OUT_DIR / 'orders'
@@ -160,7 +162,11 @@ def calibrate(*, write: bool = False) -> Tuple[float, float, int, int]:
         th['q_add'] = float(q_add)
         th['q_new'] = float(q_new)
         obj['thresholds'] = th
-        pol_path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf-8')
+        write_policy(
+            calibrator=__name__,
+            policy=obj,
+            explicit_path=pol_path,
+        )
     return float(q_add), float(q_new), n_add, n_new
 
 

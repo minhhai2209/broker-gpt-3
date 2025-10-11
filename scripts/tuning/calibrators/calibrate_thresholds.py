@@ -38,6 +38,8 @@ from scripts.orders.order_engine import (
     classify_action,
 )
 
+from scripts.tuning.calibrators.policy_write import write_policy
+
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / 'out'
@@ -55,12 +57,6 @@ def _read_json_config() -> Dict:
     raw = re.sub(r"(^|\s)//.*$", "", raw, flags=re.M)
     raw = re.sub(r"(^|\s)#.*$", "", raw, flags=re.M)
     return json.loads(raw)
-
-
-def _write_json_config(obj: Dict) -> None:
-    target = ORDERS_PATH if ORDERS_PATH.exists() else CONFIG_PATH
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf-8')
 
 
 def _load_csv(name: str) -> pd.DataFrame:
@@ -206,7 +202,12 @@ def calibrate(write: bool = False) -> Tuple[float, float, int, int]:
         th2['q_add'] = float(q_add)
         th2['q_new'] = float(q_new)
         obj['thresholds'] = th2
-        _write_json_config(obj)
+        write_policy(
+            calibrator=__name__,
+            policy=obj,
+            orders_path=ORDERS_PATH,
+            config_path=CONFIG_PATH,
+        )
     return float(q_add), float(q_new), int(n_add), int(n_new)
 
 

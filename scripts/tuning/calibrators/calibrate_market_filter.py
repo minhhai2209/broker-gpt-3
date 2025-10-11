@@ -45,6 +45,8 @@ import re
 import numpy as np
 import pandas as pd
 
+from scripts.tuning.calibrators.policy_write import write_policy
+
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / 'out'
@@ -67,12 +69,6 @@ def _load_policy() -> Dict:
     raw = src.read_text(encoding='utf-8')
     js = json.loads(_strip_json_comments(raw))
     return js
-
-
-def _save_policy(obj: Dict) -> None:
-    target = ORDERS_PATH if ORDERS_PATH.exists() else CONFIG_PATH
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf-8')
 
 
 def _load_vnindex_history(min_days: int = 400) -> pd.DataFrame:
@@ -296,7 +292,12 @@ def calibrate(write: bool = False) -> Dict[str, float]:
         mf = dict(obj.get('market_filter', {}) or {})
         mf.update(out)
         obj['market_filter'] = mf
-        _save_policy(obj)
+        write_policy(
+            calibrator=__name__,
+            policy=obj,
+            orders_path=ORDERS_PATH,
+            config_path=CONFIG_PATH,
+        )
     return out
 
 

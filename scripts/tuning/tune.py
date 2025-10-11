@@ -80,8 +80,33 @@ def main() -> int:
     )
     # New deterministic calibrators (generic / reusable)
     from scripts.tuning.calibrators import calibrate_budget_topk, calibrate_execution_fill
+    from scripts.tuning.calibrators.policy_write import (
+        expect_calibrations,
+        verify_calibrations,
+        reset_tracking,
+    )
 
     print('[tune] Running calibrators')
+    reset_tracking()
+    expect_calibrations([
+        calibrate_regime_components.__name__,
+        calibrate_regime.__name__,
+        calibrate_market_filter.__name__,
+        calibrate_breadth_floor.__name__,
+        calibrate_leader_gates.__name__,
+        calibrate_risk_limits.__name__,
+        calibrate_sizing.__name__,
+        calibrate_budget_topk.__name__,
+        calibrate_execution_fill.__name__,
+        calibrate_thresholds.__name__,
+        calibrate_softmax_tau.__name__,
+        calibrate_near_ceiling.__name__,
+        calibrate_liquidity.__name__,
+        calibrate_dynamic_caps.__name__,
+        calibrate_ttl_minutes.__name__,
+        calibrate_fill_prob.__name__,
+        calibrate_watchlist.__name__,
+    ])
     calibrate_regime_components.calibrate(write=True)
     calibrate_regime.calibrate(horizon=63, write=True)
     calibrate_market_filter.calibrate(write=True)
@@ -100,6 +125,11 @@ def main() -> int:
     calibrate_ttl_minutes.calibrate(write=True)
     calibrate_fill_prob.calibrate(write=True)
     calibrate_watchlist.calibrate(write=True)
+
+    missing_writes = verify_calibrations()
+    if missing_writes:
+        missing_list = ', '.join(sorted(missing_writes))
+        raise SystemExit(f"[tune] Missing policy writes from calibrators: {missing_list}")
 
     # Surface final overlay path for downstream automation (GitHub Action persists when appropriate)
     src = OUT_DIR / 'orders' / 'policy_overrides.json'

@@ -28,6 +28,8 @@ import re
 import numpy as np
 import pandas as pd
 
+from scripts.tuning.calibrators.policy_write import write_policy
+
 BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / 'out'
 ORDERS_PATH = OUT_DIR / 'orders' / 'policy_overrides.json'
@@ -42,12 +44,6 @@ def _load_json() -> dict:
     raw = re.sub(r"(^|\s)//.*$", "", raw, flags=re.M)
     raw = re.sub(r"(^|\s)#.*$", "", raw, flags=re.M)
     return json.loads(raw)
-
-
-def _save_json(obj: dict) -> None:
-    target = ORDERS_PATH if ORDERS_PATH.exists() else CONFIG_PATH
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf-8')
 
 
 def _load_metrics() -> pd.DataFrame:
@@ -97,7 +93,12 @@ def calibrate(write: bool = False) -> tuple[float, float, float]:
         sz = dict(obj.get('sizing', {}) or {})
         sz['default_stop_atr_mult'] = float(sl_mult)
         obj['sizing'] = sz
-        _save_json(obj)
+        write_policy(
+            calibrator=__name__,
+            policy=obj,
+            orders_path=ORDERS_PATH,
+            config_path=CONFIG_PATH,
+        )
     return float(tp_mult), float(sl_mult), float(atr_med)
 
 

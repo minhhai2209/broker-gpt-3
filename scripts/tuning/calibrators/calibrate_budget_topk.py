@@ -32,6 +32,8 @@ import re
 import math
 import pandas as pd
 
+from scripts.tuning.calibrators.policy_write import write_policy
+
 BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / "out"
 ORDERS_PATH = OUT_DIR / "orders" / "policy_overrides.json"
@@ -50,12 +52,6 @@ def _load_policy() -> Dict:
     if not src.exists():
         raise SystemExit(f"Missing policy file: {src}")
     return json.loads(_strip(src.read_text(encoding="utf-8")))
-
-
-def _save_policy(obj: Dict) -> None:
-    target = ORDERS_PATH if ORDERS_PATH.exists() else CONFIG_PATH
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _load_csv(path: Path) -> pd.DataFrame:
@@ -155,7 +151,12 @@ def calibrate(*, write: bool = True) -> Dict[str, float]:
         mf_conf = dict(obj.get("market_filter", {}) or {})
         mf_conf["breadth_relax_margin"] = float(breadth_relax)
         obj["market_filter"] = mf_conf
-        _save_policy(obj)
+        write_policy(
+            calibrator=__name__,
+            policy=obj,
+            orders_path=ORDERS_PATH,
+            config_path=CONFIG_PATH,
+        )
     return out
 
 
