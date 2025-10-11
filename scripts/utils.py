@@ -23,7 +23,10 @@ def detect_session_phase_now_vn() -> str:
             "Install tzdata to ensure deterministic session phase detection."
         )
     tz = ZoneInfo("Asia/Ho_Chi_Minh")  # type: ignore[arg-type]
-    now = datetime.now(tz).time()
+    now_dt = datetime.now(tz)
+    if now_dt.weekday() >= 5:
+        return "post"
+    now = now_dt.time()
     if now < time(9, 0):
         return "pre"
     if time(9, 0) <= now < time(11, 30):

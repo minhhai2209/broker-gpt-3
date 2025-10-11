@@ -62,8 +62,12 @@ def _latest_intraday_timestamp(latest_path: Path = Path('out/intraday/latest.csv
 
 def infer_session_context(intraday_dir: Path = Path('out/intraday')) -> tuple[str, int]:
     now = datetime.now(VN_TZ)
-    phase_now = _phase_from_dt(now)
-    session_active_now = phase_now in ('morning', 'afternoon', 'ATC')
+    if now.weekday() >= 5:
+        phase_now = 'post'
+        session_active_now = False
+    else:
+        phase_now = _phase_from_dt(now)
+        session_active_now = phase_now in ('morning', 'afternoon', 'ATC')
     latest_path = intraday_dir / 'latest.csv'
     latest_ts = _latest_intraday_timestamp(latest_path)
     if latest_ts is None:

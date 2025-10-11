@@ -26,6 +26,13 @@ class _PreOpenDateTime(ORIGINAL_DATETIME):
         return base if tz is None else ORIGINAL_DATETIME(2025, 9, 23, 8, 30, tzinfo=tz)
 
 
+class _WeekendDateTime(ORIGINAL_DATETIME):
+    @classmethod
+    def now(cls, tz=None):  # type: ignore[override]
+        base = ORIGINAL_DATETIME(2025, 9, 27, 13, 30)
+        return base if tz is None else ORIGINAL_DATETIME(2025, 9, 27, 13, 30, tzinfo=tz)
+
+
 class TestBuildMetricsSession(unittest.TestCase):
     def tearDown(self) -> None:
         bm.datetime = ORIGINAL_DATETIME
@@ -64,6 +71,15 @@ class TestBuildMetricsSession(unittest.TestCase):
             bm.datetime = _PreOpenDateTime
             phase, in_session = bm.infer_session_context(dataset_dir)
             self.assertEqual(phase, 'pre')
+            self.assertEqual(in_session, 0)
+
+    def test_infer_session_context_weekend_tolerates_previous_day_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dataset_dir = Path(tmp) / 'intraday'
+            self._write_latest(dataset_dir, '2025-09-26 14:45:00')
+            bm.datetime = _WeekendDateTime
+            phase, in_session = bm.infer_session_context(dataset_dir)
+            self.assertEqual(phase, 'post')
             self.assertEqual(in_session, 0)
 
 
