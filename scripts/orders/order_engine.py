@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -48,6 +48,55 @@ from scripts.portfolio.portfolio_risk import (
 )
 from scripts.tuning.mean_variance_calibrator import calibrate_mean_variance_params
 import json
+
+
+def _relaxed_breadth_floor(
+    raw_floor: float,
+    mf_conf: Mapping[str, Any],
+    *,
+    risk_on_prob: float,
+    atr_percentile: float,
+) -> float:
+    """Return an effective breadth floor after applying relaxation margin."""
+
+    try:
+        floor = float(raw_floor)
+    except Exception:
+        floor = 0.0
+    floor = max(0.0, min(1.0, floor))
+
+    try:
+        margin = float((mf_conf or {}).get("breadth_relax_margin", 0.0) or 0.0)
+    except Exception:
+        margin = 0.0
+    if margin <= 0.0:
+        return floor
+
+    prob = max(0.0, min(1.0, float(risk_on_prob)))
+    if prob <= 0.0:
+        return floor
+
+    try:
+        atr_pct = float(atr_percentile)
+    except Exception:
+        atr_pct = 0.0
+    try:
+        soft = float((mf_conf or {}).get("index_atr_soft_pct", 0.9) or 0.9)
+    except Exception:
+        soft = 0.9
+    try:
+        hard = float((mf_conf or {}).get("index_atr_hard_pct", 0.97) or 0.97)
+    except Exception:
+        hard = soft + 0.07
+    if hard <= soft:
+        hard = soft + 0.01
+
+    span = max(hard - soft, 1e-6)
+    vol_relax = 1.0 - max(0.0, min(1.0, (atr_pct - soft) / span))
+    relax = margin * prob * max(vol_relax, 0.0)
+    adjusted = floor - relax
+    return max(0.0, min(1.0, adjusted))
+
 
 # Paths
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -660,6 +709,7 @@ def get_market_regime(session_summary: pd.DataFrame, sector_strength: pd.DataFra
         "risk_off_index_drop_pct": abs(_mf_float("risk_off_index_drop_pct")),
         "risk_off_trend_floor": _mf_float("risk_off_trend_floor"),
         "risk_off_breadth_floor": max(0.0, min(1.0, _mf_float("risk_off_breadth_floor"))),
+        "breadth_relax_margin": max(0.0, min(0.2, _mf_float("breadth_relax_margin"))),
         "leader_min_rsi": _mf_float("leader_min_rsi"),
         "leader_min_mom_norm": max(0.0, min(1.0, _mf_float("leader_min_mom_norm"))),
         "leader_require_ma20": _mf_bool("leader_require_ma20"),
@@ -960,9 +1010,15 @@ def get_market_regime(session_summary: pd.DataFrame, sector_strength: pd.DataFra
         except Exception:
             trend_floor = 0.0
         try:
-            breadth_floor = float(market_filter_conf.get('risk_off_breadth_floor', 0.0) or 0.0)
+            breadth_floor_raw = float(market_filter_conf.get('risk_off_breadth_floor', 0.0) or 0.0)
         except Exception:
-            breadth_floor = 0.0
+            breadth_floor_raw = 0.0
+        breadth_floor = _relaxed_breadth_floor(
+            breadth_floor_raw,
+            market_filter_conf,
+            risk_on_prob=getattr(mr, 'risk_on_probability', 0.0) or 0.0,
+            atr_percentile=getattr(mr, 'index_atr_percentile', 0.0) or 0.0,
+        )
         try:
             score_hard = float(market_filter_conf.get('market_score_hard_floor', 0.0) or 0.0)
         except Exception:
@@ -2757,13 +2813,19 @@ def decide_actions(
     mf_conf = getattr(regime, 'market_filter', {}) or {}
     idx_drop_thr = float(mf_conf.get('risk_off_index_drop_pct', 0.5) or 0.0)
     trend_floor = float(mf_conf.get('risk_off_trend_floor', 0.0) or 0.0)
-    breadth_floor = float(mf_conf.get('risk_off_breadth_floor', 0.4) or 0.0)
+    breadth_floor_raw = float(mf_conf.get('risk_off_breadth_floor', 0.4) or 0.0)
     score_soft = float(mf_conf.get('market_score_soft_floor', 1.0) or 1.0)
     score_hard = float(mf_conf.get('market_score_hard_floor', 0.0) or 0.0)
     idx_chg = float(getattr(regime, 'index_change_pct', 0.0) or 0.0)
     trend_strength = float(getattr(regime, 'trend_strength', 0.0) or 0.0)
     breadth_hint = float(getattr(regime, 'breadth_hint', 0.0) or 0.0)
     market_score = float(getattr(regime, 'market_score', 0.0) or 0.0)
+    breadth_floor = _relaxed_breadth_floor(
+        breadth_floor_raw,
+        mf_conf,
+        risk_on_prob=getattr(regime, 'risk_on_probability', 0.0) or 0.0,
+        atr_percentile=getattr(regime, 'index_atr_percentile', 0.0) or 0.0,
+    )
     guard_new = (
         (idx_drop_thr > 0.0 and idx_chg <= -abs(idx_drop_thr))
         or (trend_strength <= trend_floor)
@@ -3609,13 +3671,19 @@ def build_orders(
     mf_conf = getattr(regime, 'market_filter', {}) or {}
     idx_drop_thr = float(mf_conf.get('risk_off_index_drop_pct', 0.5) or 0.0)
     trend_floor = float(mf_conf.get('risk_off_trend_floor', 0.0) or 0.0)
-    breadth_floor = float(mf_conf.get('risk_off_breadth_floor', 0.4) or 0.0)
+    breadth_floor_raw = float(mf_conf.get('risk_off_breadth_floor', 0.4) or 0.0)
     score_soft = float(mf_conf.get('market_score_soft_floor', 1.0) or 1.0)
     score_hard = float(mf_conf.get('market_score_hard_floor', 0.0) or 0.0)
     idx_chg = float(getattr(regime, 'index_change_pct', 0.0) or 0.0)
     trend_strength = float(getattr(regime, 'trend_strength', 0.0) or 0.0)
     breadth_hint = float(getattr(regime, 'breadth_hint', 0.0) or 0.0)
     market_score = float(getattr(regime, 'market_score', 0.0) or 0.0)
+    breadth_floor = _relaxed_breadth_floor(
+        breadth_floor_raw,
+        mf_conf,
+        risk_on_prob=getattr(regime, 'risk_on_probability', 0.0) or 0.0,
+        atr_percentile=getattr(regime, 'index_atr_percentile', 0.0) or 0.0,
+    )
     # Severity multiplier configurable via policy (default 1.5)
     severe_mult = float(mf_conf.get('severe_drop_mult', 1.5) or 1.5)
     severe = idx_drop_thr > 0.0 and idx_chg <= -abs(idx_drop_thr) * severe_mult

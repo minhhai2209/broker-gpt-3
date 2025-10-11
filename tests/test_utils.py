@@ -1,6 +1,7 @@
 from pathlib import Path
 import unittest
 
+import scripts.utils as su
 from scripts.utils import hose_tick_size, round_to_tick, clip_to_band, load_universe_from_files
 
 
@@ -26,6 +27,28 @@ class TestUtils(unittest.TestCase):
         self.assertIsInstance(uni, list)
         self.assertGreater(len(uni), 0)
         self.assertIn('FPT', uni)
+
+
+class TestDetectSessionPhase(unittest.TestCase):
+    ORIGINAL_DT = su.datetime
+
+    @classmethod
+    def tearDownClass(cls):
+        su.datetime = cls.ORIGINAL_DT
+
+    def tearDown(self) -> None:
+        su.datetime = self.ORIGINAL_DT
+
+    def test_weekend_defaults_to_post(self):
+        class _WeekendDateTime(self.ORIGINAL_DT):
+            @classmethod
+            def now(cls, tz=None):  # type: ignore[override]
+                base = cls(2025, 9, 27, 13, 30)
+                return base if tz is None else cls(2025, 9, 27, 13, 30, tzinfo=tz)
+
+        su.datetime = _WeekendDateTime
+        phase = su.detect_session_phase_now_vn()
+        self.assertEqual(phase, 'post')
 
 
 if __name__ == '__main__':

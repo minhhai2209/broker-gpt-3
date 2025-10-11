@@ -141,6 +141,7 @@ class TestMarketFilterScalingParams(unittest.TestCase):
             'risk_off_index_drop_pct': 0.5,
             'risk_off_trend_floor': -1.0,
             'risk_off_breadth_floor': 0.2,
+            'breadth_relax_margin': 0.0,
             'market_score_soft_floor': 0.55,
             'market_score_hard_floor': 0.35,
             'leader_min_rsi': 30.0,
@@ -148,11 +149,15 @@ class TestMarketFilterScalingParams(unittest.TestCase):
             'leader_require_ma20': 0,
             'leader_require_ma50': 0,
             'leader_max': 0,
+            'risk_off_drawdown_floor': 0.40,
             'guard_new_scale_cap': 0.90,
             'atr_soft_scale_cap': 0.70,
             'severe_drop_mult': 1.50,
             'index_atr_soft_pct': 0.10,
             'index_atr_hard_pct': 0.40,
+            'idx_chg_smoothed_hard_drop': 0.5,
+            'trend_norm_hard_floor': -0.25,
+            'vol_ann_hard_ceiling': 0.60,
         }
         tuning = self._tuning_with_regime(mf, buy_budget=0.12)
         actions, scores, feats, regime = decide_actions(
@@ -174,6 +179,7 @@ class TestMarketFilterScalingParams(unittest.TestCase):
             'risk_off_index_drop_pct': 0.5,
             'risk_off_trend_floor': -1.0,
             'risk_off_breadth_floor': 0.2,
+            'breadth_relax_margin': 0.0,
             'market_score_soft_floor': 0.55,
             'market_score_hard_floor': 0.35,
             'leader_min_rsi': 30.0,
@@ -181,11 +187,15 @@ class TestMarketFilterScalingParams(unittest.TestCase):
             'leader_require_ma20': 0,
             'leader_require_ma50': 0,
             'leader_max': 0,
+            'risk_off_drawdown_floor': 0.40,
             'guard_new_scale_cap': 0.90,
             'atr_soft_scale_cap': 0.70,
             'severe_drop_mult': 1.50,
             'index_atr_soft_pct': 0.40,
             'index_atr_hard_pct': 0.90,
+            'idx_chg_smoothed_hard_drop': 0.5,
+            'trend_norm_hard_floor': -0.25,
+            'vol_ann_hard_ceiling': 0.60,
         }
         tuning = self._tuning_with_regime(mf, buy_budget=0.12)
         actions, scores, feats, regime = decide_actions(
