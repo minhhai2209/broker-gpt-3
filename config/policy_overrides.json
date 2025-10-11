@@ -11,7 +11,7 @@
     "neutral": 0.1,
     "risk_on": 0.15
   },
-  "add_max": 10,
+  "add_max": 4,
   "new_max": 3,
   "weights": {
     "w_trend": 0.35,
@@ -32,8 +32,8 @@
     "base_add": 0.35,
     "base_new": 0.4,
     "trim_th": -0.05,
-    "q_add": 0.6428571428571428,
-    "q_new": 0.9423076923076923,
+    "q_add": 0.6,
+    "q_new": 0.9558823529411765,
     "min_liq_norm": 0.00980392156862745,
     "near_ceiling_pct": 0.9377149445165011,
     "tp_pct": 0.0,
@@ -283,7 +283,7 @@
     "momentum_unit": 0.12
   },
   "sizing": {
-    "softmax_tau": 0.0500000000000022,
+    "softmax_tau": 0.05130290985107532,
     "add_share": 0.5,
     "new_share": 0.5,
     "min_lot": 100,
