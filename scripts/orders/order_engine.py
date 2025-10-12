@@ -28,6 +28,13 @@ from scripts.orders.orders_io import (
     write_orders_quality,
     write_orders_csv_enriched,
 )
+from scripts.orders.ladder import (
+    generate_ladder_levels,
+    write_ladder_final_csv,
+    build_ladder_quality_rows,
+    write_ladder_quality_csv,
+    write_ladder_log,
+)
 from scripts.indicators.precompute_indicators import precompute_indicators_from_history_df
 from scripts.portfolio.report_pnl import build_portfolio_pnl_dfs
 from scripts.utils import (clip_to_band, detect_session_phase_now_vn,
@@ -4500,15 +4507,44 @@ def run(simulate: bool = False, *, context: Optional[Dict[str, Any]] = None, fla
         except Exception:
             prev_orders_df = None
     exec_hint = _suggest_execution_window(regime, session_summary, session_now)
-    write_orders_csv(
-        orders,
-        OUT_ORDERS_DIR / "orders_final.csv",
-        snapshot=snapshot,
-        presets=presets,
-        regime=regime,
-        feats_all=feats_all,
-        scores=scores,
-    )
+    # Execution Ladder integration (after sizing/pricing, before writing CSVs)
+    levels: list = []
+    ladder_dropped: list = []
+    ladder_debug: list = []
+    try:
+        levels, ladder_dropped, ladder_debug = generate_ladder_levels(
+            orders, regime=regime, snapshot=snapshot, metrics=metrics, presets=presets
+        )
+    except SystemExit:
+        # Hard fail as per policy if config is malformed
+        raise
+    except Exception as _exc_lad:
+        # If ladder fails unexpectedly, keep legacy output to avoid blackouts
+        print(f"[warn] ladder_generation_failed: {_exc_lad}")
+        levels = []
+
+    if levels:
+        write_ladder_final_csv(levels, OUT_ORDERS_DIR / "orders_final.csv")
+        try:
+            q_rows = build_ladder_quality_rows(levels, snapshot=snapshot, presets=presets, metrics=metrics, regime=regime, feats_all=feats_all)
+            write_ladder_quality_csv(q_rows, OUT_ORDERS_DIR / "orders_quality.csv")
+        except Exception as _exc_q:
+            print(f"[warn] ladder_quality_failed: {_exc_q}")
+        try:
+            write_ladder_log(ladder_debug, OUT_DIR / 'debug' / 'ladder.log')
+        except Exception as _exc_log:
+            print(f"[warn] ladder_log_failed: {_exc_log}")
+    else:
+        # Fallback to legacy minimal CSV when ladder disabled or produced no levels
+        write_orders_csv(
+            orders,
+            OUT_ORDERS_DIR / "orders_final.csv",
+            snapshot=snapshot,
+            presets=presets,
+            regime=regime,
+            feats_all=feats_all,
+            scores=scores,
+        )
     (OUT_ORDERS_DIR / "orders_print.txt").write_text(print_orders(orders, snapshot), encoding="utf-8")
     diff_lines: List[str] = []
     if prev_orders_df is not None and not prev_orders_df.empty:
@@ -4633,11 +4669,13 @@ def run(simulate: bool = False, *, context: Optional[Dict[str, Any]] = None, fla
     write_orders_analysis(analysis_lines, OUT_ORDERS_DIR / "orders_analysis.txt")
     write_orders_reasoning(actions, scores, feats_all, OUT_ORDERS_DIR / "orders_reasoning.csv")
     # Per-order execution/profitability heuristics to help operator prioritize input
-    try:
-        write_orders_quality(orders, snapshot, presets, regime, feats_all, scores, OUT_ORDERS_DIR / "orders_quality.csv")
-    except Exception as _exc_q:
-        analysis_lines.append(f"[warn] write_orders_quality failed: {_exc_q}")
-        write_orders_analysis(analysis_lines, OUT_ORDERS_DIR / "orders_analysis.txt")
+    # If ladder used, orders_quality.csv already written above; otherwise, keep legacy writer
+    if not levels:
+        try:
+            write_orders_quality(orders, snapshot, presets, regime, feats_all, scores, OUT_ORDERS_DIR / "orders_quality.csv")
+        except Exception as _exc_q:
+            analysis_lines.append(f"[warn] write_orders_quality failed: {_exc_q}")
+            write_orders_analysis(analysis_lines, OUT_ORDERS_DIR / "orders_analysis.txt")
     # Trade suggestions (human-readable summary)
     try:
         # Use policy knob for suggestions length if provided
@@ -4692,6 +4730,32 @@ def run(simulate: bool = False, *, context: Optional[Dict[str, Any]] = None, fla
         filtered_path = OUT_ORDERS_DIR / "orders_filtered.csv"
         if filtered_path.exists():
             filtered_path.unlink()
+    # Append ladder‑dropped levels to watchlist (enriched) if any
+    if ladder_dropped:
+        dropped_orders = []
+        for d in ladder_dropped:
+            note = f"LADDER_DROPPED:{d.get('Reason','')};Bundle={d.get('BundleId','')};Level={d.get('Level','')}"
+            try:
+                dropped_orders.append(Order(
+                    ticker=str(d.get('Ticker')), side=str(d.get('Side')).upper(),
+                    quantity=int(d.get('Quantity') or 0), limit_price=float(d.get('LimitPrice') or 0.0), note=note
+                ))
+            except Exception:
+                continue
+        wl_path = OUT_ORDERS_DIR / 'orders_watchlist.csv'
+        if wl_path.exists():
+            tmp_path = OUT_ORDERS_DIR / 'orders_watchlist._ladder_tmp.csv'
+            write_orders_csv_enriched(dropped_orders, tmp_path, snapshot=snapshot, presets=presets, regime=regime, feats_all=feats_all, scores=scores)
+            try:
+                df_old = pd.read_csv(wl_path)
+                df_new = pd.read_csv(tmp_path)
+                df_all = pd.concat([df_old, df_new], ignore_index=True)
+                df_all.to_csv(wl_path, index=False)
+                tmp_path.unlink(missing_ok=True)
+            except Exception as _exc_merge:
+                print(f"[warn] merge_watchlist_failed: {_exc_merge}")
+        else:
+            write_orders_csv_enriched(dropped_orders, wl_path, snapshot=snapshot, presets=presets, regime=regime, feats_all=feats_all, scores=scores)
     print(f"[hint] {exec_hint}")
 
     # Update cooldown ledger based on today actions (exit/take_profit/new actually placed)

@@ -271,6 +271,45 @@ class Execution(BaseModel):
     flash_k_atr: float = Field(default=1.50, ge=0.0)
     fill: Optional[FillConfig] = None
 
+    class Ladder(BaseModel):
+        enabled: bool = True
+        max_levels: int = Field(default=3, ge=1, le=5)
+        lot_size: int = Field(default=100, ge=1)
+        method: Literal['atr_pct', 'ticks'] = 'atr_pct'
+        buy_offsets_atr: Dict[str, List[float]] = Field(default_factory=lambda: {
+            'risk_on': [0.00, 0.25, 0.50],
+            'neutral': [0.00, 0.35, 0.70],
+            'risk_off': [0.10, 0.50, 1.00],
+        })
+        sell_offsets_atr: Dict[str, List[float]] = Field(default_factory=lambda: {
+            'risk_on': [0.30, 0.60, 0.90],
+            'neutral': [0.50, 1.00, 1.50],
+            'risk_off': [0.70, 1.20, 1.80],
+        })
+        weights: Dict[str, List[float]] = Field(default_factory=lambda: {
+            'risk_on': [0.60, 0.30, 0.10],
+            'neutral': [0.45, 0.35, 0.20],
+            'risk_off': [0.25, 0.35, 0.40],
+        })
+        ttl_min: List[int] = Field(default_factory=lambda: [5, 15, 30])
+        reprice_ticks: Dict[str, int] = Field(default_factory=lambda: {
+            'risk_on': 2, 'neutral': 1, 'risk_off': 0,
+        })
+        min_fill_prob: float = Field(default=0.20, ge=0.0, le=1.0)
+        adtv_cap_frac: float = Field(default=0.03, ge=0.0, le=0.20)
+        atc_guard_minutes: int = Field(default=5, ge=0)
+        skip_if_limit_lock: bool = True
+        no_cross: bool = True
+
+        @model_validator(mode="after")
+        def _validate_shapes(self):
+            for key in ('risk_on','neutral','risk_off'):
+                if key not in self.buy_offsets_atr or key not in self.sell_offsets_atr or key not in self.weights:
+                    raise ValueError(f"ladder requires offsets/weights for profile '{key}'")
+            return self
+
+    ladder: Optional[Ladder] = None
+
 
 class MarketFilter(BaseModel):
     # Keys calibrated by engine can be omitted in config (set at runtime):

@@ -357,7 +357,36 @@
     // Minimum number of ticks assumed for slippage regardless of ATR or pct floors
     "slip_ticks_min": 1,
     // Multiplier on ATR used to detect/guard against flash-move volatility spikes
-    "flash_k_atr": 1.5
+    "flash_k_atr": 1.5,
+    // Execution ladder for scale-in/scale-out (see specs/execution_ladder_spec.txt)
+    "ladder": {
+      "enabled": true,
+      "max_levels": 3,
+      "lot_size": 100,
+      "method": "atr_pct",
+      "buy_offsets_atr": {
+        "risk_on":  [0.00, 0.25, 0.50],
+        "neutral":  [0.00, 0.35, 0.70],
+        "risk_off": [0.10, 0.50, 1.00]
+      },
+      "sell_offsets_atr": {
+        "risk_on":  [0.30, 0.60, 0.90],
+        "neutral":  [0.50, 1.00, 1.50],
+        "risk_off": [0.70, 1.20, 1.80]
+      },
+      "weights": {
+        "risk_on":  [0.60, 0.30, 0.10],
+        "neutral":  [0.45, 0.35, 0.20],
+        "risk_off": [0.25, 0.35, 0.40]
+      },
+      "ttl_min": [5, 15, 30],
+      "reprice_ticks": { "risk_on": 2, "neutral": 1, "risk_off": 0 },
+      "min_fill_prob": 0.20,
+      "adtv_cap_frac": 0.03,
+      "atc_guard_minutes": 5,
+      "skip_if_limit_lock": true,
+      "no_cross": true
+    }
   },
   // Normalization scales for regime diagnostics (avoid hidden constants)
   "regime_scales": {
