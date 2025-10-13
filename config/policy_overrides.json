@@ -11,8 +11,8 @@
     "neutral": 0.1,
     "risk_on": 0.15
   },
-  "add_max": 3,
-  "new_max": 3,
+  "add_max": 7,
+  "new_max": 7,
   "weights": {
     "w_trend": 0.35,
     "w_momo": 0.25,
@@ -32,14 +32,14 @@
     "base_add": 0.35,
     "base_new": 0.4,
     "trim_th": -0.05,
-    "q_add": 0.7,
-    "q_new": 0.9571428571428572,
-    "min_liq_norm": 0.00980392156862745,
-    "near_ceiling_pct": 0.9809203292573206,
+    "q_add": 0.0,
+    "q_new": 0.9066666666666666,
+    "min_liq_norm": 0.29411764705882354,
+    "near_ceiling_pct": 0.975165958549103,
     "tp_pct": 0.0,
     "sl_pct": 0.0,
-    "tp_atr_mult": 1.0471204188481675,
-    "sl_atr_mult": 0.6980802792321117,
+    "tp_atr_mult": 1.0434782608695652,
+    "sl_atr_mult": 0.6956521739130435,
     "tp_floor_pct": 0.03,
     "tp_cap_pct": 0.1,
     "sl_floor_pct": 0.02,
@@ -101,7 +101,7 @@
     "add_max_neutral_cap": 1
   },
   "regime_model": {
-    "intercept": 2.181198741132156,
+    "intercept": 2.181213371213852,
     "threshold": 0.79,
     "components": {
       "trend": {
@@ -130,13 +130,13 @@
         "weight": 1.05
       },
       "index_return": {
-        "mean": 0.13886946661871394,
-        "std": 0.16645165467179798,
+        "mean": 0.13881533495867798,
+        "std": 0.1662663315496845,
         "weight": 0.8
       },
       "turnover": {
-        "mean": 0.5841075355804617,
-        "std": 0.3149012318012288,
+        "mean": 0.5841941786802053,
+        "std": 0.31493594383794893,
         "weight": 0.8
       },
       "mcclellan": {
@@ -190,7 +190,7 @@
     "risk_off_drawdown_floor": 0.03765736205513479,
     "market_score_soft_floor": 0.6,
     "market_score_hard_floor": 0.3,
-    "leader_min_rsi": 55.85,
+    "leader_min_rsi": 55.595,
     "leader_min_mom_norm": 0.7524509803921569,
     "leader_require_ma20": 1,
     "leader_require_ma50": 1,
@@ -202,7 +202,7 @@
     "severe_drop_mult": 1.5,
     "idx_chg_smoothed_hard_drop": 0.3484877041695573,
     "trend_norm_hard_floor": -0.36045671543390895,
-    "vol_ann_hard_ceiling": 0.26602164077952245,
+    "vol_ann_hard_ceiling": 0.2660216407795225,
     "us_epu_soft_pct": null,
     "us_epu_hard_pct": null,
     "dxy_soft_pct": null,
@@ -355,7 +355,7 @@
     "momentum_unit": 0.12
   },
   "sizing": {
-    "softmax_tau": 0.05536270141601673,
+    "softmax_tau": 0.07386779785156361,
     "add_share": 0.5,
     "new_share": 0.5,
     "min_lot": 100,
@@ -370,7 +370,7 @@
     "qty_min_lot": 100,
     "min_notional_per_order": 2000000.0,
     "cov_lookback_days": 250,
-    "cov_reg": 0.000435021702554581,
+    "cov_reg": 0.0004350392293398562,
     "risk_parity_floor": 0.2,
     "dynamic_caps": {
       "enable": 0,
@@ -389,7 +389,7 @@
     "min_names_target": 10,
     "market_index_symbol": "VNINDEX",
     "risk_per_trade_frac": 0.005,
-    "default_stop_atr_mult": 0.6980802792321117,
+    "default_stop_atr_mult": 0.6956521739130435,
     "tranche_frac": 0.25,
     "new_first_tranche_lots": 2,
     "mean_variance_calibration": {
@@ -439,18 +439,18 @@
     },
     "watchlist": {
       "enable": 1,
-      "min_priority": 0.346,
+      "min_priority": 0.342,
       "micro_window": 3
     },
     "suggestions_top_n": 3,
     "ttl_bucket_state": {
       "current": "high",
-      "sigma": 0.01973005761309172
+      "sigma": 0.02010305052400415
     },
     "ttl_bucket_thresholds": {
       "p75": 0.008629187521809203,
       "p95": 0.01928582174338461,
-      "latest": 0.01973005761309172
+      "latest": 0.02010305052400415
     },
     "ttl_minutes_baseline": {
       "base": 12,
