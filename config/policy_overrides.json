@@ -135,8 +135,8 @@
         "weight": 0.8
       },
       "turnover": {
-        "mean": 0.5846187298689486,
-        "std": 0.31526331684024145,
+        "mean": 0.5846178395403457,
+        "std": 0.31525234290857523,
         "weight": 0.8
       },
       "mcclellan": {
@@ -247,7 +247,7 @@
       "cross": 0.9,
       "near_ceiling": 0.05,
       "min": 0.05,
-      "decay_scale_min_ticks": 16.9
+      "decay_scale_min_ticks": 16.8
     },
     "slippage_model": {
       "alpha_bps": 5.0,
@@ -370,7 +370,7 @@
     "qty_min_lot": 100,
     "min_notional_per_order": 2000000.0,
     "cov_lookback_days": 250,
-    "cov_reg": 0.00043607651775707975,
+    "cov_reg": 0.00043607607287475476,
     "risk_parity_floor": 0.2,
     "dynamic_caps": {
       "enable": 0,
