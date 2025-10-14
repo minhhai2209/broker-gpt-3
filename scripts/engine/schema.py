@@ -310,6 +310,17 @@ class Execution(BaseModel):
 
     ladder: Optional[Ladder] = None
 
+    class TimeOfDay(BaseModel):
+        class PhaseRule(BaseModel):
+            allow_cross: Optional[bool] = None
+            max_tranches: Optional[int] = None
+            exit_ma_break_min_phase: Optional[str] = None
+            allow_cross_if_target_prob_gte: Optional[float] = None
+
+        phase_rules: Dict[str, PhaseRule] = Field(default_factory=dict)
+
+    time_of_day: Optional[TimeOfDay] = None
+
 
 class MarketFilter(BaseModel):
     # Keys calibrated by engine can be omitted in config (set at runtime):
@@ -348,6 +359,14 @@ class MarketFilter(BaseModel):
     idx_chg_smoothed_hard_drop: Optional[float] = Field(default=None, ge=0.0)  # percent magnitude
     trend_norm_hard_floor: Optional[float] = Field(default=None, ge=-1.0, le=1.0)
     vol_ann_hard_ceiling: Optional[float] = Field(default=None, gt=0.0)
+
+    class Events(BaseModel):
+        enable: Union[int, bool] = 0
+        no_new_on_event: Union[int, bool] = 1
+        t_minus: int = Field(default=1, ge=0)
+        t_plus: int = Field(default=1, ge=0)
+
+    events: Optional[Events] = None
 
     @model_validator(mode="after")
     def _check_values(self):
@@ -618,6 +637,27 @@ class PolicyOverrides(BaseModel):
     market_filter: MarketFilter
     # Optional UI and market config
     orders_ui: Optional[OrdersUI] = None
+    # Optional risk overlays (vol targeting / kill-switch)
+    class Risk(BaseModel):
+        class VolTarget(BaseModel):
+            enable: Union[int, bool] = 0
+            target_ann: float = Field(default=0.15, gt=0.0)
+            lookback_days: int = Field(default=20, ge=1)
+            scale_min: float = Field(default=0.6, ge=0.0)
+            scale_max: float = Field(default=1.4, ge=0.0)
+
+        class KillSwitch(BaseModel):
+            enable: Union[int, bool] = 0
+            dd_hard_pct: float = Field(default=0.12, ge=0.0)
+            sl_streak_n: int = Field(default=5, ge=0)
+            window_days: int = Field(default=3, ge=1)
+            cooldown_days: int = Field(default=3, ge=0)
+            actions: Dict[str, float] = Field(default_factory=lambda: {"buy_budget_frac": 0.0, "add_budget_frac_scale": 0.33})
+
+        vol_target: VolTarget = Field(default_factory=VolTarget)
+        kill_switch: KillSwitch = Field(default_factory=KillSwitch)
+
+    risk: Optional[Risk] = None
     market: Optional[MarketConfig] = None
     regime_model: RegimeModel
     # Optional: scales used to normalize regime components (avoid hidden constants)

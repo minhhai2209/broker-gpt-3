@@ -1525,6 +1525,22 @@ def pick_limit_price(ticker: str, side: str, snap_row: pd.Series, preset_row: Op
     else:
         limit_price = round_to_tick(limit_price, tick)
     limit_price = clip_to_band(limit_price, floor_tick, ceil_tick)
+    # Enforce near-ceiling guard: cap BUY limit to near_ceiling_pct * ceiling
+    try:
+        if side == 'BUY' and ceil_tick is not None and regime is not None:
+            th_conf_nc = dict(getattr(regime, 'thresholds', {}) or {})
+            nc_val = th_conf_nc.get('near_ceiling_pct')
+            if nc_val is not None:
+                nc = float(nc_val)
+                if nc > 0.0:
+                    cap_px = nc * float(ceil_tick)
+                    if limit_price > cap_px:
+                        import math as _mm
+                        step_nc = tick if tick else 0.0
+                        limit_price = (_mm.floor(cap_px / step_nc) * step_nc) if step_nc > 0 else cap_px
+                        limit_price = clip_to_band(limit_price, floor_tick, ceil_tick)
+    except Exception:
+        pass
     return float(f"{limit_price:.2f}")
 
 
@@ -3967,6 +3983,30 @@ def build_orders(
     min_lot = int(float(sizing['min_lot']))
     lot = max(min_lot, 1)
     fill_cfg = dict((getattr(regime, 'execution', {}) or {}).get('fill') or {})
+    # Time-of-day: if ATC and target_prob high, allow crossing (temporarily disable no_cross)
+    try:
+        exec_conf_local = dict(getattr(regime, 'execution', {}) or {})
+        tod_conf = exec_conf_local.get('time_of_day') if isinstance(exec_conf_local, dict) else None
+        if isinstance(tod_conf, dict):
+            prules = tod_conf.get('phase_rules') if isinstance(tod_conf.get('phase_rules'), dict) else None
+            phase_now = str(getattr(regime, 'phase', '') or '').strip().upper()
+            if prules and phase_now == 'ATC':
+                atc_rule = prules.get('ATC') if isinstance(prules.get('ATC'), dict) else None
+                thr = atc_rule.get('allow_cross_if_target_prob_gte') if atc_rule else None
+                if thr is not None:
+                    try:
+                        thr_val = float(thr)
+                    except Exception:
+                        thr_val = None
+                    if thr_val is not None:
+                        try:
+                            tp_local = float(fill_cfg.get('target_prob', 0.0) or 0.0)
+                        except Exception:
+                            tp_local = 0.0
+                        if tp_local >= thr_val:
+                            fill_cfg['no_cross'] = False
+    except Exception:
+        pass
 
     def _apply_caps_and_qty(t: str, budget_k: float, limit_price: float) -> int:
         # Base qty from budget
