@@ -76,13 +76,13 @@
     // Minimum normalized liquidity required for eligibility (0..1)
     "min_liq_norm": 0.3,
     // Consider a price "near ceiling" when Price/BandCeiling ≥ this fraction; avoid chasing
-    "near_ceiling_pct": 0.98,
+    "near_ceiling_pct": 0.989,
     // Static TP/SL kept for rollback; set to 0 when using per-ticker ATR mode
     "tp_pct": 0.0,
     "sl_pct": 0.0,
     // Dynamic TP/SL multipliers relative to ATR% (computed as multiplier × ATR_pct in decimal)
     "tp_atr_mult": 1.35,
-    "sl_atr_mult": 1.7,
+    "sl_atr_mult": 1.50,
     // Floors/caps for per-ticker ATR exits (fractions of price)
     "tp_floor_pct": 0.03,
     "tp_cap_pct": 0.10,
@@ -281,6 +281,8 @@
     "atr_soft_scale_cap": 0.5,
     // Multiplier applied to risk_off_index_drop_pct for severe scenario
     "severe_drop_mult": 1.5,
+    // Optional issuer event gating (no new positions during event window)
+    "events": { "enable": 1, "no_new_on_event": 1, "t_minus": 1, "t_plus": 1 },
     // Additional hard guards (optional, can be null to disable)
     "idx_chg_smoothed_hard_drop": 0.025,
     "trend_norm_hard_floor": -0.36045671543390645,
@@ -386,6 +388,14 @@
       "atc_guard_minutes": 10,
       "skip_if_limit_lock": false,
       "no_cross": false
+    },
+    "time_of_day": {
+      "phase_rules": {
+        "ATO": { "allow_cross": false, "max_tranches": 1 },
+        "MORNING": { "allow_cross": false },
+        "AFTERNOON": { "allow_cross": false, "exit_ma_break_min_phase": "AFTERNOON" },
+        "ATC": { "allow_cross_if_target_prob_gte": 0.85 }
+      }
     }
   },
   // Normalization scales for regime diagnostics (avoid hidden constants)
@@ -429,13 +439,13 @@
     "risk_parity_floor": 0.2,
     // Optional dynamic caps scaled from ENP target; enable to override static caps
     "dynamic_caps": {
-      "enable": 0,
-      "pos_min": 0.1,
+      "enable": 1,
+      "pos_min": 0.10,
       "pos_max": 0.16,
       "sector_min": 0.28,
-      "sector_max": 0.4,
+      "sector_max": 0.40,
       "blend": 1.0,
-      "override_static": 0
+      "override_static": 1
     },
     // Allocation model: softmax | risk_budget | mean_variance
     "allocation_model": "mean_variance",
@@ -465,6 +475,10 @@
       "test_horizon_days": 60,
       "min_history_days": 320
     }
+  },
+  "risk": {
+    "vol_target": { "enable": 1, "target_ann": 0.15, "lookback_days": 20, "scale_min": 0.6, "scale_max": 1.4 },
+    "kill_switch": { "enable": 1, "dd_hard_pct": 0.12, "sl_streak_n": 5, "window_days": 3, "cooldown_days": 3, "actions": { "buy_budget_frac": 0.0, "add_budget_frac_scale": 0.33 } }
   },
   // UX defaults for generated order files (non-trading policy)
   "orders_ui": {
