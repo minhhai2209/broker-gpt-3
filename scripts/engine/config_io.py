@@ -78,7 +78,7 @@ def ensure_policy_override_file() -> Path:
         overlays = [
             BASE_DIR / "config" / "policy_nightly_overrides.json",
             BASE_DIR / "config" / "policy_ai_overrides.json",
-            OVERRIDE_SRC,  # legacy
+            OVERRIDE_SRC,  # legacy unified overlay (tuner-managed)
         ]
         for path in overlays:
             if path.exists():

@@ -26,10 +26,10 @@
   // Max number of add-on BUY orders (adds to existing positions) that can be opened today (guardrailed 0..10)
   // Codex overrides should respect the heuristic: add_max >= new_max when staying offensive, and both may
   // drop to 0 for kill-switch scenarios triggered by severe news.
-  "add_max": 6,
+  "add_max": 9,
   // Max number of new positions that can be opened today (guardrailed 0..10)
   // Use lower values (0–1) to slow expansion when liquidity/volatility deteriorates; avoid raising above 6.
-  "new_max": 3,
+  "new_max": 9,
 
   // Weights for conviction score components used to rank candidates
   // Positive weights increase attractiveness; negative weights penalize.
@@ -125,7 +125,7 @@
     // Exit on MA20/MA50 break heuristic (1/0 = on/off)
     "exit_on_ma_break": 1,
     // Cooldown days after exit before re‑entry signals are allowed
-    "cooldown_days": 3,
+    "cooldown_days": 1,
     // RSI thresholds to gate/downgrade exits/trim under weak momentum (0..100)
     "exit_ma_break_rsi": 45.0,
     "trim_rsi_below_ma20": 45.0,
@@ -361,31 +361,31 @@
     // Execution ladder for scale-in/scale-out (see specs/execution_ladder_spec.txt)
     "ladder": {
       "enabled": true,
-      "max_levels": 3,
+      "max_levels": 4,
       "lot_size": 100,
       "method": "atr_pct",
       "buy_offsets_atr": {
-        "risk_on":  [0.00, 0.25, 0.50],
-        "neutral":  [0.00, 0.35, 0.70],
-        "risk_off": [0.10, 0.50, 1.00]
+        "risk_on":  [0.00, 0.25, 0.50, 0.75],
+        "neutral":  [0.00, 0.35, 0.70, 1.05],
+        "risk_off": [0.10, 0.50, 1.00, 1.50]
       },
       "sell_offsets_atr": {
-        "risk_on":  [0.30, 0.60, 0.90],
-        "neutral":  [0.50, 1.00, 1.50],
-        "risk_off": [0.70, 1.20, 1.80]
+        "risk_on":  [0.30, 0.60, 0.90, 1.20],
+        "neutral":  [0.50, 1.00, 1.50, 2.00],
+        "risk_off": [0.70, 1.20, 1.80, 2.40]
       },
       "weights": {
-        "risk_on":  [0.60, 0.30, 0.10],
-        "neutral":  [0.45, 0.35, 0.20],
-        "risk_off": [0.25, 0.35, 0.40]
+        "risk_on":  [0.55, 0.30, 0.10, 0.05],
+        "neutral":  [0.45, 0.35, 0.15, 0.05],
+        "risk_off": [0.25, 0.30, 0.25, 0.20]
       },
-      "ttl_min": [5, 15, 30],
-      "reprice_ticks": { "risk_on": 2, "neutral": 1, "risk_off": 0 },
-      "min_fill_prob": 0.20,
+      "ttl_min": [5, 12, 20, 30],
+      "reprice_ticks": { "risk_on": 1, "neutral": 1, "risk_off": 0 },
+      "min_fill_prob": 0.12,
       "adtv_cap_frac": 0.03,
-      "atc_guard_minutes": 5,
-      "skip_if_limit_lock": true,
-      "no_cross": true
+      "atc_guard_minutes": 10,
+      "skip_if_limit_lock": false,
+      "no_cross": false
     }
   },
   // Normalization scales for regime diagnostics (avoid hidden constants)
@@ -516,7 +516,7 @@
     "thresholds": {
       // Near-ceiling quantile for Price/BandCeiling. Higher = stricter near-ceiling gate
       // Use high percentile to avoid over-filtering during strong tapes.
-      "near_ceiling_q": 0.99
+      "near_ceiling_q": 0.985
     },
     "market_filter": {
       // idx_drop_q: percentile of index drawdown that triggers guardrails.
