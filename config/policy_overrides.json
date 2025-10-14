@@ -152,9 +152,11 @@
     }
   },
   "sector_bias": {
+    "TECHNOLOGY": 0.08,
     "FINANCIALS": 0.04,
-    "UTILITIES": 0.03,
     "REALESTATE": -0.06,
+    "MATERIALS": -0.03,
+    "UTILITIES": 0.03,
     "Tài chính": 0.06,
     "Công nghiệp": 0.05,
     "Công nghệ thông tin": 0.04,
@@ -163,9 +165,10 @@
   },
   "ticker_bias": {
     "FPT": 0.06,
-    "VNM": 0.04,
-    "HPG": 0.05,
     "VCB": 0.05,
+    "VIC": -0.05,
+    "HPG": 0.05,
+    "VNM": 0.04,
     "SSI": 0.05,
     "TCB": 0.03,
     "VPB": 0.03,
