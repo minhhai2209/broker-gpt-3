@@ -101,12 +101,12 @@
     "add_max_neutral_cap": 1
   },
   "regime_model": {
-    "intercept": 2.2415754745117584,
-    "threshold": 0.8,
+    "intercept": 2.2763477020139082,
+    "threshold": 0.56,
     "components": {
       "trend": {
-        "mean": 0.4344183192866935,
-        "std": 0.36339210517449144,
+        "mean": 0.43511257024874406,
+        "std": 0.3638597388394111,
         "weight": 1.55
       },
       "momentum": {
@@ -120,23 +120,23 @@
         "weight": 1.2
       },
       "drawdown": {
-        "mean": 0.44839709315471243,
-        "std": 0.2907037521490456,
+        "mean": 0.45280921912604427,
+        "std": 0.2914707517622685,
         "weight": 0.95
       },
       "volatility": {
-        "mean": 0.5024729285505845,
-        "std": 0.26945957701216333,
+        "mean": 0.49482830637473624,
+        "std": 0.2757128430328976,
         "weight": 1.05
       },
       "index_return": {
-        "mean": 0.1396794251746153,
-        "std": 0.16747217571277195,
+        "mean": 0.13988178360360443,
+        "std": 0.1675927116808379,
         "weight": 0.8
       },
       "turnover": {
-        "mean": 0.5850665901524396,
-        "std": 0.315265677578005,
+        "mean": 0.5859442202319631,
+        "std": 0.3145642907541703,
         "weight": 0.8
       },
       "mcclellan": {
@@ -190,10 +190,10 @@
     "dynamic_caps": 0
   },
   "market_filter": {
-    "risk_off_index_drop_pct": 0.3484877041695573,
+    "risk_off_index_drop_pct": 0.3491002267676364,
     "risk_off_trend_floor": 0.0,
     "risk_off_breadth_floor": 0.48,
-    "breadth_relax_margin": 0.010336134453781511,
+    "breadth_relax_margin": 0.01037593984962406,
     "risk_off_drawdown_floor": 0.03765736205513479,
     "market_score_soft_floor": 0.6,
     "market_score_hard_floor": 0.3,
@@ -202,14 +202,14 @@
     "leader_require_ma20": 1,
     "leader_require_ma50": 1,
     "leader_max": 2,
-    "index_atr_soft_pct": 0.9002096436058701,
-    "index_atr_hard_pct": 0.970062893081761,
+    "index_atr_soft_pct": 0.9002100840336135,
+    "index_atr_hard_pct": 0.970063025210084,
     "guard_new_scale_cap": 0.4,
     "atr_soft_scale_cap": 0.5,
     "severe_drop_mult": 1.5,
-    "idx_chg_smoothed_hard_drop": 0.3484877041695573,
-    "trend_norm_hard_floor": -0.36045671543390645,
-    "vol_ann_hard_ceiling": 0.2660216407795225,
+    "idx_chg_smoothed_hard_drop": 0.3491002267676364,
+    "trend_norm_hard_floor": -0.3616207839546208,
+    "vol_ann_hard_ceiling": 0.26608499119066753,
     "us_epu_soft_pct": null,
     "us_epu_hard_pct": null,
     "dxy_soft_pct": null,
