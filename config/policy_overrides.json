@@ -11,8 +11,8 @@
     "neutral": 0.1,
     "risk_on": 0.2
   },
-  "add_max": 8,
-  "new_max": 8,
+  "add_max": 5,
+  "new_max": 5,
   "weights": {
     "w_trend": 0.35,
     "w_momo": 0.25,
@@ -32,9 +32,9 @@
     "base_add": 0.35,
     "base_new": 0.4,
     "trim_th": -0.05,
-    "q_add": 0.0,
-    "q_new": 0.9,
-    "min_liq_norm": 0.2549019607843137,
+    "q_add": 0.7058823529411764,
+    "q_new": 0.9264705882352942,
+    "min_liq_norm": 0.00980392156862745,
     "near_ceiling_pct": 0.9370358705161853,
     "tp_pct": 0.0,
     "sl_pct": 0.0,
@@ -207,9 +207,15 @@
     "guard_new_scale_cap": 0.4,
     "atr_soft_scale_cap": 0.5,
     "severe_drop_mult": 1.5,
+    "events": {
+      "enable": 1,
+      "no_new_on_event": 1,
+      "t_minus": 1,
+      "t_plus": 1
+    },
     "idx_chg_smoothed_hard_drop": 0.3484877041695573,
     "trend_norm_hard_floor": -0.36045671543390645,
-    "vol_ann_hard_ceiling": 0.2660216407795225,
+    "vol_ann_hard_ceiling": 0.26602164077952245,
     "us_epu_soft_pct": null,
     "us_epu_hard_pct": null,
     "dxy_soft_pct": null,
@@ -343,6 +349,24 @@
       "skip_if_limit_lock": true,
       "no_cross": true
     },
+    "time_of_day": {
+      "phase_rules": {
+        "ATO": {
+          "allow_cross": false,
+          "max_tranches": 1
+        },
+        "MORNING": {
+          "allow_cross": false
+        },
+        "AFTERNOON": {
+          "allow_cross": false,
+          "exit_ma_break_min_phase": "AFTERNOON"
+        },
+        "ATC": {
+          "allow_cross_if_target_prob_gte": 0.85
+        }
+      }
+    },
     "fill": {
       "horizon_s": 122,
       "window_sigma_s": 98,
@@ -362,7 +386,7 @@
     "momentum_unit": 0.12
   },
   "sizing": {
-    "softmax_tau": 0.11933746337890735,
+    "softmax_tau": 0.0500000000000022,
     "add_share": 0.5,
     "new_share": 0.5,
     "min_lot": 100,
@@ -419,6 +443,26 @@
       "lookback_days": 250,
       "test_horizon_days": 60,
       "min_history_days": 320
+    }
+  },
+  "risk": {
+    "vol_target": {
+      "enable": 1,
+      "target_ann": 0.15,
+      "lookback_days": 20,
+      "scale_min": 0.6,
+      "scale_max": 1.4
+    },
+    "kill_switch": {
+      "enable": 1,
+      "dd_hard_pct": 0.12,
+      "sl_streak_n": 5,
+      "window_days": 3,
+      "cooldown_days": 3,
+      "actions": {
+        "buy_budget_frac": 0.0,
+        "add_budget_frac_scale": 0.33
+      }
     }
   },
   "orders_ui": {
