@@ -11,8 +11,8 @@
     "neutral": 0.1,
     "risk_on": 0.2
   },
-  "add_max": 9,
-  "new_max": 9,
+  "add_max": 8,
+  "new_max": 8,
   "weights": {
     "w_trend": 0.35,
     "w_momo": 0.25,
@@ -33,13 +33,13 @@
     "base_new": 0.4,
     "trim_th": -0.05,
     "q_add": 0.0,
-    "q_new": 0.8888888888888888,
-    "min_liq_norm": 0.24509803921568626,
-    "near_ceiling_pct": 0.999,
+    "q_new": 0.9,
+    "min_liq_norm": 0.2549019607843137,
+    "near_ceiling_pct": 0.9370358705161853,
     "tp_pct": 0.0,
     "sl_pct": 0.0,
-    "tp_atr_mult": 1.0380622837370244,
-    "sl_atr_mult": 0.6920415224913496,
+    "tp_atr_mult": 1.015228426395939,
+    "sl_atr_mult": 0.676818950930626,
     "tp_floor_pct": 0.03,
     "tp_cap_pct": 0.1,
     "sl_floor_pct": 0.02,
@@ -101,12 +101,12 @@
     "add_max_neutral_cap": 1
   },
   "regime_model": {
-    "intercept": 2.2421233635412117,
+    "intercept": 2.2415754745117584,
     "threshold": 0.8,
     "components": {
       "trend": {
-        "mean": 0.43443973072896824,
-        "std": 0.36342256371298187,
+        "mean": 0.4344183192866935,
+        "std": 0.36339210517449144,
         "weight": 1.55
       },
       "momentum": {
@@ -120,23 +120,23 @@
         "weight": 1.2
       },
       "drawdown": {
-        "mean": 0.44848860425251286,
-        "std": 0.29080553243965285,
+        "mean": 0.44839709315471243,
+        "std": 0.2907037521490456,
         "weight": 0.95
       },
       "volatility": {
-        "mean": 0.5024896369883455,
-        "std": 0.26944785806229443,
+        "mean": 0.5024729285505845,
+        "std": 0.26945957701216333,
         "weight": 1.05
       },
       "index_return": {
-        "mean": 0.13989780594805765,
-        "std": 0.16791069819125587,
+        "mean": 0.1396794251746153,
+        "std": 0.16747217571277195,
         "weight": 0.8
       },
       "turnover": {
-        "mean": 0.5846766962035936,
-        "std": 0.3148968403849946,
+        "mean": 0.5850665901524396,
+        "std": 0.315265677578005,
         "weight": 0.8
       },
       "mcclellan": {
@@ -190,11 +190,11 @@
     "risk_off_index_drop_pct": 0.3484877041695573,
     "risk_off_trend_floor": 0.0,
     "risk_off_breadth_floor": 0.48,
-    "breadth_relax_margin": 0.014537815126050435,
+    "breadth_relax_margin": 0.010336134453781511,
     "risk_off_drawdown_floor": 0.03765736205513479,
     "market_score_soft_floor": 0.6,
     "market_score_hard_floor": 0.3,
-    "leader_min_rsi": 57.415,
+    "leader_min_rsi": 55.7125,
     "leader_min_mom_norm": 0.7524509803921569,
     "leader_require_ma20": 1,
     "leader_require_ma50": 1,
@@ -251,7 +251,7 @@
       "cross": 0.9,
       "near_ceiling": 0.05,
       "min": 0.05,
-      "decay_scale_min_ticks": 16.8
+      "decay_scale_min_ticks": 17.2
     },
     "slippage_model": {
       "alpha_bps": 5.0,
@@ -341,9 +341,9 @@
       "no_cross": true
     },
     "fill": {
-      "horizon_s": 147,
-      "window_sigma_s": 118,
-      "window_vol_s": 176,
+      "horizon_s": 122,
+      "window_sigma_s": 98,
+      "window_vol_s": 146,
       "target_prob": 0.0,
       "max_chase_ticks": 2,
       "cancel_ratio_per_min": 0.15,
@@ -359,7 +359,7 @@
     "momentum_unit": 0.12
   },
   "sizing": {
-    "softmax_tau": 0.11963958740234484,
+    "softmax_tau": 0.11933746337890735,
     "add_share": 0.5,
     "new_share": 0.5,
     "min_lot": 100,
@@ -374,7 +374,7 @@
     "qty_min_lot": 100,
     "min_notional_per_order": 2000000.0,
     "cov_lookback_days": 250,
-    "cov_reg": 0.00043686467457211813,
+    "cov_reg": 0.00043756522626626587,
     "risk_parity_floor": 0.2,
     "dynamic_caps": {
       "enable": 0,
@@ -393,7 +393,7 @@
     "min_names_target": 10,
     "market_index_symbol": "VNINDEX",
     "risk_per_trade_frac": 0.005,
-    "default_stop_atr_mult": 0.6920415224913496,
+    "default_stop_atr_mult": 0.676818950930626,
     "tranche_frac": 0.25,
     "new_first_tranche_lots": 2,
     "mean_variance_calibration": {
@@ -443,18 +443,18 @@
     },
     "watchlist": {
       "enable": 1,
-      "min_priority": 0.349,
+      "min_priority": 0.31,
       "micro_window": 3
     },
     "suggestions_top_n": 3,
     "ttl_bucket_state": {
       "current": "medium",
-      "sigma": 0.01154158064134515
+      "sigma": 0.014573342634730294
     },
     "ttl_bucket_thresholds": {
       "p75": 0.008744569116203181,
       "p95": 0.01928582174338461,
-      "latest": 0.01154158064134515
+      "latest": 0.014573342634730294
     },
     "ttl_minutes_baseline": {
       "base": 12,
