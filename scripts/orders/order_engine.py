@@ -2841,15 +2841,32 @@ def decide_actions(
     )
 
     if guard_new:
-        reason_note = "market filter active – pause new entries under weak market conditions"
+        # Build explicit diagnostic note with triggered conditions
+        triggers = []
+        if idx_drop_thr > 0.0 and idx_chg <= -abs(idx_drop_thr):
+            triggers.append(f"smoothed drop {idx_chg:.2%} ≤ floor {(-abs(idx_drop_thr)):.2%}")
+        if trend_strength <= trend_floor:
+            triggers.append(f"trend {trend_strength:.3f} ≤ floor {trend_floor:.3f}")
+        if breadth_hint < breadth_floor:
+            triggers.append(f"breadth {breadth_hint:.3f} < floor {breadth_floor:.3f}")
+        # ATR context if available
+        try:
+            atr_pctile = float(getattr(regime, 'index_atr_percentile', 0.0) or 0.0)
+            soft = float(mf_conf.get('index_atr_soft_pct', 0.0) or 0.0)
+            if atr_pctile >= soft and soft > 0.0:
+                triggers.append(f"ATR%ile {atr_pctile:.1%} ≥ soft {soft:.1%} (budget cap active)")
+        except Exception:
+            pass
+        reason_core = "; ".join(triggers) if triggers else "guard conditions met"
+        reason_note = f"market filter active – pause new entries ({reason_core})"
         if market_score <= score_hard:
-            reason_note += f" (market_score {market_score:.2f} <= hard floor {score_hard:.2f})"
+            reason_note += f"; market_score {market_score:.2f} ≤ hard floor {score_hard:.2f}"
         # Always defer ADD when market weak
         for t in list(act.keys()):
             if act.get(t) == "add":
                 act[t] = "hold"
                 debug_filters["market"].append(t)
-                _note_filter(t, "market", "market filter active – defer adding until trend/breadth improves")
+                _note_filter(t, "market", f"ADD deferred: {reason_core}")
         # Leader bypass for NEW
         leader_min_rsi = float(mf_conf.get('leader_min_rsi', 1e9))
         leader_min_mom = float(mf_conf.get('leader_min_mom_norm', 1.0))
@@ -4791,7 +4808,11 @@ def run(simulate: bool = False, *, context: Optional[Dict[str, Any]] = None, fla
     try:
         state_path = OUT_ORDERS_DIR / 'position_state.csv'
         existing_state = dict(getattr(regime, 'position_state', {}) or {})
-        stateless_meta_upper = {str(k).upper(): v for k, v in stateless_meta.items()}
+        # Be robust to missing local 'stateless_meta' symbol in rare paths
+        _stateless = locals().get('stateless_meta', None)
+        if _stateless is None:
+            _stateless = dict(getattr(regime, 'stateless_sell_meta', {}) or {})
+        stateless_meta_upper = {str(k).upper(): v for k, v in (_stateless.items() if isinstance(_stateless, dict) else [])}
         actions_upper = {str(k).upper(): v for k, v in actions.items()}
         updated_state: Dict[str, Dict[str, object]] = {}
         cd_days = 0

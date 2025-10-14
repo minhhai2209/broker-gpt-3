@@ -9,10 +9,10 @@
   "buy_budget_by_regime": {
     "risk_off": 0.02,
     "neutral": 0.1,
-    "risk_on": 0.15
+    "risk_on": 0.2
   },
-  "add_max": 7,
-  "new_max": 7,
+  "add_max": 5,
+  "new_max": 5,
   "weights": {
     "w_trend": 0.35,
     "w_momo": 0.25,
@@ -32,9 +32,9 @@
     "base_add": 0.35,
     "base_new": 0.4,
     "trim_th": -0.05,
-    "q_add": 0.0,
-    "q_new": 0.9078947368421053,
-    "min_liq_norm": 0.3235294117647059,
+    "q_add": 0.6153846153846154,
+    "q_new": 0.9264705882352942,
+    "min_liq_norm": 0.00980392156862745,
     "near_ceiling_pct": 0.999,
     "tp_pct": 0.0,
     "sl_pct": 0.0,
@@ -101,7 +101,7 @@
     "add_max_neutral_cap": 1
   },
   "regime_model": {
-    "intercept": 2.242191702957546,
+    "intercept": 2.2421917029577196,
     "threshold": 0.8,
     "components": {
       "trend": {
@@ -202,7 +202,7 @@
     "severe_drop_mult": 1.5,
     "idx_chg_smoothed_hard_drop": 0.3484877041695573,
     "trend_norm_hard_floor": -0.36045671543390645,
-    "vol_ann_hard_ceiling": 0.2660216407795225,
+    "vol_ann_hard_ceiling": 0.26602164077952245,
     "us_epu_soft_pct": null,
     "us_epu_hard_pct": null,
     "dxy_soft_pct": null,
@@ -340,7 +340,7 @@
       "horizon_s": 151,
       "window_sigma_s": 121,
       "window_vol_s": 181,
-      "target_prob": 0.3,
+      "target_prob": 0.0,
       "max_chase_ticks": 2,
       "cancel_ratio_per_min": 0.15,
       "joiner_factor": 0.15000000000000002,
@@ -355,7 +355,7 @@
     "momentum_unit": 0.12
   },
   "sizing": {
-    "softmax_tau": 0.09652709960937611,
+    "softmax_tau": 0.0500000000000022,
     "add_share": 0.5,
     "new_share": 0.5,
     "min_lot": 100,

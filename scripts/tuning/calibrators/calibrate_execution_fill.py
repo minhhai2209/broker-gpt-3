@@ -212,7 +212,7 @@ def calibrate(*, write: bool = True) -> Dict[str, float]:
         pofs.append(best)
 
     # Compute target_prob quantile from best POFs if pool non‑empty
-    target_prob = float(fill_conf.get('target_prob', 0.55) or 0.55)
+    target_prob = float(fill_conf.get('target_prob', 0.0) or 0.0)
     if pofs:
         p = np.array([_clip(x, 0.0, 1.0) for x in pofs], dtype=float)
         n = int(p.size)
@@ -222,16 +222,10 @@ def calibrate(*, write: bool = True) -> Dict[str, float]:
         else:
             q = float(1.0 - (keep / float(n)))
             q = float(_clip(q, 0.0, 0.995))
-        tp = float(np.quantile(p, q)) if n > 0 else target_prob
-        p_max = float(np.max(p)) if n > 0 else 0.0
-        # Distribution-aware floor: ensure at least one candidate can pass if budgets allow
-        dist_floor = max(0.05, 0.98 * p_max)  # keep just below best-of-pool
-        # Static safety floor in calm tapes; relaxed automatically when p_max is low
-        static_floor = 0.30
-        floor = min(dist_floor, static_floor)
-        # Final target: between floor and upper clamp, and never above best-of-pool
-        target_prob = float(min(p_max, _clip(max(tp, floor), 0.0, 0.75)))
-    # else: keep existing target_prob (no NEW pool today)
+        _ = float(np.quantile(p, q))  # not used when disabling guard
+        # Disable fill-probability acceptance guard per operator policy
+        target_prob = 0.0
+    # else: keep 0.0 target_prob (no NEW pool today)
 
     out = {
         'horizon_s': horizon_s,

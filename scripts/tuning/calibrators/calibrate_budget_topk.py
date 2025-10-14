@@ -114,7 +114,7 @@ def calibrate(*, write: bool = True) -> Dict[str, float]:
 
     # NEW breadth target — adaptive with regime floors, clipped to [0..10]
     if getattr(regime, "risk_on", False):
-        base_floor = 3  # ensure exploration even when at min_names_target
+        base_floor = 5  # buy more tickers when risk-on; cushion for unfilled orders
     elif getattr(regime, "is_neutral", False):
         base_floor = 1
     else:
@@ -133,7 +133,7 @@ def calibrate(*, write: bool = True) -> Dict[str, float]:
     budget_map = {
         "risk_off": 0.02,
         "neutral": 0.10,
-        "risk_on": 0.15,
+        "risk_on": 0.20,
     }
 
     out = {
