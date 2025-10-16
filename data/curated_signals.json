@@ -1,0 +1,8 @@
+{
+  "meta": {"updated": "2025-10-16", "note": "Edit this file weekly. Prices in thousand VND per share."},
+  "tickers": [
+    {"ticker": "STB", "tier": "A", "pullback_low_k": 35.0, "pullback_high_k": 36.0, "breakout_k": 40.0, "stop_k": 32.0},
+    {"ticker": "CTG", "tier": "A", "pullback_low_k": 30.0, "pullback_high_k": 32.0, "breakout_k": 36.0, "stop_k": 28.0}
+  ]
+}
+

@@ -4624,25 +4624,19 @@ def build_orders(
 
 def run(simulate: bool = False, *, context: Optional[Dict[str, Any]] = None, flags: Optional[Dict[str, Any]] = None):
     OUT_ORDERS_DIR.mkdir(parents=True, exist_ok=True)
-    # Ensure we have a runtime copy of the policy first; then derive static knobs (e.g., band)
-    ensure_policy_override_file()
-    try:
-        runtime_path = aggregate_to_runtime()
-    except PatchMergeError as _exc_merge:
-        raise SystemExit(f"Failed to aggregate policy patches: {_exc_merge}") from _exc_merge
-    # Read single policy source once (runtime merged copy)
+    # Step 1) Prepare baseline merged overlays (no runtime patches yet) → set band from baseline
+    baseline_path = ensure_policy_override_file()
     import json as _json, re as _re
-    pol_path = runtime_path if runtime_path.exists() else OUT_ORDERS_DIR / 'policy_overrides.json'
-    if not pol_path.exists():
-        raise SystemExit('Missing runtime policy after aggregation')
+    if not baseline_path.exists():
+        raise SystemExit('Missing merged baseline policy')
     try:
-        raw = pol_path.read_text(encoding='utf-8')
+        raw = baseline_path.read_text(encoding='utf-8')
         raw = _re.sub(r"/\*.*?\*/", "", raw, flags=_re.S)
         raw = _re.sub(r"(^|\s)//.*$", "", raw, flags=_re.M)
         raw = _re.sub(r"(^|\s)#.*$", "", raw, flags=_re.M)
         pol_obj = _json.loads(raw)
     except Exception as _exc_pol:
-        raise SystemExit(f'Invalid runtime policy JSON: {_exc_pol}') from _exc_pol
+        raise SystemExit(f'Invalid merged baseline policy JSON: {_exc_pol}') from _exc_pol
     try:
         _band = float((((pol_obj.get('market') or {}).get('microstructure') or {}).get('daily_band_pct')))
     except Exception as _exc_band:
@@ -4654,8 +4648,21 @@ def run(simulate: bool = False, *, context: Optional[Dict[str, Any]] = None, fla
         _set_band(_band)
     except Exception as _exc_set:
         raise SystemExit(f"Failed to set daily_band_pct into presets module: {_exc_set}") from _exc_set
-    # Build fresh artifacts
+    # Build fresh artifacts (snapshot used by curated emitter)
     portfolio, prices_history, snapshot, metrics, sector_strength, presets, session_summary = ensure_pipeline_artifacts()
+
+    # Step 2) Emit curated patch based on long-term curated_signals.json and current snapshot (optional)
+    try:
+        from scripts.curated.emit_curated_patch import emit_curated_patch as _emit_curated
+        _emit_curated()
+    except Exception:
+        pass
+
+    # Step 3) Aggregate runtime policy (baseline + optional curated patch + others)
+    try:
+        runtime_path = aggregate_to_runtime()
+    except PatchMergeError as _exc_merge:
+        raise SystemExit(f"Failed to aggregate policy patches: {_exc_merge}") from _exc_merge
     # Runtime calibrations have been removed from the order generation flow. Calibrated
     # policy overrides must be produced ahead of time via the scheduled GitHub Actions
     # workflows. Guard against legacy toggles that would attempt to re-enable

@@ -73,6 +73,15 @@ Curated bias (dài hạn, cập nhật thủ công)
 - Nếu không muốn ảnh hưởng logic hạ EXIT→TRIM khi gãy MA50 + RSI thấp, giữ bias < 0.05 (ngưỡng `thresholds.tilt_exit_downgrade_min`).
 - TUYỆT ĐỐI không sửa tay `config/policy_overrides.json`; dùng file này cho phần curated lâu dài (bạn có thể cập nhật mỗi tuần).
 
+Curated signals (điều kiện giá dài hạn, dùng tự động mỗi lần chạy)
+- Nguồn dữ liệu: `data/curated_signals.json` — lưu đủ Pullback/Breakout/Stop theo từng mã, cập nhật hàng tuần.
+- Khi chạy `./broker.sh orders`, engine đọc snapshot giá hiện tại rồi tự sinh patch runtime `out/orders/patch_tune.json` từ file này (via `scripts/curated/emit_curated_patch.py`).
+- Quy tắc mặc định:
+  - Giá trong vùng Pullback → cộng bias +0.06 cho mã đó (ưu tiên “gom thêm”).
+  - Giá breakout qua ngưỡng → cộng bias +0.08.
+  - Ngược lại bias nền theo Tier (A: +0.02, B: +0.01). Tất cả đều bị clamp trong [-0.20..0.20].
+  - Patch có TTL hết ngày; thông tin gốc vẫn lưu dài hạn trong `data/curated_signals.json`.
+
   
 
 Diagnostics & calibrations

@@ -312,6 +312,11 @@ Curated biases (long‑term overlay)
 - Guardrails: bias ∈ [-0.20..0.20]. Nếu không muốn tác động tới quy tắc downgrade EXIT→TRIM nhờ tilt, giữ bias < `thresholds.tilt_exit_downgrade_min` (mặc định 0.05). Khi cần nhấn mạnh ưu tiên giữ (giảm EXIT thành TRIM) có thể dùng bias ≥ 0.05 — hành vi đã được engine ghi chú trong diagnostics.
 - Lưu ý: Không thêm khóa lạ (pullback/breakout/stop) vào file overlay vì schema policy không hỗ trợ. Những chú thích này nếu cần có thể lưu riêng (tài liệu nội bộ) hoặc để calibrator chuyên biệt xử lý rồi sinh patch runtime có TTL (trường hợp ngắn hạn).
 
+Curated signals (giá/điều kiện kỹ thuật dài hạn, lưu file riêng)
+- File: `data/curated_signals.json` (schema tối giản: ticker, tier, pullback_low_k, pullback_high_k, breakout_k, stop_k). Giá theo nghìn đồng/cp.
+- Runner `scripts/curated/emit_curated_patch.py` được gọi trong `order_engine.run()` sau khi build snapshot/metrics. Nó đọc file curated, so sánh với giá hiện tại và xuất `out/orders/patch_tune.json` với bias có TTL hết ngày. Như vậy dữ liệu curated vẫn lưu dài hạn, còn patch là runtime session‑level đúng với chính sách “patch chỉ cho DEV/runtime”.
+- Mặc định bias: Pullback +0.06, Breakout +0.08, baseline Tier A +0.02, Tier B +0.01 (có clamp). Các giá trị này có thể điều chỉnh sau khi có dữ liệu/hiệu ứng thực nghiệm; thay đổi phải cập nhật tài liệu và test liên quan.
+
 Nhìn chung, để chạy tốt, hệ thống yêu cầu kết nối mạng để gọi API và cần các file dữ liệu tĩnh (industry_map, có thể fundamentals) được chuẩn bị. Các lỗi thường gặp như thiếu dữ liệu đều được engine phát hiện sớm (ví dụ thiếu lịch sử sẽ dừng và báo để chạy lại cho đủ dữ liệu).
 
 Backend API Server (Flask) (không còn Scheduler)
