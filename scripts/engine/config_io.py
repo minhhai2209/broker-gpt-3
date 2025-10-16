@@ -79,6 +79,7 @@ def ensure_policy_override_file() -> Path:
             BASE_DIR / "config" / "policy_nightly_overrides.json",
             BASE_DIR / "config" / "policy_ai_overrides.json",
             OVERRIDE_SRC,  # legacy unified overlay (tuner-managed)
+            BASE_DIR / "config" / "policy_curated_overrides.json",  # manual long-term curated bias overlay
         ]
         for path in overlays:
             if path.exists():

@@ -67,6 +67,12 @@ Phân loại collector dữ liệu:
 - Script tiện ích `scripts/data_fetching/run_collect_all.sh` chỉ là wrapper gọi lần lượt hai nhóm trên; có thể dùng cho cron đơn giản nhưng khuyến nghị dùng trực tiếp `run_data_jobs.py` hoặc `--job` để kiểm soát nhóm/concurrency.
 - GitHub Actions tách riêng theo dataset: `Data - Global Factors`, `Data - Vietstock Fundamentals`, `Data - Vietstock Events` (lần lượt chạy `--job` tương ứng sau khi thiết lập Playwright/phụ thuộc). Các workflow này được cron sau giờ đóng cửa HOSE và upload artefact CSV/log để kiểm tra nhanh.
 
+Curated bias (dài hạn, cập nhật thủ công)
+- File: `config/policy_curated_overrides.json` (đã được engine merge tự động ở runtime, sau baseline và các overlay khác).
+- Chỉ nên khai báo `ticker_bias` (map `{ "TICKER": bias }`, bias ∈ [-0.20..0.20]).
+- Nếu không muốn ảnh hưởng logic hạ EXIT→TRIM khi gãy MA50 + RSI thấp, giữ bias < 0.05 (ngưỡng `thresholds.tilt_exit_downgrade_min`).
+- TUYỆT ĐỐI không sửa tay `config/policy_overrides.json`; dùng file này cho phần curated lâu dài (bạn có thể cập nhật mỗi tuần).
+
   
 
 Diagnostics & calibrations

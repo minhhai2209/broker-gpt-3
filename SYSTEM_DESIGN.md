@@ -307,6 +307,11 @@ Lịch chạy collector dữ liệu:
 - Wrapper `scripts/data_fetching/run_collect_all.sh` chỉ gọi lần lượt hai nhóm trên, giữ tương thích cho cron cũ; tuy vậy config chuẩn vẫn là `config/data_jobs.json` nên mọi thay đổi collector phải nằm tại đây và đi kèm test/tài liệu.
 - GitHub Actions: mỗi dataset có workflow riêng (`Data - Global Factors`, `Data - Vietstock Fundamentals`, `Data - Vietstock Events`). Chúng chạy lần lượt sau giờ đóng cửa HOSE (cron lệch nhau ~15 phút) và gọi trực tiếp `run_data_jobs.py --job <name>` để tránh can nhiễu giữa job, đồng thời upload các file CSV/log phục vụ audit.
 
+Curated biases (long‑term overlay)
+- Engine merge thêm `config/policy_curated_overrides.json` vào runtime policy sau baseline và các overlay publish/tune. File này dành cho curated danh mục ưu tiên (ví dụ shortlist cập nhật hàng tuần) với duy nhất trường hợp dùng: `ticker_bias`.
+- Guardrails: bias ∈ [-0.20..0.20]. Nếu không muốn tác động tới quy tắc downgrade EXIT→TRIM nhờ tilt, giữ bias < `thresholds.tilt_exit_downgrade_min` (mặc định 0.05). Khi cần nhấn mạnh ưu tiên giữ (giảm EXIT thành TRIM) có thể dùng bias ≥ 0.05 — hành vi đã được engine ghi chú trong diagnostics.
+- Lưu ý: Không thêm khóa lạ (pullback/breakout/stop) vào file overlay vì schema policy không hỗ trợ. Những chú thích này nếu cần có thể lưu riêng (tài liệu nội bộ) hoặc để calibrator chuyên biệt xử lý rồi sinh patch runtime có TTL (trường hợp ngắn hạn).
+
 Nhìn chung, để chạy tốt, hệ thống yêu cầu kết nối mạng để gọi API và cần các file dữ liệu tĩnh (industry_map, có thể fundamentals) được chuẩn bị. Các lỗi thường gặp như thiếu dữ liệu đều được engine phát hiện sớm (ví dụ thiếu lịch sử sẽ dừng và báo để chạy lại cho đủ dữ liệu).
 
 Backend API Server (Flask) (không còn Scheduler)
