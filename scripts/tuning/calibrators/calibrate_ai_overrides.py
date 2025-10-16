@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import tempfile
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Set
 
 
 BASE_DIR = Path(__file__).resolve().parents[3]
@@ -27,61 +27,24 @@ AI_OVERRIDES_PATH = CONFIG_DIR / "policy_ai_overrides.json"
 AUDIT_PATH = OUT_DIR / "debug" / "policy_ai_overrides_audit.ndjson"
 
 
+# Narrow Codex AI scope: only biases + event-style execution hints + optional per-ticker gates
 ALLOWED_TOP_LEVEL = {
-    "rationale",
-    "buy_budget_frac",
-    "add_max",
-    "new_max",
-    "calibration_targets",
-    "sector_bias",
-    "ticker_bias",
-    "execution",
+    "rationale",          # free-text audit note
+    "market_bias",        # global lean in [-0.2..0.2]
+    "sector_bias",        # map of sector -> bias in [-0.2..0.2]
+    "ticker_bias",        # map of TICKER -> bias in [-0.2..0.2]
 }
 
-ALLOWED_CALIBRATION_TARGETS = {
-    "liquidity": {"adtv_multiple"},
-    "market_filter": {
-        "idx_drop_q",
-        "vol_ann_q",
-        "trend_floor_q",
-        "atr_soft_q",
-        "atr_hard_q",
-        "ms_soft_q",
-        "ms_hard_q",
-        "dd_floor_q",
-        "breadth_floor_q",
-        "breadth_floor_half_life_days",
-        "breadth_floor_min",
-        "breadth_floor_max",
-        "leader_rsi_q",
-        "leader_mom_q",
-    },
-    "dynamic_caps": {"enp_total_target", "sector_limit_target"},
-    "sizing": {"enp_target", "enp_target_add", "enp_target_new"},
-    "thresholds": {"near_ceiling_q"},
-}
+# (Deprecated) Older prompts asked Codex to output calibration_targets / budget knobs.
+# We explicitly reject those now to keep AI intent narrow and auditable.
+ALLOWED_CALIBRATION_TARGETS: dict = {}
 
-ALLOWED_EXECUTION_FILL = {
-    "horizon_s",
-    "window_sigma_s",
-    "window_vol_s",
-    "target_prob",
-    "max_chase_ticks",
-    "cancel_ratio_per_min",
-    "joiner_factor",
-    "no_cross",
-}
+# New execution keys allowed from Codex (event-style only)
+# No execution/event keys accepted in this mode
+ALLOWED_EXECUTION_EVENT: set = set()
 
 BIAS_RANGE = (-0.20, 0.20)
-BUY_BUDGET_FRAC_RANGE = (0.02, 0.30)
-NEW_ADD_RANGE = (0, 20)
-MAX_CHASE_RANGE = (0, 2)
-HORIZON_RANGE = (10, 240)
-WINDOW_SIGMA_RANGE = (15, 240)
-WINDOW_VOL_RANGE = (30, 300)
-TARGET_PROB_RANGE = (0.0, 0.95)
-CANCEL_RATIO_RANGE = (0.0, 0.90)
-JOINER_RANGE = (0.0, 0.50)
+EVENT_BUDGET_SCALE_RANGE = (0.0, 1.0)
 
 
 def _strip_json_comments(text: str) -> str:
@@ -122,83 +85,13 @@ def _normalise_bias_map(raw: Any, *, context: str) -> Dict[str, float]:
 
 
 def _normalise_calibration_targets(raw: Any) -> Dict[str, Dict[str, float]]:
-    targets = _ensure_dict(raw, "calibration_targets")
-    out: Dict[str, Dict[str, float]] = {}
-    for section, allowed_keys in ALLOWED_CALIBRATION_TARGETS.items():
-        if section not in targets:
-            continue
-        sec_raw = _ensure_dict(targets[section], f"calibration_targets.{section}")
-        sec_out: Dict[str, float] = {}
-        for key, value in sec_raw.items():
-            if key not in allowed_keys:
-                raise SystemExit(f"Unsupported calibration_targets.{section}.{key}")
-            try:
-                sec_out[key] = float(value)
-            except Exception as exc:
-                raise SystemExit(
-                    f"calibration_targets.{section}.{key} must be numeric"
-                ) from exc
-        out[section] = sec_out
-    for section in targets.keys():
-        if section not in ALLOWED_CALIBRATION_TARGETS:
-            raise SystemExit(f"Unsupported calibration_targets section '{section}'")
-    return out
+    # Explicitly disallow calibration_targets from Codex now
+    raise SystemExit("calibration_targets are not accepted from Codex AI pre-phase")
 
 
 def _normalise_execution(raw: Any) -> Dict[str, Any]:
-    execution = _ensure_dict(raw, "execution")
-    out: Dict[str, Any] = {}
-    if "fill" in execution:
-        fill_raw = _ensure_dict(execution["fill"], "execution.fill")
-        # Provide an explicit diagnostic for a common mistake: nesting under a 'base' alias.
-        if "base" in fill_raw:
-            raise SystemExit(
-                "Unsupported alias 'execution.fill.base'; use flat execution.fill keys: "
-                "horizon_s, window_sigma_s, window_vol_s, target_prob, max_chase_ticks, "
-                "cancel_ratio_per_min, joiner_factor, no_cross"
-            )
-        fill_out: Dict[str, Any] = {}
-        for key, value in fill_raw.items():
-            if key not in ALLOWED_EXECUTION_FILL:
-                raise SystemExit(f"Unsupported execution.fill.{key}")
-            if key == "no_cross":
-                fill_out[key] = bool(value)
-            elif key == "max_chase_ticks":
-                try:
-                    fill_out[key] = _clamp_int(value, MAX_CHASE_RANGE)
-                except Exception as exc:
-                    raise SystemExit("execution.fill.max_chase_ticks must be int") from exc
-            elif key in {"horizon_s", "window_sigma_s", "window_vol_s"}:
-                try:
-                    ivalue = int(value)
-                except Exception as exc:
-                    raise SystemExit(f"execution.fill.{key} must be int") from exc
-                bounds = (
-                    HORIZON_RANGE if key == "horizon_s"
-                    else WINDOW_SIGMA_RANGE if key == "window_sigma_s"
-                    else WINDOW_VOL_RANGE
-                )
-                fill_out[key] = _clamp_int(ivalue, bounds)
-            elif key == "target_prob":
-                try:
-                    fill_out[key] = _clamp(float(value), TARGET_PROB_RANGE)
-                except Exception as exc:
-                    raise SystemExit("execution.fill.target_prob must be numeric") from exc
-            elif key == "cancel_ratio_per_min":
-                try:
-                    fill_out[key] = _clamp(float(value), CANCEL_RATIO_RANGE)
-                except Exception as exc:
-                    raise SystemExit("execution.fill.cancel_ratio_per_min must be numeric") from exc
-            elif key == "joiner_factor":
-                try:
-                    fill_out[key] = _clamp(float(value), JOINER_RANGE)
-                except Exception as exc:
-                    raise SystemExit("execution.fill.joiner_factor must be numeric") from exc
-        out["fill"] = fill_out
-    for key in execution.keys():
-        if key != "fill":
-            raise SystemExit(f"Unsupported execution key '{key}'")
-    return out
+    # Execution is not accepted from Codex in this mode
+    raise SystemExit("'execution' is not accepted from Codex AI pre-phase")
 
 
 def _normalise_overrides(raw: Dict[str, Any]) -> Dict[str, Any]:
@@ -214,26 +107,21 @@ def _normalise_overrides(raw: Dict[str, Any]) -> Dict[str, Any]:
             if not isinstance(value, str):
                 raise SystemExit("rationale must be a string")
             out[key] = value.strip()
-        elif key == "buy_budget_frac":
+        elif key == "market_bias":
             try:
-                out[key] = _clamp(float(value), BUY_BUDGET_FRAC_RANGE)
+                out[key] = _clamp(float(value), BIAS_RANGE)
             except Exception as exc:
-                raise SystemExit("buy_budget_frac must be numeric") from exc
-        elif key in {"add_max", "new_max"}:
-            try:
-                out[key] = _clamp_int(value, NEW_ADD_RANGE)
-            except Exception as exc:
-                raise SystemExit(f"{key} must be integer") from exc
-        elif key == "calibration_targets":
-            out[key] = _normalise_calibration_targets(value)
+                raise SystemExit("market_bias must be numeric") from exc
         elif key == "sector_bias":
             out[key] = _normalise_bias_map(value, context="sector_bias")
         elif key == "ticker_bias":
             out[key] = _normalise_bias_map(value, context="ticker_bias")
-        elif key == "execution":
-            exec_norm = _normalise_execution(value)
-            if exec_norm:
-                out[key] = exec_norm
+    # Filter by internal universe (HOSE) after normalization
+    tickers_u, sectors_u = _load_universe_sets()
+    if out.get("ticker_bias"):
+        out["ticker_bias"] = {k: v for k, v in out["ticker_bias"].items() if k in tickers_u}
+    if out.get("sector_bias"):
+        out["sector_bias"] = {k: v for k, v in out["sector_bias"].items() if k in sectors_u}
     return out
 
 
@@ -281,50 +169,57 @@ def _write_ai_overrides(new_data: Dict[str, Any]) -> None:
         fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
+def _load_universe_sets() -> Tuple[Set[str], Set[str]]:
+    """Return (tickers_set, sectors_set) from data/industry_map.csv."""
+    import csv as _csv
+    path = BASE_DIR / "data" / "industry_map.csv"
+    tickers: Set[str] = set()
+    sectors: Set[str] = set()
+    if path.exists():
+        with path.open("r", encoding="utf-8") as fh:
+            rd = _csv.DictReader(fh)
+            for row in rd:
+                t = str(row.get("Ticker", "")).strip().upper()
+                s = str(row.get("Sector", "")).strip()
+                if t:
+                    tickers.add(t)
+                if s:
+                    sectors.add(s)
+    return tickers, sectors
+
+
 def _build_prompt(sample_json: str) -> str:
-    allowed = "\n".join(f"- {k}" for k in sorted(ALLOWED_TOP_LEVEL))
     vn_tz = timezone(timedelta(hours=7))
     now_str = datetime.now(vn_tz).strftime("%Y-%m-%d %H:%M:%S %Z%z")
-    return f"""
-Bạn là chuyên gia điều chỉnh policy giao dịch cho Broker GPT.
-
-Yêu cầu:
-- Chỉ xuất JSON tại file policy_overrides.generated.json chứa các khóa sau:
-{allowed}
-- Các khóa lồng nhau chỉ sử dụng đúng whitelist trong đặc tả (liquidity/market_filter/dynamic_caps/sizing/thresholds, execution.fill,...).
-- Mọi giá trị phải nằm trong guardrail: buy_budget_frac ∈ [0.02,0.30], add_max/new_max ∈ [0,20], bias ∈ [-0.20,0.20], execution.fill.* tuân thủ clamp.
-- Luôn cung cấp "rationale" (chuỗi, nêu rõ bối cảnh/tin tức, TTL, tác động tới rủi ro).
-- Tuyệt đối KHÔNG ghi thêm khóa ngoài whitelist.
-- Nếu không cần thay đổi, vẫn ghi rationale và đặt khóa rỗng (hoặc bỏ qua) theo chuẩn JSON object.
-
- Ràng buộc QUAN TRỌNG cho execution.fill:
- - Không được lồng thêm cấp alias như "base"; mọi khóa phải phẳng dưới execution.fill.
- - Danh sách khóa hợp lệ của execution.fill: horizon_s, window_sigma_s, window_vol_s, target_prob, max_chase_ticks, cancel_ratio_per_min, joiner_factor, no_cross.
- - Ví dụ hợp lệ:
-   "execution": {{
-     "fill": {{
-       "horizon_s": 75,
-       "window_sigma_s": 75,
-       "window_vol_s": 120,
-       "target_prob": 0.55,
-       "max_chase_ticks": 2,
-       "cancel_ratio_per_min": 0.15,
-       "joiner_factor": 0.25,
-       "no_cross": true
-     }}
-   }}
-
-Thời điểm (VN): {now_str}
-
-Schema tham chiếu (rút gọn):
-{sample_json}
-"""
+    example_json = (
+        "{\n"
+        "  \"rationale\": \"Tóm tắt tin tức và lí do (nguồn: VNExpress, Cafef, Bloomberg…).\",\n"
+        "  \"market_bias\": 0.05,\n"
+        "  \"sector_bias\": {\"Tài chính\": 0.04, \"Công nghệ thông tin\": 0.03},\n"
+        "  \"ticker_bias\": {\"CTG\": 0.05, \"FPT\": 0.04}\n"
+        "}"
+    )
+    return (
+        "Chỉ in JSON hợp lệ (không kèm văn bản khác) VÀ ghi đúng nội dung vào file 'policy_overrides.generated.json' trong thư mục hiện tại.\n\n"
+        "Nhiệm vụ duy nhất:\n"
+        "- Đọc tin tức/nguồn công khai (VN/EN) 3–7 ngày gần đây; tổng hợp catalyst/risks.\n"
+        "- Khuyến nghị NGÀNH (sector_bias) và MÃ (ticker_bias) trên sàn HOSE với bias ∈ [-0.20, 0.20].\n\n"
+        "Ràng buộc đầu ra (JSON):\n"
+        "- Khóa cấp 1: rationale, market_bias (tuỳ chọn), sector_bias, ticker_bias.\n"
+        "- sector_bias: map {Sector -> bias}; ticker_bias: map {Ticker -> bias}.\n"
+        "- Bỏ qua tất cả khóa khác; nếu không có thay đổi hãy để map rỗng nhưng vẫn có rationale.\n\n"
+        f"Thời điểm (VN): {now_str}\n\n"
+        "Ví dụ JSON: \n"
+        f"{example_json}\n"
+    )
 
 
 def _invoke_codex(sample_json: str) -> Dict[str, Any]:
     codex_bin = shutil.which("codex")
+    # Default required unless explicitly disabled via env
+    require_codex = os.environ.get("BROKER_REQUIRE_CODEX", "1") == "1"
     if not codex_bin:
-        if os.environ.get("BROKER_REQUIRE_CODEX") == "1":
+        if require_codex:
             raise SystemExit("Codex CLI not found but BROKER_REQUIRE_CODEX=1")
         print("[ai_overrides] Codex CLI not found; skipping AI overlay generation")
         return {}
@@ -333,7 +228,7 @@ def _invoke_codex(sample_json: str) -> Dict[str, Any]:
         codex_bin,
         "exec",
         "--skip-git-repo-check",
-        "--full-auto",
+        "--yolo",
         "--model",
         "gpt-5",
         "-c",
@@ -362,9 +257,23 @@ def _invoke_codex(sample_json: str) -> Dict[str, Any]:
         if proc.returncode != 0:
             err_path = debug_dir / f"codex_policy_error_{ts}.txt"
             err_path.write_text(output, encoding="utf-8")
-            raise SystemExit(f"Codex CLI failed with exit code {proc.returncode}; see {err_path}")
+            if require_codex:
+                raise SystemExit(f"Codex CLI failed with exit code {proc.returncode}; see {err_path}")
+            print(f"[ai_overrides] Codex CLI failed (exit {proc.returncode}); skipping AI overlay. See {err_path}")
+            return {}
         if not gen_path.exists():
-            raise SystemExit("Codex run completed without generating policy_overrides.generated.json")
+            # Fallback: try to parse JSON from stdout and persist
+            try:
+                # naive extraction: take substring between first '{' and last '}'
+                start = output.find('{')
+                end = output.rfind('}')
+                if start != -1 and end != -1 and end > start:
+                    payload = json.loads(output[start:end+1])
+                    gen_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+                else:
+                    raise ValueError('no JSON braces found')
+            except Exception as _exc_json:
+                raise SystemExit("Codex run completed without generating policy_overrides.generated.json") from _exc_json
         return json.loads(gen_path.read_text(encoding="utf-8"))
 
 

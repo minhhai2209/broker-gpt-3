@@ -271,6 +271,12 @@ class Execution(BaseModel):
     flash_k_atr: float = Field(default=1.50, ge=0.0)
     fill: Optional[FillConfig] = None
 
+    # New: controls for order price crossing behavior at engine stage
+    # Keep legacy behavior by default (filter BUY when limit>market in engine).
+    # When set to 0/False, engine will clamp BUY limit down to market instead of filtering,
+    # letting the order pass to IO where session-aware clamping is already applied.
+    filter_buy_limit_gt_market: Union[int, bool] = 1
+
     class Ladder(BaseModel):
         enabled: bool = True
         max_levels: int = Field(default=3, ge=1, le=5)
@@ -355,6 +361,9 @@ class MarketFilter(BaseModel):
     atr_soft_scale_cap: float = Field(ge=0.0, le=1.0, default=0.50)
     # Multiplier for severe index drop relative to risk_off_index_drop_pct
     severe_drop_mult: float = Field(gt=0.0, default=1.50)
+    # Optional: when leader bypass finds no leaders but guard_new is active and
+    # bypass is allowed (not severe), keep top-K NEW by score anyway (K=0 disables).
+    leader_fallback_topk_if_empty: int = Field(ge=0, default=0)
     # Hard guards (calibrated): optional in config
     idx_chg_smoothed_hard_drop: Optional[float] = Field(default=None, ge=0.0)  # percent magnitude
     trend_norm_hard_floor: Optional[float] = Field(default=None, ge=-1.0, le=1.0)
@@ -589,6 +598,13 @@ class OrdersUI(BaseModel):
     watchlist: Watchlist = Field(default_factory=Watchlist)
     # Number of tickers to show for suggestions (UI only)
     suggestions_top_n: int = Field(ge=1, default=3)
+    # When enabled, write pre-sized BUY candidates (before safety/market/budget filters)
+    # into orders_filtered.csv with Reason='candidate_pre'. Default disabled to keep legacy outputs stable.
+    write_pre_candidates: Union[int, bool] = 0
+    # Pre-size mode for candidate_pre sizing:
+    # - 'budget_softmax': split daily budget by score (legacy behavior)
+    # - 'score_min_lot': map min score to 1 lot, others proportionally in lots
+    pre_size_mode: Literal['budget_softmax','score_min_lot'] = 'budget_softmax'
 
 
 class Evaluation(BaseModel):
@@ -629,6 +645,8 @@ class PolicyOverrides(BaseModel):
     thresholds: Thresholds
     thresholds_profiles: Optional[ThresholdProfiles] = None
     neutral_adaptive: NeutralAdaptive = Field(default_factory=NeutralAdaptive)
+    # Optional global bias (leaning buy/observe) in [-0.2..0.2].
+    market_bias: Optional[float] = 0.0
     sector_bias: Dict[str, float]
     ticker_bias: Dict[str, float]
     pricing: Pricing

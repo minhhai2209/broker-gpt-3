@@ -166,15 +166,21 @@ def write_csv(rows: Iterable[EventRow], out_path: Path) -> None:
             )
 
 
-def run(tickers: List[str], out_path: Path, delay: float) -> None:
+def run(tickers: List[str], out_path: Path, delay: float, skip_missing: bool = False) -> None:
     all_rows: List[EventRow] = []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
         for idx, t in enumerate(tickers, start=1):
-            rows = fetch_events_for_ticker(page, t, delay)
-            all_rows.extend(rows)
-            print(f"[{idx}/{len(tickers)}] {t}: {len(rows)} sự kiện")
+            try:
+                rows = fetch_events_for_ticker(page, t, delay)
+                all_rows.extend(rows)
+                print(f"[{idx}/{len(tickers)}] {t}: {len(rows)} sự kiện")
+            except Exception as exc:
+                if skip_missing:
+                    print(f"[warn] Bỏ qua {t}: {type(exc).__name__}: {exc}")
+                    continue
+                raise
         browser.close()
     # Fail fast if nothing collected
     if not all_rows:
@@ -190,6 +196,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--limit", type=int, default=None, help="Giới hạn số mã để chạy thử")
     ap.add_argument("--delay", type=float, default=0.3, help="Delay giữa các lần gọi (giây)")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT, help="CSV đầu ra cho calendar loader")
+    ap.add_argument("--skip-missing", action="store_true", help="Bỏ qua mã lỗi DOM/không có bảng và tiếp tục")
     args = ap.parse_args(argv)
 
     if args.tickers:
@@ -201,7 +208,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print("Không có mã nào để xử lý", file=sys.stderr)
         return 2
 
-    run(tickers, args.out, args.delay)
+    run(tickers, args.out, args.delay, skip_missing=args.skip_missing)
     return 0
 
 

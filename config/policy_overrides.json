@@ -33,13 +33,13 @@
     "base_new": 0.4,
     "trim_th": -0.05,
     "q_add": 0.7058823529411764,
-    "q_new": 0.9253731343283582,
-    "min_liq_norm": 0.00980392156862745,
-    "near_ceiling_pct": 0.9745443149454998,
+    "q_new": 0.9206349206349207,
+    "min_liq_norm": 0.0,
+    "near_ceiling_pct": 0.9864072783584977,
     "tp_pct": 0.0,
     "sl_pct": 0.0,
-    "tp_atr_mult": 1.0135135135135134,
-    "sl_atr_mult": 0.6756756756756757,
+    "tp_atr_mult": 1.0380622837370244,
+    "sl_atr_mult": 0.6920415224913496,
     "tp_floor_pct": 0.03,
     "tp_cap_pct": 0.1,
     "sl_floor_pct": 0.02,
@@ -101,12 +101,12 @@
     "add_max_neutral_cap": 1
   },
   "regime_model": {
-    "intercept": 2.2848194448628294,
+    "intercept": 2.350340748007158,
     "threshold": 0.56,
     "components": {
       "trend": {
-        "mean": 0.43691971927662626,
-        "std": 0.3644479326752515,
+        "mean": 0.43954097378303103,
+        "std": 0.36538274940205073,
         "weight": 1.55
       },
       "momentum": {
@@ -120,23 +120,23 @@
         "weight": 1.2
       },
       "drawdown": {
-        "mean": 0.45333243030687215,
-        "std": 0.2913887454266956,
+        "mean": 0.4588369700899191,
+        "std": 0.2925419319052284,
         "weight": 0.95
       },
       "volatility": {
-        "mean": 0.49447160852004585,
-        "std": 0.27553192815427835,
+        "mean": 0.5154333061825024,
+        "std": 0.2622798694802043,
         "weight": 1.05
       },
       "index_return": {
-        "mean": 0.14057593582094832,
-        "std": 0.1680897137557442,
+        "mean": 0.14147672186609173,
+        "std": 0.16847367555349,
         "weight": 0.8
       },
       "turnover": {
-        "mean": 0.5860511556352135,
-        "std": 0.31422900780652746,
+        "mean": 0.5874772285146563,
+        "std": 0.31450823734068695,
         "weight": 0.8
       },
       "mcclellan": {
@@ -164,15 +164,32 @@
     "Bất động sản": -0.03
   },
   "ticker_bias": {
-    "FPT": 0.06,
-    "VCB": 0.05,
-    "VIC": -0.05,
-    "HPG": 0.05,
-    "VNM": 0.04,
     "SSI": 0.05,
-    "TCB": 0.03,
-    "VPB": 0.03,
+    "VND": 0.05,
+    "HCM": 0.08,
+    "VCI": 0.08,
+    "VCB": 0.05,
+    "BID": 0.02,
+    "CTG": 0.02,
+    "MBB": 0.06,
+    "FPT": 0.06,
     "VHM": -0.03,
+    "VRE": 0.01,
+    "VNM": 0.04,
+    "MWG": 0.02,
+    "VJC": 0.04,
+    "GAS": -0.05,
+    "PLX": -0.02,
+    "PVD": -0.06,
+    "HPG": 0.05,
+    "GMD": 0.03,
+    "KBC": 0.03,
+    "BCM": 0.03,
+    "REE": 0.02,
+    "POW": -0.03,
+    "TCB": 0.03,
+    "VIC": -0.05,
+    "VPB": 0.03,
     "NVL": -0.04
   },
   "calibration": {
@@ -193,11 +210,11 @@
     "risk_off_index_drop_pct": 0.3484877041695573,
     "risk_off_trend_floor": 0.0,
     "risk_off_breadth_floor": 0.48,
-    "breadth_relax_margin": 0.014537815126050435,
+    "breadth_relax_margin": 0.01873949579831936,
     "risk_off_drawdown_floor": 0.03765736205513479,
     "market_score_soft_floor": 0.6,
     "market_score_hard_floor": 0.3,
-    "leader_min_rsi": 56.6525,
+    "leader_min_rsi": 59.677499999999995,
     "leader_min_mom_norm": 0.7524509803921569,
     "leader_require_ma20": 1,
     "leader_require_ma50": 1,
@@ -207,6 +224,7 @@
     "guard_new_scale_cap": 0.4,
     "atr_soft_scale_cap": 0.5,
     "severe_drop_mult": 1.5,
+    "leader_fallback_topk_if_empty": 2,
     "events": {
       "enable": 1,
       "no_new_on_event": 1,
@@ -260,7 +278,7 @@
       "cross": 0.9,
       "near_ceiling": 0.05,
       "min": 0.05,
-      "decay_scale_min_ticks": 16.9
+      "decay_scale_min_ticks": 16.3
     },
     "slippage_model": {
       "alpha_bps": 5.0,
@@ -277,6 +295,7 @@
     "slip_atr_mult": 0.5,
     "slip_ticks_min": 1,
     "flash_k_atr": 1.5,
+    "filter_buy_limit_gt_market": 0,
     "ladder": {
       "enabled": true,
       "max_levels": 3,
@@ -367,10 +386,14 @@
         }
       }
     },
+    "event_pause_new": false,
+    "leader_fallback_topk_if_empty": 2,
+    "event_budget_scale": 1.0,
+    "write_pre_candidates": true,
     "fill": {
-      "horizon_s": 147,
-      "window_sigma_s": 118,
-      "window_vol_s": 176,
+      "horizon_s": 172,
+      "window_sigma_s": 138,
+      "window_vol_s": 206,
       "target_prob": 0.0,
       "max_chase_ticks": 2,
       "cancel_ratio_per_min": 0.15,
@@ -401,7 +424,7 @@
     "qty_min_lot": 100,
     "min_notional_per_order": 2000000.0,
     "cov_lookback_days": 250,
-    "cov_reg": 0.000437720554947801,
+    "cov_reg": 0.00043840383530217256,
     "risk_parity_floor": 0.2,
     "dynamic_caps": {
       "enable": 0,
@@ -420,7 +443,7 @@
     "min_names_target": 10,
     "market_index_symbol": "VNINDEX",
     "risk_per_trade_frac": 0.005,
-    "default_stop_atr_mult": 0.6756756756756757,
+    "default_stop_atr_mult": 0.6920415224913496,
     "tranche_frac": 0.25,
     "new_first_tranche_lots": 2,
     "mean_variance_calibration": {
@@ -490,18 +513,20 @@
     },
     "watchlist": {
       "enable": 1,
-      "min_priority": 0.283,
+      "min_priority": 0.3,
       "micro_window": 3
     },
     "suggestions_top_n": 3,
+    "write_pre_candidates": 1,
+    "pre_size_mode": "score_min_lot",
     "ttl_bucket_state": {
       "current": "low",
-      "sigma": 0.00794792702961805
+      "sigma": 0.004534893075574874
     },
     "ttl_bucket_thresholds": {
-      "p75": 0.008744569116203181,
+      "p75": 0.008920442318859155,
       "p95": 0.01928582174338461,
-      "latest": 0.00794792702961805
+      "latest": 0.004534893075574874
     },
     "ttl_minutes_baseline": {
       "base": 12,
@@ -552,5 +577,7 @@
       "sector_limit_target": 0.35
     }
   },
-  "rationale": "Giữ nguyên cấu hình cơ sở; chưa áp dụng bias theo ngành/mã. Bối cảnh: giữa tháng 10, thị trường VN bước vào mùa KQKD quý 3 và chịu ảnh hưởng từ kỳ vọng lãi suất toàn cầu; không ghi nhận sự kiện bất thường buộc điều chỉnh khẩn. TTL: hiệu lực 10 phiên giao dịch kể từ 2025-10-09 (VN). Tác động tới rủi ro: duy trì ngân sách mua và giới hạn thêm/mở mới theo mặc định, tránh gia tăng rủi ro thực thi; lớp execution giữ nguyên (fill tuân thủ clamp mặc định)."
+  "rationale": "Giữ nguyên cấu hình cơ sở; chưa áp dụng bias theo ngành/mã. Bối cảnh: giữa tháng 10, thị trường VN bước vào mùa KQKD quý 3 và chịu ảnh hưởng từ kỳ vọng lãi suất toàn cầu; không ghi nhận sự kiện bất thường buộc điều chỉnh khẩn. TTL: hiệu lực 10 phiên giao dịch kể từ 2025-10-09 (VN). Tác động tới rủi ro: duy trì ngân sách mua và giới hạn thêm/mở mới theo mặc định, tránh gia tăng rủi ro thực thi; lớp execution giữ nguyên (fill tuân thủ clamp mặc định).",
+  "market_bias": 0.06,
+  "gate": {}
 }

@@ -281,6 +281,8 @@
     "atr_soft_scale_cap": 0.5,
     // Multiplier applied to risk_off_index_drop_pct for severe scenario
     "severe_drop_mult": 1.5,
+    // Keep at least K NEW tickers when guard_new active but no leaders qualify (0 disables)
+    "leader_fallback_topk_if_empty": 2,
     // Optional issuer event gating (no new positions during event window)
     "events": { "enable": 1, "no_new_on_event": 1, "t_minus": 1, "t_plus": 1 },
     // Additional hard guards (optional, can be null to disable)
@@ -360,6 +362,8 @@
     "slip_ticks_min": 1,
     // Multiplier on ATR used to detect/guard against flash-move volatility spikes
     "flash_k_atr": 1.5,
+    // Clamp BUY to market instead of filtering when Limit > Market (0=clamp, 1=filter)
+    "filter_buy_limit_gt_market": 0,
     // Execution ladder for scale-in/scale-out (see specs/execution_ladder_spec.txt)
     "ladder": {
       "enabled": true,
@@ -505,7 +509,11 @@
       "micro_window": 3
     },
     // Number of tickers shown in suggestions (UI only)
-    "suggestions_top_n": 3
+    "suggestions_top_n": 3,
+    // Write all BUY candidates pre-sized (before safety/market/budget filters) to orders_filtered.csv
+    "write_pre_candidates": 1,
+    // Pre-size mode: 'score_min_lot' maps min score to 1 lot, others proportional
+    "pre_size_mode": "score_min_lot"
   },
   // Market microstructure defaults (for price band/tick logic)
   "market": {
