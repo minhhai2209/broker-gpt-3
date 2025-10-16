@@ -33,13 +33,13 @@
     "base_new": 0.4,
     "trim_th": -0.05,
     "q_add": 0.7058823529411764,
-    "q_new": 0.9206349206349207,
+    "q_new": 0.921875,
     "min_liq_norm": 0.0,
-    "near_ceiling_pct": 0.9985013805195591,
+    "near_ceiling_pct": 0.9370268199233716,
     "tp_pct": 0.0,
     "sl_pct": 0.0,
-    "tp_atr_mult": 1.006711409395973,
-    "sl_atr_mult": 0.6711409395973155,
+    "tp_atr_mult": 1.0084033613445378,
+    "sl_atr_mult": 0.6722689075630252,
     "tp_floor_pct": 0.03,
     "tp_cap_pct": 0.1,
     "sl_floor_pct": 0.02,
@@ -101,7 +101,7 @@
     "add_max_neutral_cap": 1
   },
   "regime_model": {
-    "intercept": 2.349852941764194,
+    "intercept": 2.3505223302565783,
     "threshold": 0.56,
     "components": {
       "trend": {
@@ -120,8 +120,8 @@
         "weight": 1.2
       },
       "drawdown": {
-        "mean": 0.45869554384786393,
-        "std": 0.29241166034014265,
+        "mean": 0.4589035236155921,
+        "std": 0.2926144746316162,
         "weight": 0.95
       },
       "volatility": {
@@ -130,13 +130,13 @@
         "weight": 1.05
       },
       "index_return": {
-        "mean": 0.1413787609303498,
-        "std": 0.1683257545419863,
+        "mean": 0.14153442488303558,
+        "std": 0.1685732685924278,
         "weight": 0.8
       },
       "turnover": {
-        "mean": 0.5891061187898349,
-        "std": 0.31343255325518354,
+        "mean": 0.5894521336657641,
+        "std": 0.3136085361670426,
         "weight": 0.8
       },
       "mcclellan": {
@@ -164,25 +164,27 @@
     "Bất động sản": -0.03
   },
   "ticker_bias": {
-    "FPT": 0.06,
-    "POW": -0.03,
-    "HPG": 0.05,
-    "VCB": 0.05,
     "CTG": 0.02,
+    "VCB": 0.05,
+    "FPT": 0.06,
+    "PNJ": 0.06,
+    "VHC": 0.06,
+    "HPG": 0.05,
+    "SSI": 0.05,
+    "MWG": 0.02,
+    "POW": -0.03,
+    "GAS": -0.05,
+    "VHM": -0.03,
+    "PVD": -0.06,
     "BID": 0.02,
     "VNM": 0.04,
-    "MWG": 0.02,
-    "VHM": -0.03,
     "VRE": 0.01,
-    "SSI": 0.05,
-    "GAS": -0.05,
     "PLX": -0.02,
     "VND": 0.05,
     "HCM": 0.08,
     "VCI": 0.08,
     "MBB": 0.06,
     "VJC": 0.04,
-    "PVD": -0.06,
     "GMD": 0.03,
     "KBC": 0.03,
     "BCM": 0.03,
@@ -196,12 +198,12 @@
     "risk_off_index_drop_pct": 0.3484877041695573,
     "risk_off_trend_floor": 0.0,
     "risk_off_breadth_floor": 0.48,
-    "breadth_relax_margin": 0.016338535414165682,
+    "breadth_relax_margin": 0.01813925570228093,
     "guard_behavior": "scale_only",
     "risk_off_drawdown_floor": 0.03765736205513479,
     "market_score_soft_floor": 0.6,
     "market_score_hard_floor": 0.3,
-    "leader_min_rsi": 58.394999999999996,
+    "leader_min_rsi": 59.1425,
     "leader_min_mom_norm": 0.7524509803921569,
     "leader_require_ma20": 1,
     "leader_require_ma50": 1,
@@ -377,9 +379,9 @@
     "event_budget_scale": 1.0,
     "write_pre_candidates": true,
     "fill": {
-      "horizon_s": 158,
-      "window_sigma_s": 126,
-      "window_vol_s": 190,
+      "horizon_s": 169,
+      "window_sigma_s": 135,
+      "window_vol_s": 203,
       "target_prob": 0.0,
       "max_chase_ticks": 2,
       "cancel_ratio_per_min": 0.15,
@@ -410,7 +412,7 @@
     "qty_min_lot": 100,
     "min_notional_per_order": 2000000.0,
     "cov_lookback_days": 250,
-    "cov_reg": 0.0004390611558924092,
+    "cov_reg": 0.00044012804933037824,
     "risk_parity_floor": 0.2,
     "dynamic_caps": {
       "enable": 0,
@@ -429,7 +431,7 @@
     "min_names_target": 10,
     "market_index_symbol": "VNINDEX",
     "risk_per_trade_frac": 0.005,
-    "default_stop_atr_mult": 0.6711409395973155,
+    "default_stop_atr_mult": 0.6722689075630252,
     "tranche_frac": 0.25,
     "new_first_tranche_lots": 2,
     "mean_variance_calibration": {
@@ -499,7 +501,7 @@
     },
     "watchlist": {
       "enable": 1,
-      "min_priority": 0.283,
+      "min_priority": 0.291,
       "micro_window": 3
     },
     "suggestions_top_n": 3,
@@ -507,12 +509,12 @@
     "pre_size_mode": "score_min_lot",
     "ttl_bucket_state": {
       "current": "low",
-      "sigma": 0.005034116363469354
+      "sigma": 0.005946322588533263
     },
     "ttl_bucket_thresholds": {
       "p75": 0.008920442318859155,
       "p95": 0.01928582174338461,
-      "latest": 0.005034116363469354
+      "latest": 0.005946322588533263
     },
     "ttl_minutes_baseline": {
       "base": 12,
