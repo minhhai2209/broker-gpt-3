@@ -1,8 +1,99 @@
 {
-  "meta": {"updated": "2025-10-16", "note": "Edit this file weekly. Prices in thousand VND per share."},
+  "meta": {"updated": "2025-10-16", "note": "Edit weekly. Price fields are thousand VND per share (k)."},
   "tickers": [
-    {"ticker": "STB", "tier": "A", "pullback_low_k": 35.0, "pullback_high_k": 36.0, "breakout_k": 40.0, "stop_k": 32.0},
-    {"ticker": "CTG", "tier": "A", "pullback_low_k": 30.0, "pullback_high_k": 32.0, "breakout_k": 36.0, "stop_k": 28.0}
+    {
+      "ticker": "STB",
+      "tier": "A",
+      "pullback_low_k": 35.0,
+      "pullback_high_k": 36.0,
+      "breakout_k": 40.0,
+      "stop_k": 32.0,
+      "note": "Hậu tái cơ cấu + chờ kế hoạch cổ tức cổ phiếu"
+    },
+    {
+      "ticker": "CTG",
+      "tier": "A",
+      "pullback_low_k": 30.0,
+      "pullback_high_k": 32.0,
+      "breakout_k": 35.0,
+      "breakout_high_k": 36.0,
+      "stop_k": 28.0,
+      "note": "Chờ duyệt chia cổ phiếu ~44.6% (tăng vốn lớn)"
+    },
+    {
+      "ticker": "POW",
+      "tier": "A",
+      "pullback_low_k": 14.5,
+      "pullback_high_k": 15.0,
+      "breakout_k": 18.0,
+      "stop_k": 14.0,
+      "note": "COD Nhơn Trạch 3 + chào bán ~12%"
+    },
+    {
+      "ticker": "PVD",
+      "tier": "A",
+      "pullback_low_k": 26.0,
+      "pullback_high_k": 27.0,
+      "breakout_k": 33.0,
+      "breakout_high_k": 35.0,
+      "stop_k": 25.0,
+      "note": "Full việc giàn; khả năng hợp đồng/gia hạn"
+    },
+    {
+      "ticker": "VIC",
+      "tier": "A",
+      "pullback_low_k": 203.0,
+      "pullback_high_k": 207.0,
+      "breakout_k": 221.0,
+      "stop_k": 195.0,
+      "note": "Pre-event phát hành từ nguồn VCSH (momentum)"
+    },
+    {
+      "ticker": "MSN",
+      "tier": "A",
+      "pullback_low_k": 81.0,
+      "pullback_high_k": 84.0,
+      "alt_pullback_low_k": 79.5,
+      "alt_pullback_high_k": 80.5,
+      "breakout_k": 90.0,
+      "stop_k": 77.5,
+      "note": "Hết overhang; kỳ vọng đối tác/định hình mới (aggr. 79.5–80.5k)"
+    },
+    {
+      "ticker": "SSI",
+      "tier": "A",
+      "pullback_low_k": 39.5,
+      "pullback_high_k": 40.5,
+      "breakout_k": 42.8,
+      "stop_k": 38.5,
+      "note": "Câu chuyện tài sản số + tailwind ngành chứng khoán"
+    },
+    {
+      "ticker": "NVL",
+      "tier": "B",
+      "pullback_low_k": 15.0,
+      "pullback_high_k": 15.6,
+      "breakout_k": 16.9,
+      "stop_k": 13.8,
+      "note": "UBCK duyệt hoán đổi nợ→cổ phiếu & triển khai"
+    },
+    {
+      "ticker": "LCG",
+      "tier": "B",
+      "pullback_low_k": 11.2,
+      "pullback_high_k": 11.8,
+      "breakout_k": 12.9,
+      "stop_k": 10.7,
+      "note": "Phát hành riêng lẻ ~100M cp + ký/thêm gói hạ tầng"
+    },
+    {
+      "ticker": "HPG",
+      "tier": "B",
+      "pullback_low_k": 27.3,
+      "pullback_high_k": 27.8,
+      "breakout_k": 29.3,
+      "stop_k": 26.4,
+      "note": "Có đơn hàng/đặt hàng thép ray (policy trigger)"
+    }
   ]
 }
-
