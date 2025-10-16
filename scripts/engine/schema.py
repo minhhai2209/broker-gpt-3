@@ -271,6 +271,12 @@ class Execution(BaseModel):
     flash_k_atr: float = Field(default=1.50, ge=0.0)
     fill: Optional[FillConfig] = None
 
+    # New: controls for order price crossing behavior at engine stage
+    # Keep legacy behavior by default (filter BUY when limit>market in engine).
+    # When set to 0/False, engine will clamp BUY limit down to market instead of filtering,
+    # letting the order pass to IO where session-aware clamping is already applied.
+    filter_buy_limit_gt_market: Union[int, bool] = 1
+
     class Ladder(BaseModel):
         enabled: bool = True
         max_levels: int = Field(default=3, ge=1, le=5)
@@ -310,6 +316,17 @@ class Execution(BaseModel):
 
     ladder: Optional[Ladder] = None
 
+    class TimeOfDay(BaseModel):
+        class PhaseRule(BaseModel):
+            allow_cross: Optional[bool] = None
+            max_tranches: Optional[int] = None
+            exit_ma_break_min_phase: Optional[str] = None
+            allow_cross_if_target_prob_gte: Optional[float] = None
+
+        phase_rules: Dict[str, PhaseRule] = Field(default_factory=dict)
+
+    time_of_day: Optional[TimeOfDay] = None
+
 
 class MarketFilter(BaseModel):
     # Keys calibrated by engine can be omitted in config (set at runtime):
@@ -317,6 +334,10 @@ class MarketFilter(BaseModel):
     risk_off_trend_floor: float
     risk_off_breadth_floor: float = Field(ge=0.0, le=1.0)
     breadth_relax_margin: Optional[float] = Field(default=None, ge=0.0, le=0.2)
+    # Guard behaviour when market weak:
+    # - 'pause' (default): pause NEW and defer ADD, allow limited leader-bypass
+    # - 'scale_only': do not filter candidates; only scale BUY budget via caps
+    guard_behavior: Literal['pause', 'scale_only'] = 'pause'
     market_score_soft_floor: float = Field(ge=0.0, le=1.0)
     market_score_hard_floor: float = Field(ge=0.0, le=1.0)
     leader_min_rsi: float
@@ -344,10 +365,21 @@ class MarketFilter(BaseModel):
     atr_soft_scale_cap: float = Field(ge=0.0, le=1.0, default=0.50)
     # Multiplier for severe index drop relative to risk_off_index_drop_pct
     severe_drop_mult: float = Field(gt=0.0, default=1.50)
+    # Optional: when leader bypass finds no leaders but guard_new is active and
+    # bypass is allowed (not severe), keep top-K NEW by score anyway (K=0 disables).
+    leader_fallback_topk_if_empty: int = Field(ge=0, default=0)
     # Hard guards (calibrated): optional in config
     idx_chg_smoothed_hard_drop: Optional[float] = Field(default=None, ge=0.0)  # percent magnitude
     trend_norm_hard_floor: Optional[float] = Field(default=None, ge=-1.0, le=1.0)
     vol_ann_hard_ceiling: Optional[float] = Field(default=None, gt=0.0)
+
+    class Events(BaseModel):
+        enable: Union[int, bool] = 0
+        no_new_on_event: Union[int, bool] = 1
+        t_minus: int = Field(default=1, ge=0)
+        t_plus: int = Field(default=1, ge=0)
+
+    events: Optional[Events] = None
 
     @model_validator(mode="after")
     def _check_values(self):
@@ -570,6 +602,13 @@ class OrdersUI(BaseModel):
     watchlist: Watchlist = Field(default_factory=Watchlist)
     # Number of tickers to show for suggestions (UI only)
     suggestions_top_n: int = Field(ge=1, default=3)
+    # When enabled, write pre-sized BUY candidates (before safety/market/budget filters)
+    # into orders_filtered.csv with Reason='candidate_pre'. Default disabled to keep legacy outputs stable.
+    write_pre_candidates: Union[int, bool] = 0
+    # Pre-size mode for candidate_pre sizing:
+    # - 'budget_softmax': split daily budget by score (legacy behavior)
+    # - 'score_min_lot': map min score to 1 lot, others proportionally in lots
+    pre_size_mode: Literal['budget_softmax','score_min_lot'] = 'budget_softmax'
 
 
 class Evaluation(BaseModel):
@@ -610,6 +649,8 @@ class PolicyOverrides(BaseModel):
     thresholds: Thresholds
     thresholds_profiles: Optional[ThresholdProfiles] = None
     neutral_adaptive: NeutralAdaptive = Field(default_factory=NeutralAdaptive)
+    # Optional global bias (leaning buy/observe) in [-0.2..0.2].
+    market_bias: Optional[float] = 0.0
     sector_bias: Dict[str, float]
     ticker_bias: Dict[str, float]
     pricing: Pricing
@@ -618,6 +659,27 @@ class PolicyOverrides(BaseModel):
     market_filter: MarketFilter
     # Optional UI and market config
     orders_ui: Optional[OrdersUI] = None
+    # Optional risk overlays (vol targeting / kill-switch)
+    class Risk(BaseModel):
+        class VolTarget(BaseModel):
+            enable: Union[int, bool] = 0
+            target_ann: float = Field(default=0.15, gt=0.0)
+            lookback_days: int = Field(default=20, ge=1)
+            scale_min: float = Field(default=0.6, ge=0.0)
+            scale_max: float = Field(default=1.4, ge=0.0)
+
+        class KillSwitch(BaseModel):
+            enable: Union[int, bool] = 0
+            dd_hard_pct: float = Field(default=0.12, ge=0.0)
+            sl_streak_n: int = Field(default=5, ge=0)
+            window_days: int = Field(default=3, ge=1)
+            cooldown_days: int = Field(default=3, ge=0)
+            actions: Dict[str, float] = Field(default_factory=lambda: {"buy_budget_frac": 0.0, "add_budget_frac_scale": 0.33})
+
+        vol_target: VolTarget = Field(default_factory=VolTarget)
+        kill_switch: KillSwitch = Field(default_factory=KillSwitch)
+
+    risk: Optional[Risk] = None
     market: Optional[MarketConfig] = None
     regime_model: RegimeModel
     # Optional: scales used to normalize regime components (avoid hidden constants)

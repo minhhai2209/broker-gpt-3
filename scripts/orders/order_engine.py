@@ -55,6 +55,7 @@ from scripts.portfolio.portfolio_risk import (
 )
 from scripts.tuning.mean_variance_calibrator import calibrate_mean_variance_params
 import json
+from scripts.data.events.calendar_loader import load_events, in_event_window
 
 
 def _relaxed_breadth_floor(
@@ -190,6 +191,8 @@ class MarketRegime:
     gk_sigma: float = 0.0
     gk_percentile: float = 0.0
     ttl_bucket: str = 'medium'
+    # Global lean (buy/observe) applied uniformly via ticker_sent weight
+    market_bias: float = 0.0
     # Neutral-adaptive regime metadata
     neutral_state: Dict[str, object] = field(default_factory=dict)
     is_neutral: bool = False
@@ -711,12 +714,22 @@ def get_market_regime(session_summary: pd.DataFrame, sector_strength: pd.DataFra
             return val
         return bool(int(val))
 
+    def _mf_str(key: str, default: str) -> str:
+        # String helper with explicit default (non-failfast) for optional keys
+        val = market_filter_raw.get(key, default)
+        try:
+            s = str(val).strip().lower()
+        except Exception:
+            s = str(default).strip().lower()
+        return s
+
     # Fail fast if required keys missing — align with "no hidden defaults"
     market_filter_conf = {
         "risk_off_index_drop_pct": abs(_mf_float("risk_off_index_drop_pct")),
         "risk_off_trend_floor": _mf_float("risk_off_trend_floor"),
         "risk_off_breadth_floor": max(0.0, min(1.0, _mf_float("risk_off_breadth_floor"))),
         "breadth_relax_margin": max(0.0, min(0.2, _mf_float("breadth_relax_margin"))),
+        "guard_behavior": _mf_str("guard_behavior", "pause"),
         "leader_min_rsi": _mf_float("leader_min_rsi"),
         "leader_min_mom_norm": max(0.0, min(1.0, _mf_float("leader_min_mom_norm"))),
         "leader_require_ma20": _mf_bool("leader_require_ma20"),
@@ -884,6 +897,7 @@ def get_market_regime(session_summary: pd.DataFrame, sector_strength: pd.DataFra
         thresholds=thresholds,
         sector_bias=sector_bias,
         ticker_bias=ticker_bias,
+        market_bias=float(tuning.get('market_bias', 0.0) or 0.0),
         pricing=pricing,
         execution=execution_conf,
         sizing=sizing,
@@ -1284,7 +1298,13 @@ def conviction_score(feats: Dict[str, float], sector: str, regime: MarketRegime,
         sector_boost = 1.0
     sector_sent = float(regime.sector_bias.get(sector, 0.0))
     w_ticker_sent = float(w.get("w_ticker_sent", 0.0))
+    global_sent = 0.0
+    try:
+        global_sent = float(getattr(regime, 'market_bias', 0.0) or 0.0)
+    except Exception:
+        global_sent = 0.0
     ticker_sent = float(regime.ticker_bias.get(ticker, 0.0)) if ticker else 0.0
+    ticker_sent = ticker_sent + global_sent
     fund_roe = feats.get("fund_roe_component", feats.get("fund_roe_norm", 0.0))
     fund_ey = feats.get("fund_ey_component", feats.get("fund_earnings_yield", 0.0))
     return (
@@ -1525,6 +1545,22 @@ def pick_limit_price(ticker: str, side: str, snap_row: pd.Series, preset_row: Op
     else:
         limit_price = round_to_tick(limit_price, tick)
     limit_price = clip_to_band(limit_price, floor_tick, ceil_tick)
+    # Enforce near-ceiling guard: cap BUY limit to near_ceiling_pct * ceiling
+    try:
+        if side == 'BUY' and ceil_tick is not None and regime is not None:
+            th_conf_nc = dict(getattr(regime, 'thresholds', {}) or {})
+            nc_val = th_conf_nc.get('near_ceiling_pct')
+            if nc_val is not None:
+                nc = float(nc_val)
+                if nc > 0.0:
+                    cap_px = nc * float(ceil_tick)
+                    if limit_price > cap_px:
+                        import math as _mm
+                        step_nc = tick if tick else 0.0
+                        limit_price = (_mm.floor(cap_px / step_nc) * step_nc) if step_nc > 0 else cap_px
+                        limit_price = clip_to_band(limit_price, floor_tick, ceil_tick)
+    except Exception:
+        pass
     return float(f"{limit_price:.2f}")
 
 
@@ -1928,6 +1964,69 @@ def decide_actions(
         except Exception:
             pass
     regime = get_market_regime(session_summary, sector_strength, tuning)
+    # Apply runtime execution-style overrides (from policy patches) broadly:
+    # We allow exec.* keys to override fields in execution/market_filter/orders_ui
+    # without mutating the baseline policy. This avoids editing overrides files.
+    try:
+        if isinstance(runtime_overrides, dict):
+            exec_patch = runtime_overrides.get('exec')
+            if isinstance(exec_patch, dict) and exec_patch:
+                # Make local copies
+                exec_conf = dict(getattr(regime, 'execution', {}) or {})
+                mf_conf = dict(getattr(regime, 'market_filter', {}) or {})
+                ou_conf = dict(getattr(regime, 'orders_ui', {}) or {})
+                event_pause_new = False
+                event_budget_scale = None
+                for k, v in exec_patch.items():
+                    key = str(k)
+                    if key == 'filter_buy_limit_gt_market':
+                        try:
+                            exec_conf[key] = int(float(v))
+                        except Exception:
+                            pass
+                    elif key == 'leader_fallback_topk_if_empty':
+                        try:
+                            mf_conf['leader_fallback_topk_if_empty'] = int(float(v))
+                        except Exception:
+                            pass
+                    elif key == 'write_pre_candidates':
+                        try:
+                            ou_conf['write_pre_candidates'] = int(float(v))
+                        except Exception:
+                            pass
+                    elif key == 'event_pause_new':
+                        try:
+                            event_pause_new = bool(int(float(v)))
+                        except Exception:
+                            event_pause_new = bool(v)
+                    elif key == 'event_budget_scale':
+                        try:
+                            event_budget_scale = max(0.0, min(1.0, float(v)))
+                        except Exception:
+                            event_budget_scale = None
+                try:
+                    regime.execution = exec_conf
+                    regime.market_filter = mf_conf
+                    regime.orders_ui = ou_conf
+                except Exception:
+                    pass
+                # Apply event overrides
+                try:
+                    if event_budget_scale is not None:
+                        base = float(getattr(regime, 'buy_budget_frac', 0.0) or 0.0)
+                        eff = base * float(event_budget_scale)
+                        regime.buy_budget_frac = eff
+                        regime.buy_budget_frac_effective = eff
+                except Exception:
+                    pass
+                try:
+                    if event_pause_new:
+                        # Set hard cap for NEW entries to 0
+                        regime.new_max = 0
+                except Exception:
+                    pass
+    except Exception:
+        pass
     snap = snapshot.set_index("Ticker")
     pre = presets.set_index("Ticker") if not presets.empty else pd.DataFrame()
     if not metrics.empty and "AvgTurnover20D_k" in metrics.columns:
@@ -2462,6 +2561,22 @@ def decide_actions(
 
     th = dict(regime.thresholds)
     q_add = float(th["q_add"]); q_new = float(th["q_new"]); base_add = float(th["base_add"]); base_new = float(th["base_new"])
+    # Snapshot pre-filter BUY candidates (before quantile/safety/market guard)
+    try:
+        pre_candidates = []
+        for t_key, action0 in act.items():
+            if action0 in {"new", "new_partial", "add"}:
+                pre_candidates.append((t_key, action0))
+        try:
+            regime.pre_buy_candidates = pre_candidates
+        except Exception:
+            pass
+    except Exception:
+        try:
+            regime.pre_buy_candidates = []
+        except Exception:
+            pass
+
     # Apply transaction cost penalty consistently to gating thresholds
     try:
         tc = 0.0
@@ -2598,6 +2713,37 @@ def decide_actions(
             cooldown_block = {}
 
     safety_cache: Dict[str, Tuple[bool, Optional[str], Optional[str]]] = {}
+    # Optional corporate events gating (Ex-rights/Record/Execution dates)
+    # Configured via policy.market_filter.events; disabled by default.
+    events_cfg = None
+    try:
+        mf_conf_local = getattr(regime, 'market_filter', {}) or {}
+        events_cfg = mf_conf_local.get('events') if isinstance(mf_conf_local, dict) else None
+    except Exception:
+        events_cfg = None
+    events_enabled = False
+    events_no_new = True
+    events_t_minus = 1
+    events_t_plus = 1
+    if isinstance(events_cfg, dict):
+        try:
+            events_enabled = bool(int(events_cfg.get('enable', 0))) if not isinstance(events_cfg.get('enable', 0), bool) else bool(events_cfg.get('enable', 0))
+        except Exception:
+            events_enabled = False
+        try:
+            events_no_new = bool(int(events_cfg.get('no_new_on_event', 1))) if not isinstance(events_cfg.get('no_new_on_event', 1), bool) else bool(events_cfg.get('no_new_on_event', 1))
+        except Exception:
+            events_no_new = True
+        try:
+            events_t_minus = max(0, int(events_cfg.get('t_minus', 1) or 1))
+        except Exception:
+            events_t_minus = 1
+        try:
+            events_t_plus = max(0, int(events_cfg.get('t_plus', 1) or 1))
+        except Exception:
+            events_t_plus = 1
+    events_df = load_events() if events_enabled else None
+    today_date = datetime.now().date()
 
     def _check_new_safety(ticker: str) -> tuple[bool, Optional[str], Optional[str]]:
         if ticker in safety_cache:
@@ -2631,6 +2777,16 @@ def decide_actions(
         if ticker_up in cooldown_block:
             safety_cache[ticker] = (False, "market", cooldown_block[ticker_up])
             return safety_cache[ticker]
+        # Optional: block NEW around corporate event window when enabled
+        if events_df is not None and events_no_new:
+            try:
+                if in_event_window(ticker_up, today_date, t_minus=events_t_minus, t_plus=events_t_plus, df=events_df):
+                    note = f"within event window ±{events_t_minus}/{events_t_plus} days"
+                    safety_cache[ticker] = (False, "events", note)
+                    return safety_cache[ticker]
+            except Exception:
+                # On any parsing error, do not block
+                pass
         safety_cache[ticker] = (True, None, None)
         return safety_cache[ticker]
 
@@ -2722,6 +2878,22 @@ def decide_actions(
                     partial_floor_map[t] = floor_local
                     partial_buffer_map[t] = buffer_local
                     partial_enabled_map[t] = enabled_local
+
+    # Snapshot pre-filter BUY candidates (before safety/market guard/budget)
+    try:
+        pre_candidates = []
+        for t, action_now in act.items():
+            if action_now in {"new", "new_partial", "add"}:
+                pre_candidates.append((t, action_now))
+        try:
+            regime.pre_buy_candidates = pre_candidates
+        except Exception:
+            pass
+    except Exception:
+        try:
+            regime.pre_buy_candidates = []
+        except Exception:
+            pass
 
     # Safety filters for NEW and NEW_PARTIAL candidates
     new_safety_pass: set[str] = set()
@@ -2858,77 +3030,93 @@ def decide_actions(
         except Exception:
             pass
         reason_core = "; ".join(triggers) if triggers else "guard conditions met"
-        reason_note = f"market filter active – pause new entries ({reason_core})"
-        if market_score <= score_hard:
-            reason_note += f"; market_score {market_score:.2f} ≤ hard floor {score_hard:.2f}"
-        # Always defer ADD when market weak
-        for t in list(act.keys()):
-            if act.get(t) == "add":
-                act[t] = "hold"
-                debug_filters["market"].append(t)
-                _note_filter(t, "market", f"ADD deferred: {reason_core}")
-        # Leader bypass for NEW
-        leader_min_rsi = float(mf_conf.get('leader_min_rsi', 1e9))
-        leader_min_mom = float(mf_conf.get('leader_min_mom_norm', 1.0))
-        req_ma20 = bool(int(mf_conf.get('leader_require_ma20', 0)))
-        req_ma50 = bool(int(mf_conf.get('leader_require_ma50', 0)))
-        leader_max = int(mf_conf.get('leader_max', 0))
-        # Disable bypass under severe market stress conditions
-        risk_off_dd_floor = float(mf_conf.get('risk_off_drawdown_floor', 0.0) or 0.0)
-        idx_drop_thr = float(mf_conf.get('risk_off_index_drop_pct', 0.0) or 0.0)
-        score_hard = float(mf_conf.get('market_score_hard_floor', 0.0) or 0.0)
-        bypass_allowed = True
-        try:
-            dd = float(getattr(regime, 'drawdown_pct', 0.0) or 0.0)
-            if risk_off_dd_floor > 0.0 and dd >= risk_off_dd_floor:
-                bypass_allowed = False
-            # Also disable when smoothed index drop breaches threshold or market_score at/below hard floor
-            # For leader-bypass disable check, use raw intraday change (session context)
-            idx_sm = float(getattr(regime, 'index_change_pct', 0.0) or 0.0)
-            if idx_drop_thr > 0.0 and idx_sm <= -abs(idx_drop_thr):
-                bypass_allowed = False
-            ms = float(getattr(regime, 'market_score', 0.0) or 0.0)
-            if ms <= score_hard:
-                bypass_allowed = False
-        except Exception:
+        # Behaviour switch according to policy
+        behavior = str(mf_conf.get('guard_behavior', 'pause')).strip().lower()
+        if behavior == 'pause':
+            reason_note = f"market filter active – pause new entries ({reason_core})"
+            if market_score <= score_hard:
+                reason_note += f"; market_score {market_score:.2f} ≤ hard floor {score_hard:.2f}"
+            # Always defer ADD when market weak
+            for t in list(act.keys()):
+                if act.get(t) == "add":
+                    act[t] = "hold"
+                    debug_filters["market"].append(t)
+                    _note_filter(t, "market", f"ADD deferred: {reason_core}")
+            # Leader bypass for NEW
+            leader_min_rsi = float(mf_conf.get('leader_min_rsi', 1e9))
+            leader_min_mom = float(mf_conf.get('leader_min_mom_norm', 1.0))
+            req_ma20 = bool(int(mf_conf.get('leader_require_ma20', 0)))
+            req_ma50 = bool(int(mf_conf.get('leader_require_ma50', 0)))
+            leader_max = int(mf_conf.get('leader_max', 0))
+            # Disable bypass under severe market stress conditions
+            risk_off_dd_floor = float(mf_conf.get('risk_off_drawdown_floor', 0.0) or 0.0)
+            idx_drop_thr = float(mf_conf.get('risk_off_index_drop_pct', 0.0) or 0.0)
+            score_hard = float(mf_conf.get('market_score_hard_floor', 0.0) or 0.0)
             bypass_allowed = True
-        new_pool = [(t, score.get(t, 0.0)) for t, a in act.items() if a == 'new']
-        keep: set[str] = set()
-        if bypass_allowed and leader_max > 0 and new_pool:
-            # filter leaders
-            leaders: list[tuple[str, float]] = []
-            for t, sc in new_pool:
-                f = feats_all.get(t, {})
-                rsi = float(f.get('rsi', 0.0) or 0.0)
-                momn = float(f.get('mom_norm', 0.0) or 0.0)
-                if rsi < leader_min_rsi or momn < leader_min_mom:
-                    continue
-                if req_ma20 and float(f.get('above_ma20', 0.0) or 0.0) < 1.0:
-                    continue
-                if req_ma50 and float(f.get('above_ma50', 0.0) or 0.0) < 1.0:
-                    continue
-                leaders.append((t, sc))
-            leaders = sorted(leaders, key=lambda x: x[1], reverse=True)[:leader_max]
-            keep = {t for t, _ in leaders}
-        # Remove other NEW
-        for t, _ in list(new_pool):
-            if t not in keep:
-                del act[t]
-                debug_filters["market"].append(t)
-                _note_filter(t, "market", reason_note if keep else reason_note + "; leader bypass not active")
-        # Policy: Under market guard, do not add to existing positions; only allow
-        # constrained NEW via leader bypass when bypass is allowed. Budgets are
-        # subsequently scaled by ATR/market_score gates downstream.
-        regime.add_max = 0
-        if bypass_allowed:
-            regime.new_max = min(len(keep), leader_max) if keep else 0
-        else:
-            regime.new_max = 0
-            # Severe conditions: zero out buy budget
             try:
-                regime.buy_budget_frac = 0.0
+                dd = float(getattr(regime, 'drawdown_pct', 0.0) or 0.0)
+                if risk_off_dd_floor > 0.0 and dd >= risk_off_dd_floor:
+                    bypass_allowed = False
+                # Also disable when smoothed index drop breaches threshold or market_score at/below hard floor
+                # For leader-bypass disable check, use raw intraday change (session context)
+                idx_sm = float(getattr(regime, 'index_change_pct', 0.0) or 0.0)
+                if idx_drop_thr > 0.0 and idx_sm <= -abs(idx_drop_thr):
+                    bypass_allowed = False
+                ms = float(getattr(regime, 'market_score', 0.0) or 0.0)
+                if ms <= score_hard:
+                    bypass_allowed = False
             except Exception:
-                pass
+                bypass_allowed = True
+            new_pool = [(t, score.get(t, 0.0)) for t, a in act.items() if a == 'new']
+            keep: set[str] = set()
+            if bypass_allowed and leader_max > 0 and new_pool:
+                # filter leaders
+                leaders: list[tuple[str, float]] = []
+                for t, sc in new_pool:
+                    f = feats_all.get(t, {})
+                    rsi = float(f.get('rsi', 0.0) or 0.0)
+                    momn = float(f.get('mom_norm', 0.0) or 0.0)
+                    if rsi < leader_min_rsi or momn < leader_min_mom:
+                        continue
+                    if req_ma20 and float(f.get('above_ma20', 0.0) or 0.0) < 1.0:
+                        continue
+                    if req_ma50 and float(f.get('above_ma50', 0.0) or 0.0) < 1.0:
+                        continue
+                    leaders.append((t, sc))
+                leaders = sorted(leaders, key=lambda x: x[1], reverse=True)[:leader_max]
+                keep = {t for t, _ in leaders}
+                # Fallback: if no leaders and a fallback K is configured, keep top-K NEW by score
+                try:
+                    k_fallback = int(mf_conf.get('leader_fallback_topk_if_empty', 0) or 0)
+                except Exception:
+                    k_fallback = 0
+                if not keep and k_fallback > 0:
+                    # Choose from the original new_pool, highest scores first
+                    fallback_pick = [t for t, _ in sorted(new_pool, key=lambda x: x[1], reverse=True)[:k_fallback]]
+                    keep = set(fallback_pick)
+            # Remove other NEW
+            for t, _ in list(new_pool):
+                if t not in keep:
+                    del act[t]
+                    debug_filters["market"].append(t)
+                    _note_filter(t, "market", reason_note if keep else reason_note + "; leader bypass not active")
+            # Policy: Under market guard, do not add to existing positions; only allow
+            # constrained NEW via leader bypass when bypass is allowed. Budgets are
+            # subsequently scaled by ATR/market_score gates downstream.
+            regime.add_max = 0
+            if bypass_allowed:
+                regime.new_max = min(len(keep), leader_max) if keep else 0
+            else:
+                regime.new_max = 0
+                # Severe conditions: zero out buy budget
+                try:
+                    regime.buy_budget_frac = 0.0
+                except Exception:
+                    pass
+        else:
+            # scale_only: do not filter/alter act/new_max/add_max here;
+            # scaling happens downstream based on ATR/score caps.
+            pass
 
     # Apply runtime gating overrides (e.g., ML calibrator)
     gate_context = runtime_overrides if isinstance(runtime_overrides, dict) else {}
@@ -3420,6 +3608,8 @@ def build_orders(
     if reuse_sell_proceeds_frac > 0.0 and expected_proceeds_k > 0.0:
         target_gross_buy += reuse_sell_proceeds_frac * expected_proceeds_k
 
+    # Optional pre-size writing moved below after filtered_records is initialized
+
     # 3) Build alloc by score softmax, then optionally risk-adjust budgets
     add_names = [t for t, a in actions.items() if a == "add"]
     new_names = [t for t, a in actions.items() if a in {"new", "new_partial"}]
@@ -3666,6 +3856,103 @@ def build_orders(
     for key in ("market", "liquidity", "near_ceiling", "limit_gt_market"):
         debug_filters.setdefault(key, [])
     filtered_records: List[Dict[str, object]] = list(getattr(regime, 'filtered_records', []) or [])
+
+    # Optional: write pre-sized BUY candidates (before quantile/safety/market filters)
+    try:
+        ou_conf = dict(getattr(regime, 'orders_ui', {}) or {})
+        write_pre = bool(int(ou_conf.get('write_pre_candidates', 0)))
+    except Exception:
+        write_pre = False
+    if write_pre:
+        try:
+            pre_list = list(getattr(regime, 'pre_buy_candidates', []) or [])
+            if pre_list:
+                ou_conf = dict(getattr(regime, 'orders_ui', {}) or {})
+                mode = str(ou_conf.get('pre_size_mode', 'budget_softmax')).strip().lower()
+                # Collect scores for candidates
+                cand = [(t, float(scores.get(t, 0.0) or 0.0), a) for t, a in pre_list]
+                cand = [(t, s if s > 0 else 0.0, a) for (t, s, a) in cand]
+                try:
+                    lot_sz = int(float(regime.sizing.get('min_lot', 100) or 100))
+                except Exception:
+                    lot_sz = 100
+                lot_sz = max(1, lot_sz)
+                if mode == 'score_min_lot':
+                    # Map min positive score → 1 lot; others proportional
+                    pos_scores = [s for (_, s, _) in cand if s > 0]
+                    if pos_scores:
+                        s_min = min(pos_scores)
+                        for t, s, a in cand:
+                            if t not in snap.index:
+                                continue
+                            srow = snap.loc[t]; mrow = met.loc[t] if t in met.index else None; prow = pre.loc[t] if t in pre.index else None
+                            limit0 = pick_limit_price(t, 'BUY', srow, prow, mrow, regime)
+                            market_px = to_float(srow.get('Price')) or to_float(srow.get('P'))
+                            lots = 1 if s <= 0 or s_min <= 0 else int(round(s / s_min))
+                            lots = max(lots, 1)
+                            qty_est = lots * lot_sz
+                            filtered_records.append({
+                                'Ticker': t,
+                                'Reason': 'candidate_pre',
+                                'Side': 'BUY',
+                                'Quantity': int(qty_est),
+                                'LimitPrice': float(limit0),
+                                'MarketPrice': float(market_px) if market_px is not None else 0.0,
+                                'Note': 'pre-sized score_min_lot',
+                            })
+                    else:
+                        # All scores ≤ 0 → default to 1 lot each
+                        for t, s, a in cand:
+                            if t not in snap.index:
+                                continue
+                            srow = snap.loc[t]; mrow = met.loc[t] if t in met.index else None; prow = pre.loc[t] if t in pre.index else None
+                            limit0 = pick_limit_price(t, 'BUY', srow, prow, mrow, regime)
+                            market_px = to_float(srow.get('Price')) or to_float(srow.get('P'))
+                            qty_est = lot_sz
+                            filtered_records.append({
+                                'Ticker': t,
+                                'Reason': 'candidate_pre',
+                                'Side': 'BUY',
+                                'Quantity': int(qty_est),
+                                'LimitPrice': float(limit0),
+                                'MarketPrice': float(market_px) if market_px is not None else 0.0,
+                                'Note': 'pre-sized score_min_lot (all<=0)',
+                            })
+                else:
+                    # Legacy budget_softmax behavior
+                    try:
+                        add_share = float(regime.sizing.get('add_share', 0.5) or 0.5)
+                        new_share = float(regime.sizing.get('new_share', 0.5) or 0.5)
+                        tau = float(regime.sizing.get('softmax_tau', 0.6) or 0.6)
+                    except Exception:
+                        add_share, new_share, tau = 0.5, 0.5, 0.6
+                    budget_add_k = max(0.0, target_gross_buy * add_share)
+                    budget_new_k = max(0.0, target_gross_buy * new_share)
+                    pre_add = [t for t, a in pre_list if a == 'add']
+                    pre_new = [t for t, a in pre_list if a in {'new','new_partial'}]
+                    items_add = [(t, float(scores.get(t, 0.0) or 0.0)) for t in pre_add]
+                    items_new = [(t, float(scores.get(t, 0.0) or 0.0)) for t in pre_new]
+                    alloc_add_pre = allocate_proportional(budget_add_k, items_add, tau=tau) if items_add else {}
+                    alloc_new_pre = allocate_proportional(budget_new_k, items_new, tau=tau) if items_new else {}
+                    for t, s, a in cand:
+                        if t not in snap.index:
+                            continue
+                        srow = snap.loc[t]; mrow = met.loc[t] if t in met.index else None; prow = pre.loc[t] if t in pre.index else None
+                        limit0 = pick_limit_price(t, 'BUY', srow, prow, mrow, regime)
+                        market_px = to_float(srow.get('Price')) or to_float(srow.get('P'))
+                        budget_k = float(alloc_add_pre.get(t, 0.0) if a == 'add' else alloc_new_pre.get(t, 0.0))
+                        qty_est = int(max(budget_k / max(limit0, 1e-9) / lot_sz, 0)) * lot_sz
+                        filtered_records.append({
+                            'Ticker': t,
+                            'Reason': 'candidate_pre',
+                            'Side': 'BUY',
+                            'Quantity': int(qty_est),
+                            'LimitPrice': float(limit0),
+                            'MarketPrice': float(market_px) if market_px is not None else 0.0,
+                            'Note': 'pre-sized budget_softmax',
+                        })
+        except Exception as _exc_pre:
+            print(f"[warn] write_pre_candidates failed: {_exc_pre}")
 
     def _track_filter(ticker: str, reason: str, note: str = "", *, side: str = "", quantity: int = 0, limit_price: float = 0.0, market_price: float = 0.0) -> None:
         """Track filters during order construction with richer audit fields."""
@@ -3967,6 +4254,30 @@ def build_orders(
     min_lot = int(float(sizing['min_lot']))
     lot = max(min_lot, 1)
     fill_cfg = dict((getattr(regime, 'execution', {}) or {}).get('fill') or {})
+    # Time-of-day: if ATC and target_prob high, allow crossing (temporarily disable no_cross)
+    try:
+        exec_conf_local = dict(getattr(regime, 'execution', {}) or {})
+        tod_conf = exec_conf_local.get('time_of_day') if isinstance(exec_conf_local, dict) else None
+        if isinstance(tod_conf, dict):
+            prules = tod_conf.get('phase_rules') if isinstance(tod_conf.get('phase_rules'), dict) else None
+            phase_now = str(getattr(regime, 'phase', '') or '').strip().upper()
+            if prules and phase_now == 'ATC':
+                atc_rule = prules.get('ATC') if isinstance(prules.get('ATC'), dict) else None
+                thr = atc_rule.get('allow_cross_if_target_prob_gte') if atc_rule else None
+                if thr is not None:
+                    try:
+                        thr_val = float(thr)
+                    except Exception:
+                        thr_val = None
+                    if thr_val is not None:
+                        try:
+                            tp_local = float(fill_cfg.get('target_prob', 0.0) or 0.0)
+                        except Exception:
+                            tp_local = 0.0
+                        if tp_local >= thr_val:
+                            fill_cfg['no_cross'] = False
+    except Exception:
+        pass
 
     def _apply_caps_and_qty(t: str, budget_k: float, limit_price: float) -> int:
         # Base qty from budget
@@ -4085,6 +4396,13 @@ def build_orders(
 
     spent_buy_k = 0.0
 
+    # Config: clamp vs filter when BUY limit > market
+    try:
+        exec_conf = dict(getattr(regime, 'execution', {}) or {})
+        filter_buy_cross = bool(int(exec_conf.get('filter_buy_limit_gt_market', 1)))
+    except Exception:
+        filter_buy_cross = True
+
     for t in add_names:
         if t not in snap.index:
             continue
@@ -4092,10 +4410,15 @@ def build_orders(
         limit = pick_limit_price(t, "BUY", s, p, m, regime)
         market_price = to_float(s.get("Price")) or to_float(s.get("P"))
         budget = float(add_alloc.get(t, 0.0))
-        qty = _apply_caps_and_qty(t, budget, limit)
+        # Optionally clamp BUY limit down to market to avoid filtering
         if market_price is not None and limit > float(market_price) + 1e-9:
-            _track_filter(t, "limit_gt_market", f"limit {limit:.2f} > market {market_price:.2f}", side="BUY", quantity=qty, limit_price=limit, market_price=float(market_price))
-            continue
+            if filter_buy_cross:
+                qty_probe = _apply_caps_and_qty(t, budget, limit)
+                _track_filter(t, "limit_gt_market", f"limit {limit:.2f} > market {market_price:.2f}", side="BUY", quantity=qty_probe, limit_price=limit, market_price=float(market_price))
+                continue
+            else:
+                limit = float(market_price)
+        qty = _apply_caps_and_qty(t, budget, limit)
         if qty > 0:
             base_note = "Mua gia tăng"
             tags: List[str] = []
@@ -4129,6 +4452,14 @@ def build_orders(
             _track_filter(t, "fill_prob_below_target", note, side="BUY")
             continue
         limit = float(limit_adj)
+        # Optionally clamp BUY limit down to market to avoid filtering
+        if market_price is not None and limit > float(market_price) + 1e-9:
+            if filter_buy_cross:
+                qty_probe = _apply_caps_and_qty(t, budget, limit)
+                _track_filter(t, "limit_gt_market", f"limit {limit:.2f} > market {market_price:.2f}", side="BUY", quantity=qty_probe, limit_price=limit, market_price=float(market_price))
+                continue
+            else:
+                limit = float(market_price)
         qty = _apply_caps_and_qty(t, budget, limit)
         is_partial = t in new_partial_names
         floor_lot_local = int(partial_floor_map_state.get(t, state_local.get('partial_entry_floor_lot', 1)) or 1)
@@ -4155,8 +4486,11 @@ def build_orders(
             elif qty > 0:
                 qty = 0
         if market_price is not None and limit > float(market_price) + 1e-9:
-            _track_filter(t, "limit_gt_market", f"limit {limit:.2f} > market {market_price:.2f}", side="BUY", quantity=qty, limit_price=limit, market_price=float(market_price))
-            continue
+            if filter_buy_cross:
+                _track_filter(t, "limit_gt_market", f"limit {limit:.2f} > market {market_price:.2f}", side="BUY", quantity=qty, limit_price=limit, market_price=float(market_price))
+                continue
+            else:
+                limit = float(market_price)
         if qty > 0:
             base_note = "Mua mới"
             tags: List[str] = []
@@ -4200,9 +4534,12 @@ def build_orders(
                     limit = pick_limit_price(t, "BUY", s, p, m, regime)
                     market_price = to_float(s.get("Price")) or to_float(s.get("P"))
                     if market_price is not None and limit > float(market_price) + 1e-9:
-                        qty_try_est = _apply_caps_and_qty(t, leftover_k, limit)
-                        _track_filter(t, "limit_gt_market", f"limit {limit:.2f} > market {market_price:.2f}", side="BUY", quantity=int(qty_try_est), limit_price=limit, market_price=float(market_price))
-                        continue
+                        if filter_buy_cross:
+                            qty_try_est = _apply_caps_and_qty(t, leftover_k, limit)
+                            _track_filter(t, "limit_gt_market", f"limit {limit:.2f} > market {market_price:.2f}", side="BUY", quantity=int(qty_try_est), limit_price=limit, market_price=float(market_price))
+                            continue
+                        else:
+                            limit = float(market_price)
                     qty_try = _apply_caps_and_qty(t, leftover_k, limit)
                     if qty_try <= 0:
                         continue

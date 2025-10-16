@@ -22,6 +22,31 @@ Overlay policy (baseline bất biến)
 - Back‑compat: `config/policy_ai_overrides.json` trước đây do tuner sinh; hiện pipeline không tạo nữa nhưng engine vẫn MERGE nếu file tồn tại.
 - Runtime merge: engine hợp nhất baseline → nightly (nếu có) → ai (nếu có) → legacy `config/policy_overrides.json` thành `out/orders/policy_overrides.json` và dùng cho phiên chạy.
 
+**Chính sách thay đổi — Luôn hiệu lực dài hạn (Long‑term by default)**
+- Mặc định mọi thay đổi cấu hình/hành vi phải có hiệu lực dài hạn, có kiểm soát version và test đi kèm. Không dùng giải pháp thời điểm (ephemeral) để “vá” tạm.
+- Ưu tiên cập nhật tại `config/policy_default.json` (baseline) và/hoặc quy trình calibrator/publish. Khi thêm khóa mới: cập nhật schema (scripts/engine/schema.py) với default rõ ràng, bổ sung vào baseline, và điều chỉnh calibrator để tránh ghi đè ngoài ý muốn.
+- Không chỉnh tay hoặc đề xuất chỉnh tay các file overrides sinh bởi pipeline: `config/policy_overrides.json`, `out/orders/policy_overrides.json`.
+- Không sử dụng `config/policy_ai_overrides.json` như kênh cấu hình chính. File này chỉ còn mục đích tương thích; tránh tạo/sửa file này trong commit thường quy.
+- Patch runtime (`out/orders/patch_market.json`, `out/orders/patch_tune.json`, `out/orders/patch_ml.json`) chỉ dùng cho DEV cục bộ, có `meta.ttl`, không commit. Không coi patch runtime là “giải pháp xong việc”. Khi đã xác nhận hướng, phải nâng cấp thành thay đổi dài hạn ở baseline/calibrator và cập nhật test/tài liệu.
+- Yêu cầu PR đối với thay đổi dài hạn: (1) cập nhật baseline + schema, (2) cập nhật SYSTEM_DESIGN.md (và README.md nếu ảnh hưởng cách dùng), (3) cập nhật/điều chỉnh tests/fixtures, (4) giữ nguyên audit trail (không sửa thủ công artefact sinh tự động).
+
+IMPORTANT — Overrides workflow (đừng chỉnh tay rồi kỳ vọng giữ được)
+- `out/orders/policy_overrides.json` và `config/policy_overrides.json` đều là artefact do pipeline/tuner sinh. Chỉnh tay 2 file này là VÔ TÁC DỤNG: phiên chạy/CI kế tiếp sẽ ghi đè lại và làm mất thay đổi.
+- `config/policy_ai_overrides.json` chỉ còn để tương thích; engine vẫn MERGE nếu tồn tại, nhưng các khóa có thể bị `config/policy_overrides.json` (unified publish) ghi đè. Không thêm/sửa file này trong commit trừ khi có chỉ đạo rõ từ calibrator.
+- Muốn thay đổi hành vi NGẮN HẠN cho 1 phiên chạy, dùng patch runtime dưới `out/orders/` và để `aggregate_patches.py` hợp nhất:
+  - `out/orders/patch_market.json`, `out/orders/patch_tune.json`, `out/orders/patch_ml.json`
+  - Bắt buộc có trường `meta.ttl` (ISO 8601) để tự hết hạn; patch không cần commit.
+  - Ví dụ rút gọn:
+    ```json
+    {
+      "meta": {"source": "local-dev", "ttl": "2025-10-15T23:59:00+07:00"},
+      "set": {"buy_budget_frac": 0.08},
+      "exec": {"min_fill_prob": 0.25},
+      "bias": {"sector_bias.Tài chính": 0.03}
+    }
+    ```
+- Muốn thay đổi DÀI HẠN, cập nhật `config/policy_default.json` hoặc quy trình calibrator (nightly) → publish sang `config/policy_overrides.json`. Không bypass quy trình bằng cách chỉnh tay “overrides”.
+
 Generated artifacts
 - `out/orders/policy_overrides.json` là file MACHINE‑GENERATED cho mỗi phiên/tune; engine thêm `"_meta".machine_generated = true` và timestamp. Tuyệt đối không chỉnh tay; mọi thay đổi sẽ bị ghi đè. Nếu cần thay đổi, cập nhật overlay tại `config/` và để engine hợp nhất ở runtime.
 - **Lưu ý bổ sung:** `config/policy_overrides.json` cũng là artefact do calibrators xuất bản. Không chỉnh tay hoặc đề xuất chỉnh tay file này; thay đổi phải đi qua quy trình tune/calibration.

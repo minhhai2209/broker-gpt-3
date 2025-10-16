@@ -1079,6 +1079,66 @@ IDC,Tỷ số Nợ vay trên Vốn chủ sở hữu,%,Q3/2024,39.62,39.62
 IDC,Tỷ số Nợ vay trên Vốn chủ sở hữu,%,Q4/2024,43.51,43.51
 IDC,Tỷ số Nợ vay trên Vốn chủ sở hữu,%,Q1/2025,47.87,47.87
 IDC,Tỷ số Nợ vay trên Vốn chủ sở hữu,%,Q2/2025,46.04,46.04
+VCS,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q2/2024,5548.78,"5,548.78"
+VCS,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q3/2024,5342.59,"5,342.59"
+VCS,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q4/2024,5044.51,"5,044.51"
+VCS,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q1/2025,4793.47,"4,793.47"
+VCS,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q2/2025,4536.35,"4,536.35"
+VCS,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q2/2024,31767.0,"31,767"
+VCS,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q3/2024,32777.0,"32,777"
+VCS,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q4/2024,31935.0,"31,935"
+VCS,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q1/2025,32848.0,"32,848"
+VCS,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q2/2025,32049.0,"32,049"
+VCS,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q2/2024,13.25,13.25
+VCS,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q3/2024,12.11,12.11
+VCS,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q4/2024,12.59,12.59
+VCS,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q1/2025,12.1,12.1
+VCS,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q2/2025,10.63,10.63
+VCS,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q2/2024,2.31,2.31
+VCS,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q3/2024,1.97,1.97
+VCS,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q4/2024,1.99,1.99
+VCS,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q1/2025,1.77,1.77
+VCS,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q2/2025,1.5,1.5
+VCS,Tỷ suất lợi nhuận gộp biên,%,Q2/2024,28.74,28.74
+VCS,Tỷ suất lợi nhuận gộp biên,%,Q3/2024,27.21,27.21
+VCS,Tỷ suất lợi nhuận gộp biên,%,Q4/2024,26.01,26.01
+VCS,Tỷ suất lợi nhuận gộp biên,%,Q1/2025,24.15,24.15
+VCS,Tỷ suất lợi nhuận gộp biên,%,Q2/2025,26.61,26.61
+VCS,Tỷ suất sinh lợi trên doanh thu thuần,%,Q2/2024,21.4,21.4
+VCS,Tỷ suất sinh lợi trên doanh thu thuần,%,Q3/2024,16.67,16.67
+VCS,Tỷ suất sinh lợi trên doanh thu thuần,%,Q4/2024,17.16,17.16
+VCS,Tỷ suất sinh lợi trên doanh thu thuần,%,Q1/2025,16.17,16.17
+VCS,Tỷ suất sinh lợi trên doanh thu thuần,%,Q2/2025,18.78,18.78
+VCS,Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA),%,Q2/2024,4.91,4.91
+VCS,Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA),%,Q3/2024,3.14,3.14
+VCS,Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA),%,Q4/2024,3.65,3.65
+VCS,Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA),%,Q1/2025,3.18,3.18
+VCS,Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA),%,Q2/2025,4.05,4.05
+VCS,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q2/2024,4.0,4
+VCS,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q3/2024,2.58,2.58
+VCS,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q4/2024,2.94,2.94
+VCS,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q1/2025,2.54,2.54
+VCS,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q2/2025,3.22,3.22
+VCS,Tỷ số thanh toán hiện hành (ngắn hạn),Lần,Q2/2024,5.12,5.12
+VCS,Tỷ số thanh toán hiện hành (ngắn hạn),Lần,Q3/2024,4.83,4.83
+VCS,Tỷ số thanh toán hiện hành (ngắn hạn),Lần,Q4/2024,4.12,4.12
+VCS,Tỷ số thanh toán hiện hành (ngắn hạn),Lần,Q1/2025,4.62,4.62
+VCS,Tỷ số thanh toán hiện hành (ngắn hạn),Lần,Q2/2025,3.91,3.91
+VCS,Khả năng thanh toán lãi vay,Lần,Q2/2024,39.53,39.53
+VCS,Khả năng thanh toán lãi vay,Lần,Q3/2024,25.84,25.84
+VCS,Khả năng thanh toán lãi vay,Lần,Q4/2024,26.27,26.27
+VCS,Khả năng thanh toán lãi vay,Lần,Q1/2025,23.66,23.66
+VCS,Khả năng thanh toán lãi vay,Lần,Q2/2025,25.59,25.59
+VCS,Tỷ số Nợ trên Tổng tài sản,%,Q2/2024,17.1,17.1
+VCS,Tỷ số Nợ trên Tổng tài sản,%,Q3/2024,18.15,18.15
+VCS,Tỷ số Nợ trên Tổng tài sản,%,Q4/2024,21.01,21.01
+VCS,Tỷ số Nợ trên Tổng tài sản,%,Q1/2025,18.77,18.77
+VCS,Tỷ số Nợ trên Tổng tài sản,%,Q2/2025,22.25,22.25
+VCS,Tỷ số Nợ vay trên Vốn chủ sở hữu,%,Q2/2024,14.67,14.67
+VCS,Tỷ số Nợ vay trên Vốn chủ sở hữu,%,Q3/2024,16.32,16.32
+VCS,Tỷ số Nợ vay trên Vốn chủ sở hữu,%,Q4/2024,18.89,18.89
+VCS,Tỷ số Nợ vay trên Vốn chủ sở hữu,%,Q1/2025,19.14,19.14
+VCS,Tỷ số Nợ vay trên Vốn chủ sở hữu,%,Q2/2025,22.39,22.39
 BCG,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q4/2023,129.07,129.07
 BCG,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q1/2024,130.24,130.24
 BCG,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q2/2024,158.87,158.87
@@ -1202,8 +1262,8 @@ CII,Tỷ số Nợ vay trên Vốn chủ sở hữu,%,Q2/2025,199.38,199.38
 CTD,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q4/2024,2998.26,"2,998.26"
 CTD,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q1/2025,3259.45,"3,259.45"
 CTD,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q2/2025,3630.68,"3,630.68"
-CTD,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q3/2025,3152.73,"3,152.73"
-CTD,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q4/2025,4434.79,"4,434.79"
+CTD,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q3/2025,3147.8,"3,147.8"
+CTD,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q4/2025,4425.36,"4,425.36"
 CTD,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q4/2024,82803.0,"82,803"
 CTD,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q1/2025,83762.0,"83,762"
 CTD,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q2/2025,83857.0,"83,857"
@@ -1212,13 +1272,13 @@ CTD,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q4/2025,86486.0,"86,486
 CTD,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q4/2024,22.91,22.91
 CTD,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q1/2025,26.08,26.08
 CTD,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q2/2025,23.55,23.55
-CTD,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q3/2025,26.01,26.01
-CTD,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q4/2025,18.49,18.49
+CTD,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q3/2025,24.81,24.81
+CTD,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q4/2025,17.65,17.65
 CTD,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q4/2024,0.8,0.8
 CTD,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q1/2025,0.98,0.98
 CTD,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q2/2025,0.98,0.98
-CTD,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q3/2025,0.94,0.94
-CTD,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q4/2025,0.91,0.91
+CTD,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q3/2025,0.91,0.91
+CTD,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q4/2025,0.88,0.88
 CTD,Tỷ suất lợi nhuận gộp biên,%,Q4/2024,3.37,3.37
 CTD,Tỷ suất lợi nhuận gộp biên,%,Q1/2025,4.32,4.32
 CTD,Tỷ suất lợi nhuận gộp biên,%,Q2/2025,2.93,2.93
@@ -5204,66 +5264,66 @@ VIB,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q3/2024,
 VIB,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q4/2024,0.41,0.41
 VIB,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q1/2025,0.39,0.39
 VIB,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q2/2025,0.4,0.4
-VIX,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q2/2024,1010.03,"1,010.03"
 VIX,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q3/2024,1073.32,"1,073.32"
 VIX,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q4/2024,737.14,737.14
 VIX,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q1/2025,805.52,805.52
 VIX,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q2/2025,1605.0,"1,605"
-VIX,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q2/2024,13616.11,"13,616.11"
+VIX,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q3/2025,2870.56,"2,870.56"
 VIX,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q3/2024,10923.82,"10,923.82"
 VIX,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q4/2024,11000.75,"11,000.75"
 VIX,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q1/2025,11256.0,"11,256"
 VIX,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q2/2025,12148.42,"12,148.42"
-VIX,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q2/2024,16.24,16.24
+VIX,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q3/2025,13169.43,"13,169.43"
 VIX,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q3/2024,11.18,11.18
 VIX,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q4/2024,13.36,13.36
 VIX,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q1/2025,15.21,15.21
 VIX,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q2/2025,7.94,7.94
-VIX,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q2/2024,1.2,1.2
+VIX,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q3/2025,12.58,12.58
 VIX,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q3/2024,1.1,1.1
 VIX,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q4/2024,0.9,0.9
 VIX,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q1/2025,1.09,1.09
 VIX,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q2/2025,1.05,1.05
-VIX,Tỷ suất lợi nhuận gộp biên,%,Q2/2024,49.69,49.69
+VIX,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q3/2025,2.74,2.74
 VIX,Tỷ suất lợi nhuận gộp biên,%,Q3/2024,64.36,64.36
 VIX,Tỷ suất lợi nhuận gộp biên,%,Q4/2024,30.88,30.88
 VIX,Tỷ suất lợi nhuận gộp biên,%,Q1/2025,52.25,52.25
 VIX,Tỷ suất lợi nhuận gộp biên,%,Q2/2025,85.39,85.39
-VIX,Tỷ suất sinh lợi trên doanh thu thuần,%,Q2/2024,32.68,32.68
+VIX,Tỷ suất lợi nhuận gộp biên,%,Q3/2025,98.43,98.43
 VIX,Tỷ suất sinh lợi trên doanh thu thuần,%,Q3/2024,47.92,47.92
 VIX,Tỷ suất sinh lợi trên doanh thu thuần,%,Q4/2024,20.6,20.6
 VIX,Tỷ suất sinh lợi trên doanh thu thuần,%,Q1/2025,38.0,38
 VIX,Tỷ suất sinh lợi trên doanh thu thuần,%,Q2/2025,65.87,65.87
-VIX,Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA),%,Q2/2024,1.37,1.37
+VIX,Tỷ suất sinh lợi trên doanh thu thuần,%,Q3/2025,76.03,76.03
 VIX,Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA),%,Q3/2024,2.12,2.12
 VIX,Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA),%,Q4/2024,0.7,0.7
 VIX,Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA),%,Q1/2025,2.29,2.29
 VIX,Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA),%,Q2/2025,7.63,7.63
-VIX,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q2/2024,1.19,1.19
+VIX,Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA),%,Q3/2025,12.93,12.93
 VIX,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q3/2024,1.84,1.84
 VIX,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q4/2024,0.59,0.59
 VIX,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q1/2025,1.85,1.85
 VIX,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q2/2025,5.79,5.79
-VIX,Tỷ số thanh toán bằng tiền mặt,Lần,Q2/2024,0.4,0.4
+VIX,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q3/2025,8.76,8.76
 VIX,Tỷ số thanh toán bằng tiền mặt,Lần,Q3/2024,1.91,1.91
 VIX,Tỷ số thanh toán bằng tiền mặt,Lần,Q4/2024,0.2,0.2
 VIX,Tỷ số thanh toán bằng tiền mặt,Lần,Q1/2025,0.12,0.12
 VIX,Tỷ số thanh toán bằng tiền mặt,Lần,Q2/2025,0.17,0.17
-VIX,Tỷ số thanh toán hiện hành (ngắn hạn),Lần,Q2/2024,7.41,7.41
+VIX,Tỷ số thanh toán bằng tiền mặt,Lần,Q3/2025,0.08,0.08
 VIX,Tỷ số thanh toán hiện hành (ngắn hạn),Lần,Q3/2024,8.36,8.36
 VIX,Tỷ số thanh toán hiện hành (ngắn hạn),Lần,Q4/2024,5.63,5.63
 VIX,Tỷ số thanh toán hiện hành (ngắn hạn),Lần,Q1/2025,5.05,5.05
 VIX,Tỷ số thanh toán hiện hành (ngắn hạn),Lần,Q2/2025,3.84,3.84
-VIX,Tỷ số Nợ trên Tổng tài sản,%,Q2/2024,14.07,14.07
+VIX,Tỷ số thanh toán hiện hành (ngắn hạn),Lần,Q3/2025,2.93,2.93
 VIX,Tỷ số Nợ trên Tổng tài sản,%,Q3/2024,12.54,12.54
 VIX,Tỷ số Nợ trên Tổng tài sản,%,Q4/2024,18.17,18.17
 VIX,Tỷ số Nợ trên Tổng tài sản,%,Q1/2025,20.35,20.35
 VIX,Tỷ số Nợ trên Tổng tài sản,%,Q2/2025,27.34,27.34
-VIX,Tỷ số Nợ trên Vốn chủ sở hữu,%,Q2/2024,16.37,16.37
+VIX,Tỷ số Nợ trên Tổng tài sản,%,Q3/2025,36.04,36.04
 VIX,Tỷ số Nợ trên Vốn chủ sở hữu,%,Q3/2024,14.34,14.34
 VIX,Tỷ số Nợ trên Vốn chủ sở hữu,%,Q4/2024,22.2,22.2
 VIX,Tỷ số Nợ trên Vốn chủ sở hữu,%,Q1/2025,25.54,25.54
 VIX,Tỷ số Nợ trên Vốn chủ sở hữu,%,Q2/2025,37.62,37.62
+VIX,Tỷ số Nợ trên Vốn chủ sở hữu,%,Q3/2025,56.36,56.36
 VND,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q2/2024,1988.35,"1,988.35"
 VND,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q3/2024,1783.38,"1,783.38"
 VND,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q4/2024,1260.98,"1,260.98"
@@ -5324,36 +5384,36 @@ VND,Tỷ số Nợ trên Vốn chủ sở hữu,%,Q3/2024,122.45,122.45
 VND,Tỷ số Nợ trên Vốn chủ sở hữu,%,Q4/2024,124.67,124.67
 VND,Tỷ số Nợ trên Vốn chủ sở hữu,%,Q1/2025,149.24,149.24
 VND,Tỷ số Nợ trên Vốn chủ sở hữu,%,Q2/2025,144.09,144.09
-VPB,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q2/2024,1535.4,"1,535.4"
 VPB,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q3/2024,1678.85,"1,678.85"
 VPB,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q4/2024,1987.71,"1,987.71"
 VPB,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q1/2025,2029.08,"2,029.08"
 VPB,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q2/2025,2193.44,"2,193.44"
-VPB,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q2/2024,17402.13,"17,402.13"
+VPB,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q3/2025,2602.77,"2,602.77"
 VPB,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q3/2024,17928.06,"17,928.06"
 VPB,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q4/2024,18562.73,"18,562.73"
 VPB,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q1/2025,19059.09,"19,059.09"
 VPB,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q2/2025,19181.26,"19,181.26"
-VPB,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q2/2024,12.15,12.15
+VPB,Giá trị sổ sách của cổ phiếu (BVPS),VNĐ,Q3/2025,20109.25,"20,109.25"
 VPB,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q3/2024,11.97,11.97
 VPB,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q4/2024,9.66,9.66
 VPB,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q1/2025,9.36,9.36
 VPB,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q2/2025,8.43,8.43
-VPB,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q2/2024,1.07,1.07
+VPB,Chỉ số giá thị trường trên thu nhập (P/E),Lần,Q3/2025,11.95,11.95
 VPB,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q3/2024,1.12,1.12
 VPB,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q4/2024,1.03,1.03
 VPB,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q1/2025,1.0,1
 VPB,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q2/2025,0.96,0.96
-VPB,Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA),%,Q2/2024,2.53,2.53
+VPB,Chỉ số giá thị trường trên giá trị sổ sách (P/B),Lần,Q3/2025,1.55,1.55
 VPB,Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA),%,Q3/2024,2.87,2.87
-VPB,Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA),%,Q4/2024,3.19,3.19
-VPB,Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA),%,Q1/2025,2.61,2.61
-VPB,Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA),%,Q2/2025,3.21,3.21
-VPB,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q2/2024,0.42,0.42
+VPB,Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA),%,Q4/2024,3.48,3.48
+VPB,Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA),%,Q1/2025,2.64,2.64
+VPB,Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA),%,Q2/2025,3.25,3.25
+VPB,Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA),%,Q3/2025,4.72,4.72
 VPB,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q3/2024,0.47,0.47
 VPB,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q4/2024,0.52,0.52
 VPB,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q1/2025,0.41,0.41
 VPB,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q2/2025,0.46,0.46
+VPB,Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA),%,Q3/2025,0.64,0.64
 IMP,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q2/2024,3910.23,"3,910.23"
 IMP,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q3/2024,3743.37,"3,743.37"
 IMP,Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS),VNĐ,Q4/2024,3373.17,"3,373.17"

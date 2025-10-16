@@ -149,15 +149,21 @@ def write_csv(records: Iterable[MetricRecord], out_path: Path) -> None:
             writer.writerow(record.__dict__)
 
 
-def run(tickers: List[str], out_path: Path, delay: float) -> None:
+def run(tickers: List[str], out_path: Path, delay: float, skip_missing: bool = False) -> None:
     all_records: List[MetricRecord] = []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
         for idx, ticker in enumerate(tickers, start=1):
-            records = fetch_ratios(page, ticker, delay)
-            all_records.extend(records)
-            print(f"[{idx}/{len(tickers)}] {ticker}: {len(records)} điểm dữ liệu")
+            try:
+                records = fetch_ratios(page, ticker, delay)
+                all_records.extend(records)
+                print(f"[{idx}/{len(tickers)}] {ticker}: {len(records)} điểm dữ liệu")
+            except Exception as exc:
+                if skip_missing:
+                    print(f"[warn] Bỏ qua {ticker}: {type(exc).__name__}: {exc}")
+                    continue
+                raise
         browser.close()
     write_csv(all_records, out_path)
     print(f"Đã ghi {len(all_records)} dòng vào {out_path}")
@@ -170,6 +176,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--limit", type=int, default=None, help="Giới hạn số mã xử lý")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="File CSV đầu ra")
     parser.add_argument("--delay", type=float, default=1.0, help="Delay (giây) giữa các lần gọi để tránh chặn")
+    parser.add_argument("--skip-missing", action="store_true", help="Bỏ qua mã lỗi DOM/không có bảng và tiếp tục")
     args = parser.parse_args(argv)
 
     if args.tickers:
@@ -181,7 +188,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print("Không có mã nào để xử lý", file=sys.stderr)
         return 1
 
-    run(tickers, args.out, args.delay)
+    run(tickers, args.out, args.delay, skip_missing=args.skip_missing)
     return 0
 
 
