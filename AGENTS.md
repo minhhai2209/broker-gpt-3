@@ -56,6 +56,13 @@ Generated artifacts
 - `SYSTEM_DESIGN.md`: kiến trúc, pipeline, thuật toán/quy tắc ra quyết định, calibrations, execution diagnostics, policy overlays, lộ trình tích hợp (API, async runner). Đây là nơi chứa toàn bộ chi tiết kỹ thuật.
 - `AGENTS.md`: Way of Work, tiêu chuẩn CI/Fail‑fast, quy tắc dữ liệu & contract, convention khi đóng góp. Đồng thời duy trì quy ước phân chia tài liệu này.
 
+Docs upkeep (bắt buộc — keep up to date)
+- Mọi thay đổi có liên quan đến schema/policy/hành vi engine PHẢI đi kèm cập nhật tài liệu:
+  - `SYSTEM_DESIGN.md`: mô tả logic mới, rationale, tham số và điều kiện kích hoạt (có mốc ngày rõ ràng).
+  - `README.md`: bổ sung gạch đầu dòng ở mục Usage/Policy nếu ảnh hưởng cách dùng (đường dẫn cấu hình, flags, patch runtime).
+- PR checklist bắt buộc “docs updated”: nếu không cập nhật 2 file trên khi thay đổi có ảnh hưởng, coi là thiếu sót review.
+- Tuyệt đối không hướng dẫn người dùng chỉnh tay `config/policy_overrides.json` trong tài liệu. Luôn chỉ dẫn thay đổi qua baseline/overlays hoặc patch runtime có `meta.ttl`.
+
 ## Tooling & CI (Codex)
 - Postinstall (Node): chạy `scripts/postinstall-codex-global.js` sau `npm install` để:
   - Cài/kiểm tra Codex CLI toàn cục (`codex --version`), fallback `NPM_CONFIG_PREFIX=$HOME/.npm-global` nếu cần.

@@ -88,6 +88,18 @@ Policy & cấu hình
    `{ "_meta": { "machine_generated": true, "generated_by": "broker-gpt runtime merge", "generated_at": "..." }, ... }`.
   Không chỉnh tay file này — mọi chỉnh sửa sẽ bị ghi đè. Thay vào đó, cập nhật các overlay trong `config/`.
 
+Market filter (VNINDEX)
+- Từ 2025-10-16, baseline đặt `market_filter.guard_behavior = "scale_only"`:
+  - `scale_only`: không lọc bỏ BUY khi tape yếu thông thường; chỉ co ngân sách bằng các cap (`guard_new_scale_cap`, `atr_soft_scale_cap`) và thang theo `market_score`. Các điều kiện “hard/severe” vẫn đóng băng mua (scale → 0).
+  - `pause` (legacy): tạm dừng NEW và hoãn ADD khi guard kích hoạt; chỉ cho phép một số NEW dạng leader-bypass.
+- Cách đổi hành vi hợp lệ:
+  - Dài hạn: sửa `config/policy_default.json` → `market_filter.guard_behavior` thành `"pause"` hoặc `"scale_only"`, kèm PR cập nhật `SYSTEM_DESIGN.md` (bắt buộc). Không sửa tay `config/policy_overrides.json`.
+  - Ngắn hạn (1 phiên): nếu cần “dừng NEW”, tạo patch runtime `out/orders/patch_tune.json` với:
+    ```json
+    {"meta": {"ttl": "<ISO8601>"}, "exec": {"event_pause_new": 1}}
+    ```
+    Patch này không thay `guard_behavior` mà chỉ chặn NEW trong phiên, đúng theo engine hỗ trợ runtime.
+
 FAQ (ngắn)
 - Vì sao giá đặt trong file lệnh đôi khi bằng giá thị trường? Trong phiên (bao gồm nghỉ trưa), nếu BUY có `LimitPrice` > giá thị trường, hệ thống kẹp về giá thị trường; SELL nếu `LimitPrice` < giá thị trường cũng kẹp về giá thị trường. Quy tắc này chỉ áp ở lớp xuất lệnh, không thay đổi khái niệm “in‑session” ở các module khác.
 

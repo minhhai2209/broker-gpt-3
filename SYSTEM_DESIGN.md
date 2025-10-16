@@ -375,3 +375,6 @@ Hệ thống áp dụng các “guard” để kiểm soát rủi ro dựa trên
 - Relax breadth: ngưỡng breadth được nới dựa trên xác suất risk‑on và mức ATR (mềm→cứng) để tránh over‑filter khi biến động không quá cực đoan.
 
 Thiết kế này bám theo thực hành tiêu chuẩn cho VNINDEX: khi tape yếu nhưng không cực đoan, ưu tiên “step‑in” (giải ngân nhỏ, từng phần) thay vì đứng ngoài hoàn toàn; khi rủi ro hệ thống tăng mạnh, dừng mua.
+
+Ghi chú thay đổi (2025-10-16)
+- Mặc định baseline chuyển từ hành vi legacy `pause` sang `scale_only` để phù hợp khẩu vị giải ngân theo nhịp và tránh bỏ lỡ điểm đảo chiều sớm, đồng thời vẫn giữ “hard/severe guards” để đóng băng mua khi rủi ro hệ thống tăng vọt.
