@@ -103,17 +103,13 @@ def ensure_policy_override_file() -> Path:
                 exec_conf.pop('fill', None)
                 out['execution'] = exec_conf
             # 4) Conditional: remove thresholds.tp_pct/sl_pct when fully ATR-dynamic
+            # Keep tp_pct/sl_pct for ATR calibration even if engine uses ATR-dynamic
             th = dict(out.get('thresholds') or {})
-            if th:
-                try:
-                    mode = str(th.get('tp_sl_mode', '') or '').strip().lower()
-                    tr = str(th.get('tp_rule', '') or '').strip().lower()
-                    sr = str(th.get('sl_rule', '') or '').strip().lower()
-                    if mode == 'atr_per_ticker' and tr == 'dynamic_only' and sr == 'dynamic_only':
-                        th.pop('tp_pct', None)
-                        th.pop('sl_pct', None)
-                except Exception:
-                    pass
+            if th is not None:
+                if 'tp_pct' not in th:
+                    th['tp_pct'] = 0.0
+                if 'sl_pct' not in th:
+                    th['sl_pct'] = 0.0
                 out['thresholds'] = th
             return out
         merged = _cleanup_policy(merged)

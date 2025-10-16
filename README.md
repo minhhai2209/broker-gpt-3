@@ -91,7 +91,7 @@ Policy & cấu hình
 Slim runtime (policy cleanup)
 - Từ 2025‑10‑16, runtime policy được “làm gọn” khi ghi ra `out/orders/policy_overrides.json`:
   - Remove: `calibration`, `thresholds_profiles`, `execution.filter_buy_limit_gt_market`, `execution.fill`.
-  - Conditional remove: `thresholds.tp_pct`, `thresholds.sl_pct` khi bật ATR‑dynamic (`tp_sl_mode=atr_per_ticker`, `tp_rule=sl_rule=dynamic_only`).
+  - Keep: `thresholds.tp_pct`, `thresholds.sl_pct` luôn hiện diện để hỗ trợ calibrations (engine có thể bỏ qua khi ở chế độ ATR‑dynamic).
   - KEEP: `features.normalization_robust`, `pricing.tc_sell_tax_frac`, `market_bias`, `global_tilts` (được engine dùng runtime).
 - Baseline vẫn giữ `tp_pct`/`sl_pct`=0.0 cho tương thích test/schema; chúng được strip ở runtime khi đủ điều kiện.
 - Engine luôn kẹp (clamp) BUY Limit xuống Market nếu Limit>Market; không còn filter lệnh tại bước này.
