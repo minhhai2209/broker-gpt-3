@@ -126,6 +126,7 @@ def emit_curated_patch(curated_path: Path | None = None, snapshot_path: Path | N
                             price = None
             price_map[it.ticker] = price
     bias_entries: Dict[str, float] = {}
+    gate_entries: Dict[str, Dict[str, object]] = {}
     for it in items:
         bias = _bias_for(it, price_map.get(it.ticker))
         if bias is None:
@@ -133,7 +134,18 @@ def emit_curated_patch(curated_path: Path | None = None, snapshot_path: Path | N
         if abs(bias) < 1e-6:
             continue
         bias_entries[f"ticker_bias.{it.ticker}"] = float(bias)
-    if not bias_entries:
+        zone = None
+        if it.pullback_low_k is not None and it.pullback_high_k is not None:
+            pk = price_map.get(it.ticker)
+            if pk is not None and it.pullback_low_k <= pk <= it.pullback_high_k:
+                zone = "pullback"
+        if zone is None and it.breakout_k is not None:
+            pk = price_map.get(it.ticker)
+            if pk is not None and pk >= it.breakout_k:
+                zone = "breakout"
+        if zone is not None:
+            gate_entries[it.ticker] = {"curated": {"zone": zone}, "force": "buy", "reason": f"curated_{zone}"}
+    if not bias_entries and not gate_entries:
         return None
     # TTL end-of-day VN
     now_vn = datetime.now(VN_TZ)
@@ -144,6 +156,7 @@ def emit_curated_patch(curated_path: Path | None = None, snapshot_path: Path | N
             "ttl": eod.isoformat(),
         },
         "bias": bias_entries,
+        "gate": gate_entries,
     }
     ORDERS_DIR.mkdir(parents=True, exist_ok=True)
     out_path = ORDERS_DIR / "patch_tune.json"
@@ -157,4 +170,3 @@ if __name__ == "__main__":
         print(f"curated patch: {p}")
     except Exception as exc:
         raise SystemExit(str(exc)) from exc
-

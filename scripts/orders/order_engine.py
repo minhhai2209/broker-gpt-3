@@ -3121,6 +3121,7 @@ def decide_actions(
                 ml_meta = meta_candidate
                 break
     gate_threshold = 0.65
+    curated_forced: set[str] = set()
     if isinstance(ml_meta, dict) and ml_meta.get("p_gate") is not None:
         try:
             gate_threshold = float(ml_meta.get("p_gate"))
@@ -3163,6 +3164,19 @@ def decide_actions(
                     if prob < local_gate:
                         block = True
                         reason = f"p_succ {prob:.2f} < p_gate {local_gate:.2f}"
+            # Curated force-buy lane: allow marking a ticker to be force-considered for BUY
+            try:
+                if not block and isinstance(info.get("force"), str):
+                    fval = str(info.get("force")).strip().lower()
+                    if fval in {"buy", "new", "add"}:
+                        curated_forced.add(ticker_up)
+            except Exception:
+                pass
+            try:
+                if not block and isinstance(info.get("curated"), dict):
+                    curated_forced.add(ticker_up)
+            except Exception:
+                pass
             if block and not reason:
                 reason = "ml_gate_block"
             if not block:
@@ -3186,20 +3200,39 @@ def decide_actions(
                     debug_filters.setdefault("ml_gate", []).append(ticker_actual)
                     _note_filter(ticker_actual, "ml_gate", reason)
 
-    # Focus top-N add/new (respect neutral caps when active)
+    # Curated force-buy: convert forced tickers into desired BUY action before ranking
+    # Held -> 'add', Not held -> 'new'.
+    if curated_forced:
+        for t_up in list(curated_forced):
+            # Find actual key in act (case-insensitive)
+            keys = [k for k in act.keys() if str(k).upper() == t_up]
+            key = keys[0] if keys else t_up
+            if key in held:
+                act[key] = "add"
+            else:
+                act[key] = "new"
+
+    # Focus top-N add/new (respect neutral caps when active) with curated precedence
     add_names = [t for t, a in act.items() if a == "add"]
     new_names = [t for t, a in act.items() if a == "new"]
     effective_add_cap = int(regime.add_max)
     if neutral_active and add_max_neutral_cap > 0:
         effective_add_cap = min(effective_add_cap, add_max_neutral_cap)
-    add_sorted = sorted(add_names, key=lambda x: score.get(x, 0.0), reverse=True)[: effective_add_cap]
+    # Ensure curated 'add' tickers take precedence in slots, then fill by score
+    curated_add = [t for t in add_names if str(t).upper() in curated_forced]
+    non_curated_add = [t for t in add_names if str(t).upper() not in curated_forced]
+    add_sorted = curated_add + [t for t in sorted(non_curated_add, key=lambda x: score.get(x, 0.0), reverse=True) if t not in curated_add]
+    add_sorted = add_sorted[: effective_add_cap]
     add_capped_count = 0
     for t in add_names:
         if t not in add_sorted:
             act[t] = "hold"
             add_capped_count += 1
     neutral_accum_set = set(add_sorted) if neutral_active else set()
-    new_sorted = sorted(new_names, key=lambda x: score.get(x, 0.0), reverse=True)[: int(regime.new_max)]
+    curated_new = [t for t in new_names if str(t).upper() in curated_forced]
+    non_curated_new = [t for t in new_names if str(t).upper() not in curated_forced]
+    new_sorted_all = curated_new + [t for t in sorted(non_curated_new, key=lambda x: score.get(x, 0.0), reverse=True) if t not in curated_new]
+    new_sorted = new_sorted_all[: int(regime.new_max)]
     for t in new_names:
         if t not in new_sorted:
             del act[t]
