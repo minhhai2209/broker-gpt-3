@@ -335,7 +335,9 @@ class TestDecideActions(unittest.TestCase):
         )
         sell_orders = [o for o in orders if o.ticker == 'AAA' and o.side == 'SELL']
         self.assertEqual(len(sell_orders), 1)
-        self.assertAlmostEqual(sell_orders[0].limit_price, 8.91, places=2)
+        # Engine clamps SELL limit up to market when below market
+        mkt = float(snapshot.loc[snapshot['Ticker'] == 'AAA', 'Price'].iloc[0])
+        self.assertAlmostEqual(sell_orders[0].limit_price, mkt, places=2)
         self.assertIn('STOP_FINAL', sell_orders[0].note)
         self.assertEqual(regime_out.ttl_overrides.get('AAA'), 3)
 

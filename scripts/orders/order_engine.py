@@ -3522,6 +3522,13 @@ def build_orders(
             limit = _stop_limit_price(t, meta, s, p)
         else:
             limit = pick_limit_price(t, "SELL", s, p, m, regime)
+        # Clamp SELL limit up to market silently (no filter record)
+        try:
+            market_price = to_float(s.get('Price')) or to_float(s.get('P'))
+            if market_price is not None and limit < float(market_price) - 1e-9:
+                limit = float(market_price)
+        except Exception:
+            pass
         cur_qty = int(held_qty.get(t, 0) or 0)
         if cur_qty <= 0:
             continue
@@ -4397,9 +4404,8 @@ def build_orders(
         limit = pick_limit_price(t, "BUY", s, p, m, regime)
         market_price = to_float(s.get("Price")) or to_float(s.get("P"))
         budget = float(add_alloc.get(t, 0.0))
-        # Clamp BUY limit down to market to avoid filtering at engine stage
+        # Clamp BUY limit down to market silently (no filter record)
         if market_price is not None and limit > float(market_price) + 1e-9:
-            _track_filter(t, "limit_gt_market", f"clamped {limit:.2f} -> {float(market_price):.2f}", side="BUY", quantity=_apply_caps_and_qty(t, budget, limit), limit_price=limit, market_price=float(market_price))
             limit = float(market_price)
         qty = _apply_caps_and_qty(t, budget, limit)
         if qty > 0:
@@ -4435,9 +4441,8 @@ def build_orders(
             _track_filter(t, "fill_prob_below_target", note, side="BUY")
             continue
         limit = float(limit_adj)
-        # Clamp BUY limit down to market to avoid filtering at engine stage
+        # Clamp BUY limit down to market silently (no filter record)
         if market_price is not None and limit > float(market_price) + 1e-9:
-            _track_filter(t, "limit_gt_market", f"clamped {limit:.2f} -> {float(market_price):.2f}", side="BUY", quantity=_apply_caps_and_qty(t, budget, limit), limit_price=limit, market_price=float(market_price))
             limit = float(market_price)
         qty = _apply_caps_and_qty(t, budget, limit)
         is_partial = t in new_partial_names
@@ -4465,11 +4470,7 @@ def build_orders(
             elif qty > 0:
                 qty = 0
         if market_price is not None and limit > float(market_price) + 1e-9:
-            if filter_buy_cross:
-                _track_filter(t, "limit_gt_market", f"limit {limit:.2f} > market {market_price:.2f}", side="BUY", quantity=qty, limit_price=limit, market_price=float(market_price))
-                continue
-            else:
-                limit = float(market_price)
+            limit = float(market_price)
         if qty > 0:
             base_note = "Mua mới"
             tags: List[str] = []

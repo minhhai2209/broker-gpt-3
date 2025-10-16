@@ -262,8 +262,12 @@ class TestDynamicCapsEnable(unittest.TestCase):
         regime = self._make_regime(tune_base)
         orders_open, _, reg_state = build_orders(actions, portfolio, snapshot, metrics, presets, pnl_summary, scores, regime, prices_history)
         qty_loose = next(o.quantity for o in orders_open if o.ticker == 'AAA')
-        filters = getattr(reg_state, 'debug_filters', {})
-        self.assertIn('BBB', filters.get('limit_gt_market', []))
+        # Since engine clamps BUY limit to market without filtering,
+        # ensure BBB appears in orders and its limit is not above market.
+        price_bbb = float(snapshot.loc[snapshot['Ticker'] == 'BBB', 'Price'].iloc[0])
+        order_bbb = next((o for o in orders_open if o.ticker == 'BBB' and o.side == 'BUY'), None)
+        self.assertIsNotNone(order_bbb)
+        self.assertLessEqual(order_bbb.limit_price, price_bbb)
 
         tune_strict = base_tuning()
         tune_strict['market_filter']['risk_off_buy'] = ["Break"]
