@@ -358,3 +358,20 @@ Mục này tổng hợp các cơ chế hiệu chỉnh (calibration) và chẩn �
   - Các lỗi cấu hình bắt buộc (thiếu schema/policy) vẫn giữ nguyên chế độ fail‑fast.
 
 Lưu ý: Các calibration và diagnostics trên phải được kiểm định bằng dữ liệu khách quan. Khi thay đổi mô hình/slopes/ngưỡng, cập nhật policy, baseline và tests kèm theo để đảm bảo CI xanh và hành vi nhất quán.
+
+
+Guard Thị Trường (Market Filter) — VNINDEX
+
+Hệ thống áp dụng các “guard” để kiểm soát rủi ro dựa trên trạng thái VNINDEX (xu hướng, breadth >MA50, ATR percentile, drawdown, biến động năm hoá) và một số yếu tố toàn cầu tuỳ chọn. Các guard ảnh hưởng tới cả việc chọn ứng viên và quy mô ngân sách mua hiệu dụng:
+
+- Hành vi guard (`market_filter.guard_behavior`):
+  - `pause` (legacy): khi guard kích hoạt, tạm dừng NEW và hoãn ADD; chỉ cho phép một số NEW dạng “leader bypass”.
+  - `scale_only` (baseline mặc định cho VNINDEX): không lọc ứng viên; chỉ co ngân sách mua hiệu dụng bằng các nắp: `guard_new_scale_cap`, `atr_soft_scale_cap`, và thang theo `market_score`. Các điều kiện “severe/hard” vẫn đóng băng (scale→0).
+
+- Điều kiện severe/hard (đóng băng mua):
+  - ATR percentile ≥ `index_atr_hard_pct` hoặc biến động năm hoá ≥ `vol_ann_hard_ceiling`.
+  - `market_score` ≤ `market_score_hard_floor` hoặc các ngưỡng toàn cầu “hard” (nếu cấu hình) đạt tới.
+
+- Relax breadth: ngưỡng breadth được nới dựa trên xác suất risk‑on và mức ATR (mềm→cứng) để tránh over‑filter khi biến động không quá cực đoan.
+
+Thiết kế này bám theo thực hành tiêu chuẩn cho VNINDEX: khi tape yếu nhưng không cực đoan, ưu tiên “step‑in” (giải ngân nhỏ, từng phần) thay vì đứng ngoài hoàn toàn; khi rủi ro hệ thống tăng mạnh, dừng mua.

@@ -334,6 +334,10 @@ class MarketFilter(BaseModel):
     risk_off_trend_floor: float
     risk_off_breadth_floor: float = Field(ge=0.0, le=1.0)
     breadth_relax_margin: Optional[float] = Field(default=None, ge=0.0, le=0.2)
+    # Guard behaviour when market weak:
+    # - 'pause' (default): pause NEW and defer ADD, allow limited leader-bypass
+    # - 'scale_only': do not filter candidates; only scale BUY budget via caps
+    guard_behavior: Literal['pause', 'scale_only'] = 'pause'
     market_score_soft_floor: float = Field(ge=0.0, le=1.0)
     market_score_hard_floor: float = Field(ge=0.0, le=1.0)
     leader_min_rsi: float

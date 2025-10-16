@@ -262,6 +262,9 @@
     "risk_off_breadth_floor": 0.4,
     // Relax breadth floor when risk-on odds and volatility justify it (fraction)
     "breadth_relax_margin": 0.0,
+    // Behavior under weak-tape guards for VNINDEX: scale-only is the standard risk practice
+    // (keep probing with small buys) unless severe/hard conditions hit.
+    "guard_behavior": "scale_only",
     // Risk‑off when index drawdown percentile ≥ this floor (0..1)
     "risk_off_drawdown_floor": 0.03765736205513479,
     // Soft/hard floors on risk‑on probability from regime model (0..1)

@@ -714,12 +714,22 @@ def get_market_regime(session_summary: pd.DataFrame, sector_strength: pd.DataFra
             return val
         return bool(int(val))
 
+    def _mf_str(key: str, default: str) -> str:
+        # String helper with explicit default (non-failfast) for optional keys
+        val = market_filter_raw.get(key, default)
+        try:
+            s = str(val).strip().lower()
+        except Exception:
+            s = str(default).strip().lower()
+        return s
+
     # Fail fast if required keys missing — align with "no hidden defaults"
     market_filter_conf = {
         "risk_off_index_drop_pct": abs(_mf_float("risk_off_index_drop_pct")),
         "risk_off_trend_floor": _mf_float("risk_off_trend_floor"),
         "risk_off_breadth_floor": max(0.0, min(1.0, _mf_float("risk_off_breadth_floor"))),
         "breadth_relax_margin": max(0.0, min(0.2, _mf_float("breadth_relax_margin"))),
+        "guard_behavior": _mf_str("guard_behavior", "pause"),
         "leader_min_rsi": _mf_float("leader_min_rsi"),
         "leader_min_mom_norm": max(0.0, min(1.0, _mf_float("leader_min_mom_norm"))),
         "leader_require_ma20": _mf_bool("leader_require_ma20"),
@@ -3020,86 +3030,93 @@ def decide_actions(
         except Exception:
             pass
         reason_core = "; ".join(triggers) if triggers else "guard conditions met"
-        reason_note = f"market filter active – pause new entries ({reason_core})"
-        if market_score <= score_hard:
-            reason_note += f"; market_score {market_score:.2f} ≤ hard floor {score_hard:.2f}"
-        # Always defer ADD when market weak
-        for t in list(act.keys()):
-            if act.get(t) == "add":
-                act[t] = "hold"
-                debug_filters["market"].append(t)
-                _note_filter(t, "market", f"ADD deferred: {reason_core}")
-        # Leader bypass for NEW
-        leader_min_rsi = float(mf_conf.get('leader_min_rsi', 1e9))
-        leader_min_mom = float(mf_conf.get('leader_min_mom_norm', 1.0))
-        req_ma20 = bool(int(mf_conf.get('leader_require_ma20', 0)))
-        req_ma50 = bool(int(mf_conf.get('leader_require_ma50', 0)))
-        leader_max = int(mf_conf.get('leader_max', 0))
-        # Disable bypass under severe market stress conditions
-        risk_off_dd_floor = float(mf_conf.get('risk_off_drawdown_floor', 0.0) or 0.0)
-        idx_drop_thr = float(mf_conf.get('risk_off_index_drop_pct', 0.0) or 0.0)
-        score_hard = float(mf_conf.get('market_score_hard_floor', 0.0) or 0.0)
-        bypass_allowed = True
-        try:
-            dd = float(getattr(regime, 'drawdown_pct', 0.0) or 0.0)
-            if risk_off_dd_floor > 0.0 and dd >= risk_off_dd_floor:
-                bypass_allowed = False
-            # Also disable when smoothed index drop breaches threshold or market_score at/below hard floor
-            # For leader-bypass disable check, use raw intraday change (session context)
-            idx_sm = float(getattr(regime, 'index_change_pct', 0.0) or 0.0)
-            if idx_drop_thr > 0.0 and idx_sm <= -abs(idx_drop_thr):
-                bypass_allowed = False
-            ms = float(getattr(regime, 'market_score', 0.0) or 0.0)
-            if ms <= score_hard:
-                bypass_allowed = False
-        except Exception:
+        # Behaviour switch according to policy
+        behavior = str(mf_conf.get('guard_behavior', 'pause')).strip().lower()
+        if behavior == 'pause':
+            reason_note = f"market filter active – pause new entries ({reason_core})"
+            if market_score <= score_hard:
+                reason_note += f"; market_score {market_score:.2f} ≤ hard floor {score_hard:.2f}"
+            # Always defer ADD when market weak
+            for t in list(act.keys()):
+                if act.get(t) == "add":
+                    act[t] = "hold"
+                    debug_filters["market"].append(t)
+                    _note_filter(t, "market", f"ADD deferred: {reason_core}")
+            # Leader bypass for NEW
+            leader_min_rsi = float(mf_conf.get('leader_min_rsi', 1e9))
+            leader_min_mom = float(mf_conf.get('leader_min_mom_norm', 1.0))
+            req_ma20 = bool(int(mf_conf.get('leader_require_ma20', 0)))
+            req_ma50 = bool(int(mf_conf.get('leader_require_ma50', 0)))
+            leader_max = int(mf_conf.get('leader_max', 0))
+            # Disable bypass under severe market stress conditions
+            risk_off_dd_floor = float(mf_conf.get('risk_off_drawdown_floor', 0.0) or 0.0)
+            idx_drop_thr = float(mf_conf.get('risk_off_index_drop_pct', 0.0) or 0.0)
+            score_hard = float(mf_conf.get('market_score_hard_floor', 0.0) or 0.0)
             bypass_allowed = True
-        new_pool = [(t, score.get(t, 0.0)) for t, a in act.items() if a == 'new']
-        keep: set[str] = set()
-        if bypass_allowed and leader_max > 0 and new_pool:
-            # filter leaders
-            leaders: list[tuple[str, float]] = []
-            for t, sc in new_pool:
-                f = feats_all.get(t, {})
-                rsi = float(f.get('rsi', 0.0) or 0.0)
-                momn = float(f.get('mom_norm', 0.0) or 0.0)
-                if rsi < leader_min_rsi or momn < leader_min_mom:
-                    continue
-                if req_ma20 and float(f.get('above_ma20', 0.0) or 0.0) < 1.0:
-                    continue
-                if req_ma50 and float(f.get('above_ma50', 0.0) or 0.0) < 1.0:
-                    continue
-                leaders.append((t, sc))
-            leaders = sorted(leaders, key=lambda x: x[1], reverse=True)[:leader_max]
-            keep = {t for t, _ in leaders}
-            # Fallback: if no leaders and a fallback K is configured, keep top-K NEW by score
             try:
-                k_fallback = int(mf_conf.get('leader_fallback_topk_if_empty', 0) or 0)
+                dd = float(getattr(regime, 'drawdown_pct', 0.0) or 0.0)
+                if risk_off_dd_floor > 0.0 and dd >= risk_off_dd_floor:
+                    bypass_allowed = False
+                # Also disable when smoothed index drop breaches threshold or market_score at/below hard floor
+                # For leader-bypass disable check, use raw intraday change (session context)
+                idx_sm = float(getattr(regime, 'index_change_pct', 0.0) or 0.0)
+                if idx_drop_thr > 0.0 and idx_sm <= -abs(idx_drop_thr):
+                    bypass_allowed = False
+                ms = float(getattr(regime, 'market_score', 0.0) or 0.0)
+                if ms <= score_hard:
+                    bypass_allowed = False
             except Exception:
-                k_fallback = 0
-            if not keep and k_fallback > 0:
-                # Choose from the original new_pool, highest scores first
-                fallback_pick = [t for t, _ in sorted(new_pool, key=lambda x: x[1], reverse=True)[:k_fallback]]
-                keep = set(fallback_pick)
-        # Remove other NEW
-        for t, _ in list(new_pool):
-            if t not in keep:
-                del act[t]
-                debug_filters["market"].append(t)
-                _note_filter(t, "market", reason_note if keep else reason_note + "; leader bypass not active")
-        # Policy: Under market guard, do not add to existing positions; only allow
-        # constrained NEW via leader bypass when bypass is allowed. Budgets are
-        # subsequently scaled by ATR/market_score gates downstream.
-        regime.add_max = 0
-        if bypass_allowed:
-            regime.new_max = min(len(keep), leader_max) if keep else 0
+                bypass_allowed = True
+            new_pool = [(t, score.get(t, 0.0)) for t, a in act.items() if a == 'new']
+            keep: set[str] = set()
+            if bypass_allowed and leader_max > 0 and new_pool:
+                # filter leaders
+                leaders: list[tuple[str, float]] = []
+                for t, sc in new_pool:
+                    f = feats_all.get(t, {})
+                    rsi = float(f.get('rsi', 0.0) or 0.0)
+                    momn = float(f.get('mom_norm', 0.0) or 0.0)
+                    if rsi < leader_min_rsi or momn < leader_min_mom:
+                        continue
+                    if req_ma20 and float(f.get('above_ma20', 0.0) or 0.0) < 1.0:
+                        continue
+                    if req_ma50 and float(f.get('above_ma50', 0.0) or 0.0) < 1.0:
+                        continue
+                    leaders.append((t, sc))
+                leaders = sorted(leaders, key=lambda x: x[1], reverse=True)[:leader_max]
+                keep = {t for t, _ in leaders}
+                # Fallback: if no leaders and a fallback K is configured, keep top-K NEW by score
+                try:
+                    k_fallback = int(mf_conf.get('leader_fallback_topk_if_empty', 0) or 0)
+                except Exception:
+                    k_fallback = 0
+                if not keep and k_fallback > 0:
+                    # Choose from the original new_pool, highest scores first
+                    fallback_pick = [t for t, _ in sorted(new_pool, key=lambda x: x[1], reverse=True)[:k_fallback]]
+                    keep = set(fallback_pick)
+            # Remove other NEW
+            for t, _ in list(new_pool):
+                if t not in keep:
+                    del act[t]
+                    debug_filters["market"].append(t)
+                    _note_filter(t, "market", reason_note if keep else reason_note + "; leader bypass not active")
+            # Policy: Under market guard, do not add to existing positions; only allow
+            # constrained NEW via leader bypass when bypass is allowed. Budgets are
+            # subsequently scaled by ATR/market_score gates downstream.
+            regime.add_max = 0
+            if bypass_allowed:
+                regime.new_max = min(len(keep), leader_max) if keep else 0
+            else:
+                regime.new_max = 0
+                # Severe conditions: zero out buy budget
+                try:
+                    regime.buy_budget_frac = 0.0
+                except Exception:
+                    pass
         else:
-            regime.new_max = 0
-            # Severe conditions: zero out buy budget
-            try:
-                regime.buy_budget_frac = 0.0
-            except Exception:
-                pass
+            # scale_only: do not filter/alter act/new_max/add_max here;
+            # scaling happens downstream based on ATR/score caps.
+            pass
 
     # Apply runtime gating overrides (e.g., ML calibrator)
     gate_context = runtime_overrides if isinstance(runtime_overrides, dict) else {}
