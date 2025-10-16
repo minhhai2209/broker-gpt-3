@@ -843,18 +843,9 @@ def get_market_regime(session_summary: pd.DataFrame, sector_strength: pd.DataFra
         if k not in weights:
             raise SystemExit(f"Missing weights['{k}'] in tuning")
 
-    # Allow profile-based thresholds by regime; fallback to flat thresholds for compatibility
-    thresholds: Dict[str, float]
-    if "thresholds_profiles" in tuning and isinstance(tuning.get("thresholds_profiles"), dict):
-        tp = tuning["thresholds_profiles"] or {}
-        prof_key = "risk_on" if risk_on else "risk_off"
-        if prof_key in tp and isinstance(tp[prof_key], dict):
-            thresholds = dict(tp[prof_key])
-        else:
-            thresholds = dict(_require(tuning, "thresholds", "must define thresholds (profiles missing keys)"))
-    else:
-        thresholds = dict(_require(tuning, "thresholds", "must define thresholds"))
-    for k in ("base_add", "base_new", "trim_th", "q_add", "q_new", "min_liq_norm", "near_ceiling_pct", "tp_pct", "sl_pct", "tp_trim_frac", "exit_on_ma_break",
+    # Use flat thresholds (profiles removed in slim runtime)
+    thresholds: Dict[str, float] = dict(_require(tuning, "thresholds", "must define thresholds"))
+    for k in ("base_add", "base_new", "trim_th", "q_add", "q_new", "min_liq_norm", "near_ceiling_pct", "tp_trim_frac", "exit_on_ma_break",
               # New thresholds to parameterize trim/exit heuristics
               "exit_ma_break_rsi", "trim_rsi_below_ma20", "trim_rsi_macdh_neg", "exit_ma_break_score_gate", "tilt_exit_downgrade_min"):
         if k not in thresholds:
@@ -4396,12 +4387,8 @@ def build_orders(
 
     spent_buy_k = 0.0
 
-    # Config: clamp vs filter when BUY limit > market
-    try:
-        exec_conf = dict(getattr(regime, 'execution', {}) or {})
-        filter_buy_cross = bool(int(exec_conf.get('filter_buy_limit_gt_market', 1)))
-    except Exception:
-        filter_buy_cross = True
+    # Slim runtime: always clamp BUY limit down to market when limit > market (remove engine-stage filter)
+    filter_buy_cross = False
 
     for t in add_names:
         if t not in snap.index:
@@ -4410,14 +4397,10 @@ def build_orders(
         limit = pick_limit_price(t, "BUY", s, p, m, regime)
         market_price = to_float(s.get("Price")) or to_float(s.get("P"))
         budget = float(add_alloc.get(t, 0.0))
-        # Optionally clamp BUY limit down to market to avoid filtering
+        # Clamp BUY limit down to market to avoid filtering at engine stage
         if market_price is not None and limit > float(market_price) + 1e-9:
-            if filter_buy_cross:
-                qty_probe = _apply_caps_and_qty(t, budget, limit)
-                _track_filter(t, "limit_gt_market", f"limit {limit:.2f} > market {market_price:.2f}", side="BUY", quantity=qty_probe, limit_price=limit, market_price=float(market_price))
-                continue
-            else:
-                limit = float(market_price)
+            _track_filter(t, "limit_gt_market", f"clamped {limit:.2f} -> {float(market_price):.2f}", side="BUY", quantity=_apply_caps_and_qty(t, budget, limit), limit_price=limit, market_price=float(market_price))
+            limit = float(market_price)
         qty = _apply_caps_and_qty(t, budget, limit)
         if qty > 0:
             base_note = "Mua gia tăng"
@@ -4452,14 +4435,10 @@ def build_orders(
             _track_filter(t, "fill_prob_below_target", note, side="BUY")
             continue
         limit = float(limit_adj)
-        # Optionally clamp BUY limit down to market to avoid filtering
+        # Clamp BUY limit down to market to avoid filtering at engine stage
         if market_price is not None and limit > float(market_price) + 1e-9:
-            if filter_buy_cross:
-                qty_probe = _apply_caps_and_qty(t, budget, limit)
-                _track_filter(t, "limit_gt_market", f"limit {limit:.2f} > market {market_price:.2f}", side="BUY", quantity=qty_probe, limit_price=limit, market_price=float(market_price))
-                continue
-            else:
-                limit = float(market_price)
+            _track_filter(t, "limit_gt_market", f"clamped {limit:.2f} -> {float(market_price):.2f}", side="BUY", quantity=_apply_caps_and_qty(t, budget, limit), limit_price=limit, market_price=float(market_price))
+            limit = float(market_price)
         qty = _apply_caps_and_qty(t, budget, limit)
         is_partial = t in new_partial_names
         floor_lot_local = int(partial_floor_map_state.get(t, state_local.get('partial_entry_floor_lot', 1)) or 1)

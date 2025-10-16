@@ -30,8 +30,8 @@ class Thresholds(BaseModel):
     q_new: float
     min_liq_norm: float
     near_ceiling_pct: float
-    tp_pct: float
-    sl_pct: float
+    tp_pct: Optional[float] = None
+    sl_pct: Optional[float] = None
     tp_atr_mult: Optional[float] = None
     sl_atr_mult: Optional[float] = None
     tp_floor_pct: Optional[float] = None
@@ -109,7 +109,7 @@ class Thresholds(BaseModel):
             raise ValueError("near_ceiling_pct must be in (0..1]")
         for name in ("tp_pct", "sl_pct"):
             v = getattr(self, name)
-            if float(v) < 0.0 or float(v) > 1.0:
+            if v is not None and (float(v) < 0.0 or float(v) > 1.0):
                 raise ValueError(f"thresholds.{name} must be in 0..1")
         for name in ("tp_floor_pct", "sl_floor_pct", "tp_cap_pct", "sl_cap_pct"):
             v = getattr(self, name)
@@ -271,11 +271,7 @@ class Execution(BaseModel):
     flash_k_atr: float = Field(default=1.50, ge=0.0)
     fill: Optional[FillConfig] = None
 
-    # New: controls for order price crossing behavior at engine stage
-    # Keep legacy behavior by default (filter BUY when limit>market in engine).
-    # When set to 0/False, engine will clamp BUY limit down to market instead of filtering,
-    # letting the order pass to IO where session-aware clamping is already applied.
-    filter_buy_limit_gt_market: Union[int, bool] = 1
+    # Slim runtime: engine no longer supports filter-vs-clamp toggle; clamping is applied unconditionally.
 
     class Ladder(BaseModel):
         enabled: bool = True
@@ -647,7 +643,7 @@ class PolicyOverrides(BaseModel):
     new_max: int
     weights: Weights
     thresholds: Thresholds
-    thresholds_profiles: Optional[ThresholdProfiles] = None
+    # thresholds_profiles removed in slim runtime (use flat thresholds)
     neutral_adaptive: NeutralAdaptive = Field(default_factory=NeutralAdaptive)
     # Optional global bias (leaning buy/observe) in [-0.2..0.2].
     market_bias: Optional[float] = 0.0

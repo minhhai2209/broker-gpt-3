@@ -378,3 +378,17 @@ Thiết kế này bám theo thực hành tiêu chuẩn cho VNINDEX: khi tape y�
 
 Ghi chú thay đổi (2025-10-16)
 - Mặc định baseline chuyển từ hành vi legacy `pause` sang `scale_only` để phù hợp khẩu vị giải ngân theo nhịp và tránh bỏ lỡ điểm đảo chiều sớm, đồng thời vẫn giữ “hard/severe guards” để đóng băng mua khi rủi ro hệ thống tăng vọt.
+
+Slim Runtime — Policy Cleanup (2025‑10‑16)
+- Mục tiêu: loại bỏ các khóa policy không còn được engine tiêu thụ trực tiếp ở runtime để giảm nhiễu review/tune.
+- Pre‑flight: chỉ xóa nếu không còn được tham chiếu bởi engine/IO ở runtime. Các khóa phục vụ calibrator/offline (ví dụ calibration_targets) không bị xóa.
+- Thay đổi áp dụng ở runtime (file hợp nhất `out/orders/policy_overrides.json`):
+  - Remove: `calibration` (toàn bộ object), `thresholds_profiles`, `execution.filter_buy_limit_gt_market`, `execution.fill`.
+  - Conditional remove: `thresholds.tp_pct`, `thresholds.sl_pct` khi `tp_sl_mode=atr_per_ticker` và `tp_rule=sl_rule=dynamic_only`.
+  - KEEP (có dùng runtime): `features.normalization_robust`, `pricing.tc_sell_tax_frac`, `market_bias`, `global_tilts`.
+- Baseline (`config/policy_default.json`):
+  - Đã bỏ `calibration`, `execution.filter_buy_limit_gt_market`.
+  - Giữ `tp_pct`/`sl_pct` ở baseline (0.0) để đồng bộ test/schema; các khóa này được strip ở runtime khi dùng ATR‑dynamic.
+- Engine:
+  - Bỏ nhánh thresholds_profiles; luôn dùng `thresholds` phẳng.
+  - Luôn “clamp” BUY Limit > Market tại engine (không còn filter) và ghi audit `limit_gt_market` (không loại lệnh).

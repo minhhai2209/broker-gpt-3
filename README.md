@@ -88,6 +88,14 @@ Policy & cấu hình
    `{ "_meta": { "machine_generated": true, "generated_by": "broker-gpt runtime merge", "generated_at": "..." }, ... }`.
   Không chỉnh tay file này — mọi chỉnh sửa sẽ bị ghi đè. Thay vào đó, cập nhật các overlay trong `config/`.
 
+Slim runtime (policy cleanup)
+- Từ 2025‑10‑16, runtime policy được “làm gọn” khi ghi ra `out/orders/policy_overrides.json`:
+  - Remove: `calibration`, `thresholds_profiles`, `execution.filter_buy_limit_gt_market`, `execution.fill`.
+  - Conditional remove: `thresholds.tp_pct`, `thresholds.sl_pct` khi bật ATR‑dynamic (`tp_sl_mode=atr_per_ticker`, `tp_rule=sl_rule=dynamic_only`).
+  - KEEP: `features.normalization_robust`, `pricing.tc_sell_tax_frac`, `market_bias`, `global_tilts` (được engine dùng runtime).
+- Baseline vẫn giữ `tp_pct`/`sl_pct`=0.0 cho tương thích test/schema; chúng được strip ở runtime khi đủ điều kiện.
+- Engine luôn kẹp (clamp) BUY Limit xuống Market nếu Limit>Market; không còn filter lệnh tại bước này.
+
 Market filter (VNINDEX)
 - Từ 2025-10-16, baseline đặt `market_filter.guard_behavior = "scale_only"`:
   - `scale_only`: không lọc bỏ BUY khi tape yếu thông thường; chỉ co ngân sách bằng các cap (`guard_new_scale_cap`, `atr_soft_scale_cap`) và thang theo `market_score`. Các điều kiện “hard/severe” vẫn đóng băng mua (scale → 0).

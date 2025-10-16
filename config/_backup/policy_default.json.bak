@@ -77,9 +77,7 @@
     "min_liq_norm": 0.3,
     // Consider a price "near ceiling" when Price/BandCeiling ≥ this fraction; avoid chasing
     "near_ceiling_pct": 0.989,
-    // Static TP/SL kept in baseline for schema/test compatibility; removed at runtime when ATR-dynamic enabled
-    "tp_pct": 0.0,
-    "sl_pct": 0.0,
+    // Static TP/SL removed in slim runtime when ATR-dynamic enabled
     // Dynamic TP/SL multipliers relative to ATR% (computed as multiplier × ATR_pct in decimal)
     "tp_atr_mult": 1.35,
     "sl_atr_mult": 1.50,

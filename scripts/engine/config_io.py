@@ -87,6 +87,36 @@ def ensure_policy_override_file() -> Path:
                 except Exception as exc:
                     raise SystemExit(f"Invalid JSON in overlay {path}: {exc}") from exc
                 merged = _deep_merge(ov_obj, merged)  # later overlays take precedence
+        # Slim runtime cleanup — remove deprecated/legacy runtime keys
+        def _cleanup_policy(obj: dict) -> dict:
+            if not isinstance(obj, dict):
+                return obj
+            out = dict(obj)
+            # 1) Remove calibration block
+            out.pop('calibration', None)
+            # 2) Remove thresholds_profiles
+            out.pop('thresholds_profiles', None)
+            # 3) Remove execution.filter_buy_limit_gt_market and execution.fill
+            exec_conf = dict(out.get('execution') or {})
+            if exec_conf:
+                exec_conf.pop('filter_buy_limit_gt_market', None)
+                exec_conf.pop('fill', None)
+                out['execution'] = exec_conf
+            # 4) Conditional: remove thresholds.tp_pct/sl_pct when fully ATR-dynamic
+            th = dict(out.get('thresholds') or {})
+            if th:
+                try:
+                    mode = str(th.get('tp_sl_mode', '') or '').strip().lower()
+                    tr = str(th.get('tp_rule', '') or '').strip().lower()
+                    sr = str(th.get('sl_rule', '') or '').strip().lower()
+                    if mode == 'atr_per_ticker' and tr == 'dynamic_only' and sr == 'dynamic_only':
+                        th.pop('tp_pct', None)
+                        th.pop('sl_pct', None)
+                except Exception:
+                    pass
+                out['thresholds'] = th
+            return out
+        merged = _cleanup_policy(merged)
         # Tag as machine-generated snapshot
         try:
             from datetime import datetime, timezone

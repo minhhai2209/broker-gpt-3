@@ -63,6 +63,10 @@ Docs upkeep (bắt buộc — keep up to date)
 - PR checklist bắt buộc “docs updated”: nếu không cập nhật 2 file trên khi thay đổi có ảnh hưởng, coi là thiếu sót review.
 - Tuyệt đối không hướng dẫn người dùng chỉnh tay `config/policy_overrides.json` trong tài liệu. Luôn chỉ dẫn thay đổi qua baseline/overlays hoặc patch runtime có `meta.ttl`.
 
+Slim runtime policy cleanup
+- Không re‑introduce các khóa đã loại tại runtime (`calibration`, `thresholds_profiles`, `execution.filter_buy_limit_gt_market`, `execution.fill`). Mọi bổ sung mới phải có lý do và test đi kèm.
+- Khi dùng ATR‑dynamic `atr_per_ticker` + `dynamic_only`, không thêm lại `thresholds.tp_pct/sl_pct` vào runtime; baseline có thể giữ 0.0 cho tương thích test, nhưng runtime phải strip.
+
 ## Tooling & CI (Codex)
 - Postinstall (Node): chạy `scripts/postinstall-codex-global.js` sau `npm install` để:
   - Cài/kiểm tra Codex CLI toàn cục (`codex --version`), fallback `NPM_CONFIG_PREFIX=$HOME/.npm-global` nếu cần.
