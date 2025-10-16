@@ -3,19 +3,26 @@ Collect or ensure intraday snapshots in a self-contained way.
 See scripts/prep/data/collect_intraday.py original for details; this is the moved version.
 """
 from __future__ import annotations
+import argparse
+import sys
 import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import List, Optional
+from typing import Iterable, List, Optional
 
 import pandas as pd
 import requests
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 from scripts.indicators import rsi_wilder
 
 VN_TZ = timezone(timedelta(hours=7))
 
 
-def fetch_last_price(symbol: str) -> float | None:
+def fetch_last_price(symbol: stremor) -> float | None:
     now = int(datetime.now(VN_TZ).timestamp())
     url = f"https://dchart-api.vndirect.com.vn/dchart/history?symbol={symbol}&resolution=1&from={now-1200}&to={now}"
     headers = {'User-Agent':'Mozilla/5.0','Referer':'https://dchart.vndirect.com.vn/'}
@@ -199,3 +206,104 @@ def ensure_intraday_latest_df(tickers: List[str], window_minutes: int = 12*60) -
             raise ValueError(f"Missing intraday data for {t}")
         rows.append({'Ticker': t, 'Ts': int(ts_value), 'Price': float(price_value), 'RSI14': rsi_num, 'TimeVN': time_vn_str})
     return pd.DataFrame(rows)
+
+
+def _load_tickers_from_source(source: Path, exclude_labels: Iterable[str]) -> List[str]:
+    if not source.exists():
+        raise FileNotFoundError(f"Ticker source not found: {source}")
+    df = pd.read_csv(source)
+    if 'Ticker' not in df.columns:
+        raise ValueError(f"'Ticker' column missing in {source}")
+    tickers = df['Ticker'].astype(str).str.upper().tolist()
+    exclude_set = {label.upper() for label in exclude_labels}
+    filtered = [t for t in tickers if t and t not in exclude_set]
+    return list(dict.fromkeys(filtered))
+
+
+def _dedupe_preserve_order(items: Iterable[str]) -> List[str]:
+    seen: dict[str, None] = {}
+    for item in items:
+        key = item.strip().upper()
+        if not key or key in seen:
+            continue
+        seen[key] = None
+    return list(seen.keys())
+
+
+def _parse_args(argv: Optional[List[str]]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Collect or refresh intraday caches.")
+    parser.add_argument(
+        "--mode",
+        choices=["ensure-latest", "collect"],
+        default="ensure-latest",
+        help="ensure-latest writes the freshest snapshot once; collect loops for live sampling.",
+    )
+    parser.add_argument(
+        "--tickers",
+        nargs="+",
+        help="Explicit tickers to process. Combine with --tickers-from to merge sources.",
+    )
+    parser.add_argument(
+        "--tickers-from",
+        type=Path,
+        dest="tickers_from",
+        help="CSV file with a 'Ticker' column (e.g. data/industry_map.csv).",
+    )
+    parser.add_argument(
+        "--keep-index-labels",
+        action="store_true",
+        help="Keep index labels such as VNINDEX/VN30/VN100 when loading from CSV.",
+    )
+    parser.add_argument(
+        "--outdir",
+        type=Path,
+        default=Path("out/intraday"),
+        help="Output directory for intraday CSV snapshots.",
+    )
+    parser.add_argument(
+        "--window-minutes",
+        type=int,
+        default=12 * 60,
+        help="Lookback window (minutes) for ensure-latest mode.",
+    )
+    parser.add_argument(
+        "--interval",
+        type=int,
+        default=30,
+        help="Sampling interval in seconds for collect mode.",
+    )
+    parser.add_argument(
+        "--duration",
+        type=int,
+        default=900,
+        help="Total runtime in seconds for collect mode.",
+    )
+    return parser.parse_args(argv)
+
+
+def _resolve_tickers(args: argparse.Namespace) -> List[str]:
+    candidates: List[str] = []
+    if args.tickers:
+        candidates.extend(args.tickers)
+    exclude = [] if args.keep_index_labels else ["VNINDEX", "VN30", "VN100"]
+    if args.tickers_from:
+        candidates.extend(_load_tickers_from_source(args.tickers_from, exclude))
+    tickers = _dedupe_preserve_order(candidates)
+    if not tickers:
+        raise SystemExit("No tickers specified. Provide --tickers and/or --tickers-from.")
+    return tickers
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    args = _parse_args(argv)
+    tickers = _resolve_tickers(args)
+    outdir = str(Path(args.outdir))
+    if args.mode == "collect":
+        collect_intraday(tickers, interval=int(args.interval), duration=int(args.duration), outdir=outdir)
+        return 0
+    ensure_intraday_latest(tickers, outdir=outdir, window_minutes=int(args.window_minutes))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

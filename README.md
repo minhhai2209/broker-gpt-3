@@ -58,6 +58,14 @@ Lệnh tiện ích
 - `./broker.sh tests` — chạy test; bật coverage: `BROKER_COVERAGE=1 ./broker.sh tests`.
 - `./broker.sh tune` — chạy calibrators + AI (Codex). Kết quả hợp nhất ghi `out/orders/policy_overrides.json` và được publish sang `config/policy_overrides.json` (tuner copy) để phục vụ audit/rollback.
 - `./broker.sh server` — chạy API server cục bộ (Flask) phục vụ extension/ứng dụng (mặc định `PORT=8787`). Server KHÔNG có cron/scheduler nội bộ; việc refresh policy do GitHub Actions hoặc lệnh `./broker.sh policy` thực hiện.
+- `python scripts/data_fetching/run_data_jobs.py --group nightly` — chạy toàn bộ nhóm collector chạy đêm (Vietstock fundamentals/events, global factors). Dùng `--dry-run` để kiểm tra config mà không gọi mạng. Log từng job nằm tại `out/logs/data_jobs/<group>/`.
+- `python scripts/data_fetching/run_data_jobs.py --job collect_global_factors` (hoặc `collect_vietstock_fundamentals`, `collect_vietstock_events`) — chạy riêng từng collector khi muốn refresh cục bộ mà không ảnh hưởng job khác.
+
+Phân loại collector dữ liệu:
+- Nightly (chạy đêm, lâu): cấu hình trong `config/data_jobs.json` nhóm `nightly` gồm Vietstock fundamentals/events và global factors. Các job hỗ trợ chạy song song khi được đánh dấu `allow_parallel=true`, còn Playwright job vẫn chạy tuần tự để tránh tranh chấp trình duyệt.
+- Real-time (chạy nhanh trong phiên): nhóm `real_time` hiện tại chỉ bao gồm `ensure_intraday_latest` để cập nhật snapshot phút. Có thể gọi `python scripts/data_fetching/run_data_jobs.py --group real_time` khi cần refresh tức thời (ví dụ sau giờ nghỉ trưa).
+- Script tiện ích `scripts/data_fetching/run_collect_all.sh` chỉ là wrapper gọi lần lượt hai nhóm trên; có thể dùng cho cron đơn giản nhưng khuyến nghị dùng trực tiếp `run_data_jobs.py` hoặc `--job` để kiểm soát nhóm/concurrency.
+- GitHub Actions tách riêng theo dataset: `Data - Global Factors`, `Data - Vietstock Fundamentals`, `Data - Vietstock Events` (lần lượt chạy `--job` tương ứng sau khi thiết lập Playwright/phụ thuộc). Các workflow này được cron sau giờ đóng cửa HOSE và upload artefact CSV/log để kiểm tra nhanh.
 
   
 

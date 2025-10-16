@@ -1,0 +1,58 @@
+name: Data - Global Factors
+
+on:
+  schedule:
+    # 10:05 UTC == 17:05 ICT (after market close)
+    - cron: '5 10 * * *'
+  workflow_dispatch:
+    inputs:
+      python-version:
+        description: 'Python version'
+        required: false
+        default: '3.11'
+
+concurrency:
+  group: data-global-factors-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    name: Collect global factors
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ inputs.python-version || '3.11' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version || '3.11' }}
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run collector
+        run: |
+          set -euo pipefail
+          python scripts/data_fetching/run_data_jobs.py --job collect_global_factors
+
+      - name: Upload artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: global-factors-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            out/global_factors_features.csv
+            out/global_factors_snapshot.csv
+            out/logs/data_jobs/**
