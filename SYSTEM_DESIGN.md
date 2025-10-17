@@ -414,3 +414,8 @@ Slim Runtime — Policy Cleanup (2025‑10‑16)
 - Engine:
   - Bỏ nhánh thresholds_profiles; luôn dùng `thresholds` phẳng.
   - Luôn “clamp” BUY Limit > Market tại engine (không còn filter) và ghi audit `limit_gt_market` (không loại lệnh).
+- 2025‑10‑17: Thêm calibrator `calibrate_ticker_stops.py` — tự động đặt `ticker_overrides.{TICKER}` cho SL theo hồ sơ dài hạn (trend & ATR). Quy tắc mặc định:
+  - Loose (trend up & ATR pctile ≤ 0.60 & momentum ≥ 0): `sl_rule=dynamic_only`, `sl_atr_mult=2.5`, `sl_floor_pct=0.03`, `sl_cap_pct=0.10`.
+  - Normal (mặc định, ATR pctile ≤ 0.90): `sl_atr_mult=2.0`, `sl_floor_pct=0.025`, `sl_cap_pct=0.08`.
+  - Tight (ATR pctile > 0.90 hoặc trend down hoặc momentum < 0): `sl_atr_mult=1.5`, `sl_floor_pct=0.02`, `sl_cap_pct=0.06`.
+  Engine áp per‑ticker overrides khi tính `resolve_tp_sl()`; hard SL vẫn giữ nguyên hành vi exit tức thì.

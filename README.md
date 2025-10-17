@@ -57,6 +57,7 @@ Lệnh tiện ích
 - `./broker.sh orders` — chạy Order Engine (mặc định).
 - `./broker.sh tests` — chạy test; bật coverage: `BROKER_COVERAGE=1 ./broker.sh tests`.
 - `./broker.sh tune` — chạy calibrators + AI (Codex). Kết quả hợp nhất ghi `out/orders/policy_overrides.json` và được publish sang `config/policy_overrides.json` (tuner copy) để phục vụ audit/rollback.
+  - Calibrators đáng chú ý: `calibrate_ticker_stops.py` tự động đặt `ticker_overrides` (SL động theo trend & ATR) cho từng mã; có hiệu lực dài hạn và được engine áp dụng khi tính TP/SL.
 - `./broker.sh server` — chạy API server cục bộ (Flask) phục vụ extension/ứng dụng (mặc định `PORT=8787`). Server KHÔNG có cron/scheduler nội bộ; việc refresh policy do GitHub Actions hoặc lệnh `./broker.sh policy` thực hiện.
 - `python scripts/data_fetching/run_data_jobs.py --group nightly` — chạy toàn bộ nhóm collector chạy đêm (Vietstock fundamentals/events, global factors). Dùng `--dry-run` để kiểm tra config mà không gọi mạng. Log từng job nằm tại `out/logs/data_jobs/<group>/`.
 - `python scripts/data_fetching/run_data_jobs.py --job collect_global_factors` (hoặc `collect_vietstock_fundamentals`, `collect_vietstock_events`) — chạy riêng từng collector khi muốn refresh cục bộ mà không ảnh hưởng job khác.

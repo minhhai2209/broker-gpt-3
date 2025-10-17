@@ -68,6 +68,7 @@ def main() -> int:
         calibrate_regime_components,
         calibrate_regime,
         calibrate_market_filter,
+        calibrate_ticker_stops,
         calibrate_breadth_floor,
         calibrate_leader_gates,
         calibrate_risk_limits,
@@ -95,6 +96,7 @@ def main() -> int:
         calibrate_regime_components.__name__,
         calibrate_regime.__name__,
         calibrate_market_filter.__name__,
+        calibrate_ticker_stops.__name__,
         calibrate_breadth_floor.__name__,
         calibrate_leader_gates.__name__,
         calibrate_risk_limits.__name__,
@@ -113,6 +115,7 @@ def main() -> int:
     calibrate_regime_components.calibrate(write=True)
     calibrate_regime.calibrate(horizon=63, write=True)
     calibrate_market_filter.calibrate(write=True)
+    calibrate_ticker_stops.calibrate(write=True)
     calibrate_breadth_floor.calibrate(write=True)
     calibrate_leader_gates.calibrate(write=True)
     calibrate_risk_limits.calibrate(write=True)
