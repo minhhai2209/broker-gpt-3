@@ -36,6 +36,7 @@ from scripts.tuning.calibrators.policy_write import write_policy
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / "out"
+DATA_DIR = BASE_DIR / "data"
 ORDERS_PATH = OUT_DIR / "orders" / "policy_overrides.json"
 CONFIG_PATH = BASE_DIR / "config" / "policy_overrides.json"
 
@@ -79,6 +80,11 @@ def calibrate(*, write: bool = True) -> Dict[str, float]:
         raise SystemExit("portfolio_clean.csv missing Ticker column")
     holdings = set(str(t).strip().upper() for t in portfolio["Ticker"].astype(str))
     n_hold = len(holdings)
+    industry = _load_csv(DATA_DIR / "industry_map.csv")
+    universe = [str(t).strip().upper() for t in industry.get("Ticker", pd.Series(dtype=str)).astype(str)]
+    universe = [t for t in universe if t and t not in {"VNINDEX", "VN30", "VN100"}]
+    universe_size = len(set(universe))
+    clip_hi = universe_size if universe_size > 0 else 50
 
     try:
         from scripts.orders.order_engine import get_market_regime
@@ -114,19 +120,15 @@ def calibrate(*, write: bool = True) -> Dict[str, float]:
 
     # NEW breadth target — adaptive with regime floors, clipped to [0..10]
     if getattr(regime, "risk_on", False):
-        base_floor = 8  # broader breadth when risk-on; cushion for unfilled orders
-    elif getattr(regime, "is_neutral", False):
-        base_floor = 3
+        k_new = clip_hi
+        k_add = clip_hi
     else:
-        base_floor = 0
-
-    k_new = base_floor + int(math.ceil(gap_to_min * (0.4 + 0.6 * risk_factor) * vol_penalty))
-    k_new = int(_clip(k_new, 0, 15))
-
-    # ADD breadth target — adaptive, clipped to [0..10]
-    k_add = int(math.ceil(n_hold * (0.10 + 0.20 * risk_factor) * vol_penalty))
-    k_add = max(k_add, k_new)  # keep add breadth at least new breadth
-    k_add = int(_clip(k_add, 0, 15))
+        base_floor = 3 if getattr(regime, "is_neutral", False) else 0
+        k_new = base_floor + int(math.ceil(gap_to_min * (0.4 + 0.6 * risk_factor) * vol_penalty))
+        k_new = int(_clip(k_new, 0, clip_hi))
+        k_add = int(math.ceil(n_hold * (0.10 + 0.20 * risk_factor) * vol_penalty))
+        k_add = max(k_add, k_new)
+        k_add = int(_clip(k_add, 0, clip_hi))
 
     # Regime budget mapping — generic, audit‑friendly (engine picks at runtime)
     # Keep within 0.02..0.30 and modest vs baseline guidance
