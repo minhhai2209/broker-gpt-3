@@ -114,19 +114,19 @@ def calibrate(*, write: bool = True) -> Dict[str, float]:
 
     # NEW breadth target — adaptive with regime floors, clipped to [0..10]
     if getattr(regime, "risk_on", False):
-        base_floor = 5  # buy more tickers when risk-on; cushion for unfilled orders
+        base_floor = 8  # broader breadth when risk-on; cushion for unfilled orders
     elif getattr(regime, "is_neutral", False):
-        base_floor = 1
+        base_floor = 3
     else:
         base_floor = 0
 
     k_new = base_floor + int(math.ceil(gap_to_min * (0.4 + 0.6 * risk_factor) * vol_penalty))
-    k_new = int(_clip(k_new, 0, 10))
+    k_new = int(_clip(k_new, 0, 15))
 
     # ADD breadth target — adaptive, clipped to [0..10]
     k_add = int(math.ceil(n_hold * (0.10 + 0.20 * risk_factor) * vol_penalty))
     k_add = max(k_add, k_new)  # keep add breadth at least new breadth
-    k_add = int(_clip(k_add, 0, 10))
+    k_add = int(_clip(k_add, 0, 15))
 
     # Regime budget mapping — generic, audit‑friendly (engine picks at runtime)
     # Keep within 0.02..0.30 and modest vs baseline guidance
