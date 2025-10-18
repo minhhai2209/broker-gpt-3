@@ -38,9 +38,6 @@ def main() -> int:
 
     # Run AI pre-phase before merging overlays
     print('[tune] Running AI overrides calibrator (Codex pre-phase)')
-    # Require Codex by default; users can export BROKER_REQUIRE_CODEX=0 to skip
-    import os as _os
-    _os.environ.setdefault('BROKER_REQUIRE_CODEX', '1')
     from scripts.tuning.calibrators import calibrate_ai_overrides
 
     calibrate_ai_overrides.calibrate(write=True)

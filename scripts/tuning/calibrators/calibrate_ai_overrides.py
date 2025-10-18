@@ -11,7 +11,6 @@ specification.
 
 from pathlib import Path
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -216,13 +215,8 @@ def _build_prompt(sample_json: str) -> str:
 
 def _invoke_codex(sample_json: str) -> Dict[str, Any]:
     codex_bin = shutil.which("codex")
-    # Default required unless explicitly disabled via env
-    require_codex = os.environ.get("BROKER_REQUIRE_CODEX", "1") == "1"
     if not codex_bin:
-        if require_codex:
-            raise SystemExit("Codex CLI not found but BROKER_REQUIRE_CODEX=1")
-        print("[ai_overrides] Codex CLI not found; skipping AI overlay generation")
-        return {}
+        raise SystemExit("Codex CLI not found; AI overrides require Codex CLI")
     prompt = _build_prompt(sample_json)
     cmd = [
         codex_bin,
@@ -257,10 +251,7 @@ def _invoke_codex(sample_json: str) -> Dict[str, Any]:
         if proc.returncode != 0:
             err_path = debug_dir / f"codex_policy_error_{ts}.txt"
             err_path.write_text(output, encoding="utf-8")
-            if require_codex:
-                raise SystemExit(f"Codex CLI failed with exit code {proc.returncode}; see {err_path}")
-            print(f"[ai_overrides] Codex CLI failed (exit {proc.returncode}); skipping AI overlay. See {err_path}")
-            return {}
+            raise SystemExit(f"Codex CLI failed with exit code {proc.returncode}; see {err_path}")
         if not gen_path.exists():
             # Fallback: try to parse JSON from stdout and persist
             try:
