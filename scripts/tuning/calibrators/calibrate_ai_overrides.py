@@ -222,7 +222,7 @@ def _invoke_codex(sample_json: str) -> Dict[str, Any]:
         codex_bin,
         "exec",
         "--skip-git-repo-check",
-        "--yolo",
+        "--full-auto",
         "--model",
         "gpt-5",
         "-c",
