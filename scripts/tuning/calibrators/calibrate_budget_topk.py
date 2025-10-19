@@ -84,7 +84,7 @@ def calibrate(*, write: bool = True) -> Dict[str, float]:
     universe = [str(t).strip().upper() for t in industry.get("Ticker", pd.Series(dtype=str)).astype(str)]
     universe = [t for t in universe if t and t not in {"VNINDEX", "VN30", "VN100"}]
     universe_size = len(set(universe))
-    clip_hi = universe_size if universe_size > 0 else 50
+    clip_hi = max(0, min(universe_size if universe_size > 0 else 50, 50))  # schema: add_max/new_max ∈ [0,50]
 
     try:
         from scripts.orders.order_engine import get_market_regime
