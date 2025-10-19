@@ -4775,8 +4775,6 @@ def run(simulate: bool = False, *, context: Optional[Dict[str, Any]] = None, fla
     wl_enable = bool(int(wl_conf.get('enable', 1)))
     wl_min_prio = float(wl_conf.get('min_priority', 0.25) or 0.25)
     wl_win = int(wl_conf.get('micro_window', 3) or 3)
-    # New: allow disabling fill-probability gating while keeping other filters
-    wl_use_fill_prob = bool(int(wl_conf.get('use_fill_prob', 1)))
     def _micro_up(ticker: str) -> bool:
         try:
             p = OUT_DIR / 'intraday' / f'{ticker}_intraday.csv'
@@ -4846,8 +4844,9 @@ def run(simulate: bool = False, *, context: Optional[Dict[str, Any]] = None, fla
         for o in list(orders):
             if o.side != 'BUY':
                 continue
+            # Permanently drop fill‑probability gating from priority — use score only
             score_val = max(0.0, float(scores.get(o.ticker, 0.0) or 0.0))
-            prio = score_val * (float(_fill_prob(o)) if wl_use_fill_prob else 1.0)
+            prio = score_val
             if (not idx_micro_ok) or (not _micro_up(o.ticker)) or prio < wl_min_prio:
                 buy_watch.append(o)
             else:
