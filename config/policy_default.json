@@ -244,7 +244,8 @@
     // Risk‑off when single‑day index drop ≤ this (negative) threshold (absolute magnitude as fraction)
     "risk_off_index_drop_pct": 0.03,
     // Risk‑off when trend component below this (0..1)
-    "risk_off_trend_floor": 0.0,
+    // Allow VNINDEX to drift modestly below MA200 (~1.5%) before triggering guard
+    "risk_off_trend_floor": -0.015,
     // Risk‑off when breadth (pct > MA50) below this (0..1)
     "risk_off_breadth_floor": 0.4,
     // Relax breadth floor when risk-on odds and volatility justify it (fraction)
@@ -484,6 +485,12 @@
       "soft": 9,
       "hard": 7
     },
+    // Minimum lifetime for BUY orders when market guard is not active (minutes)
+    // Rationale: keep GOOD ideas resting through the session so users running engine
+    // twice per day don't lose pending orders during calm regimes.
+    "buy_ttl_floor_minutes": 120,
+    // Shorter TTL applied once market guard detects a reversal/severe tape
+    "buy_ttl_reversal_minutes": 15,
     "ttl_bucket_minutes": {
       // Volatility buckets override the global TTLs. Lower vol = more patience.
       // Each bucket keeps a ≥2 minute spread from base→hard, matching desk SOP.

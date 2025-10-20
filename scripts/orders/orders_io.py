@@ -105,6 +105,109 @@ def _detect_limit_lock(side: str, snap_row: pd.Series | None, market: float | No
     return False
 
 
+def _safe_float(val, default: float = 0.0) -> float:
+    try:
+        return float(val)
+    except Exception:
+        return float(default)
+
+
+def _safe_int(val) -> int | None:
+    try:
+        return int(float(val))
+    except Exception:
+        return None
+
+
+def _effective_breadth_floor(regime, mf_conf: dict) -> float:
+    floor = _safe_float((mf_conf or {}).get('risk_off_breadth_floor'), 0.0)
+    floor = max(0.0, min(1.0, floor))
+    margin = _safe_float((mf_conf or {}).get('breadth_relax_margin'), 0.0)
+    if margin <= 0.0:
+        return floor
+    risk_on_prob = max(0.0, min(1.0, _safe_float(getattr(regime, 'risk_on_probability', 0.0), 0.0)))
+    if risk_on_prob <= 0.0:
+        return floor
+    atr_pct = max(0.0, min(1.0, _safe_float(getattr(regime, 'index_atr_percentile', 0.0), 0.0)))
+    soft = _safe_float((mf_conf or {}).get('index_atr_soft_pct'), 0.9)
+    hard = _safe_float((mf_conf or {}).get('index_atr_hard_pct'), soft + 0.07)
+    if hard <= soft:
+        hard = soft + 0.01
+    span = max(hard - soft, 1e-6)
+    vol_relax = 1.0 - max(0.0, min(1.0, (atr_pct - soft) / span))
+    adjusted = floor - margin * risk_on_prob * max(vol_relax, 0.0)
+    return max(0.0, min(1.0, adjusted))
+
+
+def _market_guard_active(regime, mf_conf: dict, idx_atr_pctile: float) -> bool:
+    try:
+        neutral_state = getattr(regime, 'neutral_state', {}) or {}
+        guard_flags = neutral_state.get('guard_flags') if isinstance(neutral_state, dict) else None
+        if isinstance(guard_flags, dict):
+            for key in ('guard_new', 'atr_hard', 'vol_hard', 'global_hard'):
+                if bool(guard_flags.get(key)):
+                    return True
+    except Exception:
+        pass
+
+    idx_drop_thr = _safe_float((mf_conf or {}).get('risk_off_index_drop_pct'), 0.0)
+    trend_floor = _safe_float((mf_conf or {}).get('risk_off_trend_floor'), 0.0)
+    breadth_floor = _effective_breadth_floor(regime, mf_conf or {})
+    score_hard = _safe_float((mf_conf or {}).get('market_score_hard_floor'), 0.0)
+    idx_chg = _safe_float(getattr(regime, 'index_change_pct', 0.0), 0.0)
+    trend_strength = _safe_float(getattr(regime, 'trend_strength', 0.0), 0.0)
+    breadth_hint = _safe_float(getattr(regime, 'breadth_hint', 0.0), 0.0)
+    market_score = _safe_float(getattr(regime, 'market_score', 0.0), 0.0)
+    guard_new = (
+        (idx_drop_thr > 0.0 and idx_chg <= -abs(idx_drop_thr))
+        or (trend_strength <= trend_floor)
+        or (breadth_hint < breadth_floor)
+        or (market_score <= score_hard)
+    )
+
+    atr_soft = _safe_float((mf_conf or {}).get('index_atr_soft_pct'), 1.0)
+    atr_hard = _safe_float((mf_conf or {}).get('index_atr_hard_pct'), 1.0)
+    atr_soft_hit = idx_atr_pctile >= atr_soft if atr_soft > 0.0 else False
+    atr_hard_hit = idx_atr_pctile >= atr_hard if atr_hard > 0.0 else False
+    vol_cap = _safe_float((mf_conf or {}).get('vol_ann_hard_ceiling'), 0.0)
+    vol_hard_hit = vol_cap > 0.0 and _safe_float(getattr(regime, 'index_vol_annualized', 0.0), 0.0) >= vol_cap
+
+    global_hard = False
+    for key, attr in (
+        ('us_epu_hard_pct', 'epu_us_percentile'),
+        ('dxy_hard_pct', 'dxy_percentile'),
+        ('spx_drawdown_hard_pct', 'spx_drawdown_pct'),
+    ):
+        thr = (mf_conf or {}).get(key)
+        if thr is None:
+            continue
+        try:
+            if _safe_float(getattr(regime, attr, 0.0), 0.0) >= float(thr):
+                global_hard = True
+                break
+        except Exception:
+            global_hard = True
+            break
+
+    if guard_new:
+        return True
+    if atr_hard_hit or vol_hard_hit or global_hard:
+        return True
+    return bool(atr_soft_hit and (mf_conf or {}).get('guard_behavior', 'pause') == 'pause')
+
+
+def _apply_buy_ttl_policy(ttl: int, *, side: str, regime, orders_ui: dict, mf_conf: dict, idx_atr_pctile: float) -> int:
+    if str(side).upper() != 'BUY':
+        return int(ttl)
+    floor = _safe_int((orders_ui or {}).get('buy_ttl_floor_minutes'))
+    reversal = _safe_int((orders_ui or {}).get('buy_ttl_reversal_minutes'))
+    if reversal and _market_guard_active(regime, mf_conf or {}, idx_atr_pctile):
+        return max(1, reversal)
+    if floor:
+        return max(int(ttl), floor)
+    return int(ttl)
+
+
 def _compute_execution_metrics(
     *,
     ticker: str,
@@ -444,6 +547,14 @@ def write_orders_quality(orders, snapshot: pd.DataFrame, presets: pd.DataFrame, 
                 raise SystemExit("Missing orders_ui.ttl_minutes.{base,soft,hard} in policy")
             ttl_base = int(ttl_conf['base']); ttl_soft = int(ttl_conf['soft']); ttl_hard = int(ttl_conf['hard'])
             ttl = ttl_hard if idx_atr_pctile >= hard else (ttl_soft if idx_atr_pctile >= soft else ttl_base)
+            ttl = _apply_buy_ttl_policy(
+                ttl,
+                side=side,
+                regime=regime,
+                orders_ui=ou_conf,
+                mf_conf=mf_conf,
+                idx_atr_pctile=idx_atr_pctile,
+            )
             if t in ttl_override_map:
                 try:
                     ttl = int(ttl_override_map[t])
@@ -626,6 +737,14 @@ def write_orders_csv_enriched(
             if slip_frac > 0.0:
                 priority_net = priority_net / (1.0 + slip_frac)
             ttl = ttl_hard if idx_atr_pctile >= hard_thr else (ttl_soft if idx_atr_pctile >= soft_thr else ttl_base)
+            ttl = _apply_buy_ttl_policy(
+                ttl,
+                side=side,
+                regime=regime,
+                orders_ui=ou_conf,
+                mf_conf=mf_conf,
+                idx_atr_pctile=idx_atr_pctile,
+            )
             sig = ''
             try:
                 note = getattr(o, 'note', '') or ''

@@ -41,7 +41,7 @@ class TestConfigMergeDefaults(unittest.TestCase):
             "pricing": {"risk_on_buy": [], "risk_on_sell": [], "risk_off_buy": [], "risk_off_sell": [], "atr_fallback_buy_mult": 0.25, "atr_fallback_sell_mult": 0.25},
             "sizing": {"add_share": 0.5, "new_share": 0.5, "cov_lookback_days": 60, "cov_reg": 0.0005, "risk_parity_floor": 0.2, "market_index_symbol": "VNINDEX", "default_stop_atr_mult": 2.0, "risk_per_trade_frac": 0.0},
             "market_filter": {
-                "risk_off_trend_floor": 0.0,
+                "risk_off_trend_floor": -0.015,
                 "risk_off_breadth_floor": 0.4,
                 "breadth_relax_margin": 0.0,
                 "risk_off_drawdown_floor": 0.2,
@@ -119,7 +119,7 @@ class TestConfigMergeDefaults(unittest.TestCase):
                 }
             },
             "market_filter": {
-                "risk_off_trend_floor": 0.0,
+                "risk_off_trend_floor": -0.015,
                 "risk_off_breadth_floor": 0.4,
                 "breadth_relax_margin": 0.0,
                 "risk_off_drawdown_floor": 0.2,
@@ -152,7 +152,7 @@ class TestConfigMergeDefaults(unittest.TestCase):
     # No fallback to sample in runtime; defaults.json absence simply results in copying base only.
     def test_no_defaults_json_copies_base_only(self):
         base = config_io.OVERRIDE_SRC
-        base.write_text('{"buy_budget_frac": 0.1, "add_max": 1, "new_max": 1, "weights": {"w_trend": 0, "w_momo": 0, "w_mom_ret": 0, "w_liq": 0, "w_vol_guard": 0, "w_beta": 0, "w_sector": 0, "w_sector_sent": 0, "w_ticker_sent": 0, "w_roe": 0, "w_earnings_yield": 0, "w_rs": 0}, "thresholds": {"base_add": 0.1, "base_new": 0.1, "trim_th": -0.1, "near_ceiling_pct": 0.98, "tp_trim_frac": 0.3, "exit_on_ma_break": 0, "cooldown_days": 0, "exit_ma_break_rsi": 45, "trim_rsi_below_ma20": 45, "trim_rsi_macdh_neg": 40}, "market_filter": {"risk_off_trend_floor": 0.0, "risk_off_breadth_floor": 0.4, "breadth_relax_margin": 0.0, "risk_off_drawdown_floor": 0.2, "market_score_soft_floor": 0.55, "market_score_hard_floor": 0.35, "leader_min_rsi": 55.0, "leader_min_mom_norm": 0.6, "leader_require_ma20": 1, "leader_require_ma50": 1, "leader_max": 2, "guard_new_scale_cap": 0.4, "atr_soft_scale_cap": 0.5, "severe_drop_mult": 1.5, "idx_chg_smoothed_hard_drop": 0.5, "trend_norm_hard_floor": -0.25, "vol_ann_hard_ceiling": 0.6}, "regime_model": {"components": {"trend": {"weight": 1.0}}}}', encoding="utf-8")
+        base.write_text('{"buy_budget_frac": 0.1, "add_max": 1, "new_max": 1, "weights": {"w_trend": 0, "w_momo": 0, "w_mom_ret": 0, "w_liq": 0, "w_vol_guard": 0, "w_beta": 0, "w_sector": 0, "w_sector_sent": 0, "w_ticker_sent": 0, "w_roe": 0, "w_earnings_yield": 0, "w_rs": 0}, "thresholds": {"base_add": 0.1, "base_new": 0.1, "trim_th": -0.1, "near_ceiling_pct": 0.98, "tp_trim_frac": 0.3, "exit_on_ma_break": 0, "cooldown_days": 0, "exit_ma_break_rsi": 45, "trim_rsi_below_ma20": 45, "trim_rsi_macdh_neg": 40}, "market_filter": {"risk_off_trend_floor": -0.015, "risk_off_breadth_floor": 0.4, "breadth_relax_margin": 0.0, "risk_off_drawdown_floor": 0.2, "market_score_soft_floor": 0.55, "market_score_hard_floor": 0.35, "leader_min_rsi": 55.0, "leader_min_mom_norm": 0.6, "leader_require_ma20": 1, "leader_require_ma50": 1, "leader_max": 2, "guard_new_scale_cap": 0.4, "atr_soft_scale_cap": 0.5, "severe_drop_mult": 1.5, "idx_chg_smoothed_hard_drop": 0.5, "trend_norm_hard_floor": -0.25, "vol_ann_hard_ceiling": 0.6}, "regime_model": {"components": {"trend": {"weight": 1.0}}}}', encoding="utf-8")
         path = config_io.ensure_policy_override_file()
         self.assertEqual(path, self._dest())
         obj = json.loads(self._dest().read_text(encoding='utf-8'))

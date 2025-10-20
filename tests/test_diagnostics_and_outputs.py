@@ -124,7 +124,7 @@ class TestDiagnosticsAndOutputs(unittest.TestCase):
             'ticker_bias': {},
             'market_filter': {
                 'risk_off_index_drop_pct': 0.5,
-                'risk_off_trend_floor': 0.0,
+                'risk_off_trend_floor': -0.015,
                 'risk_off_breadth_floor': 0.4,
                 'breadth_relax_margin': 0.0,
                 'market_score_soft_floor': 0.55,
@@ -173,6 +173,8 @@ class TestDiagnosticsAndOutputs(unittest.TestCase):
             },
             'orders_ui': {
                 'ttl_minutes': { 'base': 12, 'soft': 7, 'hard': 5 },
+                'buy_ttl_floor_minutes': 60,
+                'buy_ttl_reversal_minutes': 10,
                 'ttl_bucket_minutes': {
                     'low': { 'base': 14, 'soft': 11, 'hard': 8 },
                     'medium': { 'base': 11, 'soft': 9, 'hard': 7 },

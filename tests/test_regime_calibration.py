@@ -111,7 +111,7 @@ class TestRegimeCalibration(unittest.TestCase):
             'ticker_bias': {},
             'market_filter': {
                 'risk_off_index_drop_pct': 0.5,
-                'risk_off_trend_floor': 0.0,
+                'risk_off_trend_floor': -0.015,
                 'risk_off_breadth_floor': 0.4,
                 'breadth_relax_margin': 0.0,
                 'market_score_soft_floor': 0.55,

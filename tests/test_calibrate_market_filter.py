@@ -76,6 +76,7 @@ class TestCalibrateMarketFilter(unittest.TestCase):
         result = cmf.calibrate(write=True)
         expected_keys = {
             'risk_off_index_drop_pct',
+            'risk_off_trend_floor',
             'idx_chg_smoothed_hard_drop',
             'vol_ann_hard_ceiling',
             'trend_norm_hard_floor',
@@ -87,3 +88,8 @@ class TestCalibrateMarketFilter(unittest.TestCase):
         config = json.loads(cmf.CONFIG_PATH.read_text(encoding='utf-8'))
         market_filter = config.get('market_filter', {})
         self.assertTrue(expected_keys.issubset(market_filter.keys()))
+        self.assertAlmostEqual(
+            float(result['risk_off_trend_floor']),
+            float(result['trend_norm_hard_floor']) * 0.05,
+            places=6,
+        )

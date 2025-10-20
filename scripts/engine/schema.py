@@ -595,6 +595,8 @@ class OrdersUI(BaseModel):
         micro_window: int = Field(ge=1, default=3)
 
     ttl_minutes: TTLMinutes = Field(default_factory=TTLMinutes)
+    buy_ttl_floor_minutes: int = Field(ge=1, le=240, default=30)
+    buy_ttl_reversal_minutes: int = Field(ge=1, le=240, default=15)
     watchlist: Watchlist = Field(default_factory=Watchlist)
     # Number of tickers to show for suggestions (UI only)
     suggestions_top_n: int = Field(ge=1, default=3)

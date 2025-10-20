@@ -370,6 +370,7 @@ Mục này tổng hợp các cơ chế hiệu chỉnh (calibration) và chẩn �
     - Cơ chế: ánh xạ biến động vào 3 bucket `low/medium/high` (ngưỡng có thể cấu hình/ghi trong metadata), sau đó cập nhật `orders_ui.ttl_minutes` theo bucket.
     - Mapping hiện hành: `low → 14/11/8`, `medium → 11/9/7`, `high → 8/6/5` (lần lượt `base/soft/hard`, tính bằng phút).
     - Output: ghi đè vào `config/policy_overrides.json` (hoặc `out/orders/policy_overrides.json` runtime) các khóa liên quan TTL và metadata: `ttl_bucket_minutes`, `ttl_bucket_thresholds`, `ttl_bucket_state`. Lần chạy Order Engine kế tiếp sẽ sử dụng TTL mới.
+  - 2025-10-18: bổ sung “sàn” TTL BUY `orders_ui.buy_ttl_floor_minutes` để giữ lệnh qua cả phiên khi guard thị trường không kích hoạt. Khi guard phát hiện đảo chiều mạnh (`guard_new`, ATR ≥ hard, biến động năm hoá ≥ `vol_ann_hard_ceiling` hoặc guard toàn cầu), engine hạ TTL về `orders_ui.buy_ttl_reversal_minutes` để giảm rủi ro treo lệnh. SELL/STOP giữ nguyên hành vi cũ.
 
 - Hiệu chỉnh mean‑variance (runtime) — fallback an toàn
   - Trong một số phiên, lưới tham số hoặc dữ liệu lịch sử có thể không đủ điều kiện để đánh giá (ví dụ thiếu số điểm đủ dài sau khi căn chỉnh các mã “new/add”).
@@ -392,6 +393,7 @@ Hệ thống áp dụng các “guard” để kiểm soát rủi ro dựa trên
   - `market_score` ≤ `market_score_hard_floor` hoặc các ngưỡng toàn cầu “hard” (nếu cấu hình) đạt tới.
 
 - Relax breadth: ngưỡng breadth được nới dựa trên xác suất risk‑on và mức ATR (mềm→cứng) để tránh over‑filter khi biến động không quá cực đoan.
+- 2025-10-18: calibrator `calibrate_market_filter.py` giờ xuất thêm `market_filter.risk_off_trend_floor` (đơn vị trend strength thực, ≈% lệch MA200) bằng cách nhân `trend_norm_hard_floor` với `regime_scales.trend_unit`. Baseline đặt `risk_off_trend_floor = -0.015` để cho phép VNINDEX trượt ~1.5% dưới MA200 trước khi guard bật.
 
 Thiết kế này bám theo thực hành tiêu chuẩn cho VNINDEX: khi tape yếu nhưng không cực đoan, ưu tiên “step‑in” (giải ngân nhỏ, từng phần) thay vì đứng ngoài hoàn toàn; khi rủi ro hệ thống tăng mạnh, dừng mua.
 

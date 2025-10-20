@@ -182,7 +182,15 @@ def calibrate(write: bool = False) -> Dict[str, float]:
 
     idx_drop = abs(_quantile(smoothed_pct, q_idx))  # percent magnitude
     vol_ceiling = _quantile(vol_ann, q_vol)
-    trend_floor = _quantile(trend_norm, q_trend)
+    trend_floor_norm = _quantile(trend_norm, q_trend)
+    regime_scales = pol.get('regime_scales', {}) or {}
+    try:
+        trend_unit = float(regime_scales.get('trend_unit', 0.05) or 0.05)
+    except Exception:
+        trend_unit = 0.05
+    trend_unit = trend_unit if trend_unit != 0 else 0.05
+    trend_floor = float(trend_floor_norm)
+    trend_floor_raw = float(trend_floor_norm) * float(trend_unit)
     # Engine compares current ATR percentile (0..1) with these thresholds,
     # so we must calibrate on the distribution of ATR percentiles, not raw ATR%.
     atr_rank = pd.to_numeric(atr_pct, errors='coerce').rank(pct=True)
@@ -196,6 +204,7 @@ def calibrate(write: bool = False) -> Dict[str, float]:
         'idx_chg_smoothed_hard_drop': float(idx_drop),
         'vol_ann_hard_ceiling': float(vol_ceiling),
         'trend_norm_hard_floor': float(trend_floor),
+        'risk_off_trend_floor': float(trend_floor_raw),
         'index_atr_soft_pct': float(atr_soft),
         'index_atr_hard_pct': float(atr_hard),
     }

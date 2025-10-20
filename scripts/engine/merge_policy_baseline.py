@@ -115,6 +115,7 @@ def _merge_selected(tuned: Dict[str, Any], base: Dict[str, Any]) -> Dict[str, An
     # market_filter
     for k in (
         "risk_off_index_drop_pct",
+        "risk_off_trend_floor",
         "idx_chg_smoothed_hard_drop",
         "vol_ann_hard_ceiling",
         "trend_norm_hard_floor",

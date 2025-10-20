@@ -44,6 +44,7 @@ class TestCalibrateMarketFilterQuantiles(unittest.TestCase):
                 },
             }
         }
+        pol['regime_scales'] = {'trend_unit': 0.05}
         if include_targets:
             mf = {
                 'idx_drop_q': 0.10,
@@ -90,6 +91,12 @@ class TestCalibrateMarketFilterQuantiles(unittest.TestCase):
             # sanity: expect roughly around targets, allow wide tolerance
             self.assertGreater(soft, 0.6)
             self.assertGreaterEqual(hard, 0.90)
+            self.assertIn('risk_off_trend_floor', out)
+            self.assertAlmostEqual(
+                float(out['risk_off_trend_floor']),
+                float(out['trend_norm_hard_floor']) * 0.05,
+                places=6,
+            )
 
     def test_drawdown_and_trend_vol_thresholds(self):
         with TemporaryDirectory() as tmp:
@@ -104,6 +111,7 @@ class TestCalibrateMarketFilterQuantiles(unittest.TestCase):
             self.assertIn('risk_off_index_drop_pct', out)
             self.assertIn('vol_ann_hard_ceiling', out)
             self.assertIn('trend_norm_hard_floor', out)
+            self.assertIn('risk_off_trend_floor', out)
             self.assertGreater(out['risk_off_index_drop_pct'], 0.0)
             self.assertGreater(out['vol_ann_hard_ceiling'], 0.0)
             self.assertTrue(-1.0 <= out['trend_norm_hard_floor'] <= 1.0)
