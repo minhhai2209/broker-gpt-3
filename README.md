@@ -146,6 +146,15 @@ Market filter (VNINDEX)
     ```
     Patch này không thay `guard_behavior` mà chỉ chặn NEW trong phiên, đúng theo engine hỗ trợ runtime.
 
+Auto Budget (tùy chọn)
+- Mục tiêu: để engine tự tính ngân sách BUY trong ngày mà không cần `buy_budget_frac` cố định.
+- Bật bằng cách đặt trong baseline hoặc patch runtime (DEV cục bộ):
+  - `sizing.auto_budget_enable = 1`
+  - `sizing.auto_budget_mode = 'rpt'` (aggregate theo risk‑per‑trade)
+  - Dùng các khóa đã có để định rủi ro: `sizing.risk_per_trade_frac` và `sizing.default_stop_atr_mult` (hoặc SL% hiệu dụng từ ATR/thresholds).
+- Công thức (tóm tắt): với mỗi mã ứng viên, ước lượng khoảng dừng `stop_dist_k` (nghìn đồng/cp). Ngân sách thô cho mã ≈ `(risk_per_trade_frac * NAV) / stop_dist_k * Price`. Tổng ngân sách là tổng các mã, kẹp trần bởi `sizing.auto_budget_cap_frac * NAV` và đáy `sizing.auto_budget_min_k`.
+- Engine vẫn áp dụng các cap vị thế/ngành, ADTV và “market filter scaling” ở bước sau. Mặc định tắt (giữ hành vi `buy_budget_frac`).
+
 FAQ (ngắn)
 - Vì sao giá đặt trong file lệnh đôi khi bằng giá thị trường? Trong phiên (bao gồm nghỉ trưa), nếu BUY có `LimitPrice` > giá thị trường, hệ thống kẹp về giá thị trường; SELL nếu `LimitPrice` < giá thị trường cũng kẹp về giá thị trường. Quy tắc này chỉ áp ở lớp xuất lệnh, không thay đổi khái niệm “in‑session” ở các module khác.
 

@@ -268,6 +268,17 @@ Gom danh sách lệnh và kết xuất:
 
 Engine cũng thu thập thêm thông tin để ghi vào các file phụ:
 - orders_reasoning.csv: chứa chi tiết điểm số và các thành phần tính điểm cho mỗi mã (lấy từ feats_all và scores). File này giúp người dùng hiểu lý do vì sao một mã được mua hay bán (ví dụ các cột: TrendScore, MomScore, LiqScore, tổng điểm, bias, v.v.).
+
+Auto‑Budget (tùy chọn, dài hạn)
+--------------------------------
+
+- Mục tiêu: engine tự xác định tổng ngân sách BUY trong phiên từ rủi ro/stop thay vì tham số cố định buy_budget_frac.
+- Điều khiển (policy.sizing): `auto_budget_enable=1`, `auto_budget_mode='rpt'` (risk‑per‑trade aggregate), cùng `risk_per_trade_frac`, `default_stop_atr_mult`. Trần/đáy: `auto_budget_cap_frac`, `auto_budget_min_k`.
+- Thuật toán 'rpt':
+  1) Với mỗi ứng viên BUY (sau gate), ước lượng khoảng dừng tuyệt đối `stop_dist_k` (nghìn VND/cp): `max(default_stop_atr_mult × ATR_k, SL_pct_eff × Price_k)`; bỏ qua `SL_pct_eff ≥ 50%`.
+  2) Rủi ro cho phép mỗi lệnh: `allowed_risk_k = risk_per_trade_frac × NAV`.
+  3) Ngân sách thô cho mã: `(allowed_risk_k / stop_dist_k) × Price_k`. Tổng ngân sách = tổng các mã, kẹp trong `[auto_budget_min_k, auto_budget_cap_frac × NAV]`.
+- Sau đó, engine vẫn áp caps (max_pos_frac, max_sector_frac), guard thanh khoản (ADTV), lot size/first‑tranche, và scale theo market filter. Mặc định tắt để giữ backward‑compat; bật chỉ khi policy đã cấu hình đầy đủ dữ liệu ATR/SL.
 - orders_quality.csv: chứa các đánh giá về chất lượng lệnh và vi mô khớp lệnh. Ví dụ: 
   * Xác suất khớp lệnh (FillProb) và tỷ lệ khớp kỳ vọng (FillRateExp) dựa trên thanh khoản: Engine ước tính dựa trên khối lượng đặt so với thanh khoản trung bình (ADTV) xem khả năng khớp là bao nhiêu. Lệnh quá lớn so với thị trường sẽ có FillProb thấp.
   * Độ trượt giá dự kiến: Engine sử dụng mô hình trượt giá tuyến tính dựa trên tỷ lệ khối lượng giao dịch (có tham số pricing.tc_roundtrip_frac trong policy) để tính SlipBps (basis points) và SlipPct cho mỗi lệnh. Các giá trị này sau đó dùng tính Expected Return (ExpR) sau phí cho lệnh (đặc biệt để đánh giá lệnh mua có đáng đổi rủi ro phí hay không).

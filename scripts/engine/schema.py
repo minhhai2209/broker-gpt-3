@@ -503,6 +503,15 @@ class Sizing(BaseModel):
     min_notional_per_order: float = Field(default=2_000_000.0, ge=1_000_000.0)
     # Max lots for the very first entry of a NEW position (non-partial). Default 1.
     new_first_tranche_lots: int = Field(default=1, ge=1)
+    # Auto-budget: let engine compute target gross BUY notional from risk-per-trade inputs
+    # Disabled by default to preserve backward compatibility with buy_budget_frac.
+    auto_budget_enable: Union[int, bool] = 0
+    # Hard cap for auto-computed budget as fraction of NAV (clipped 0..0.30)
+    auto_budget_cap_frac: float = Field(default=0.20, ge=0.0, le=0.30)
+    # Optional minimum total BUY notional (thousand VND). 0 disables.
+    auto_budget_min_k: float = Field(default=0.0, ge=0.0)
+    # Mode for auto budget computation. Currently only 'rpt' (risk-per-trade aggregate) is supported.
+    auto_budget_mode: Literal['rpt', 'none'] = 'none'
     mean_variance_calibration: Optional[MeanVarianceCalibration] = None
 
     @model_validator(mode="after")
@@ -535,6 +544,10 @@ class Sizing(BaseModel):
             raise ValueError("sizing.min_notional_per_order must be >= 1_000_000 VND")
         if not str(self.market_index_symbol).strip():
             raise ValueError("sizing.market_index_symbol must be non-empty")
+        if float(self.auto_budget_cap_frac) < 0.0 or float(self.auto_budget_cap_frac) > 0.30:
+            raise ValueError("sizing.auto_budget_cap_frac must be in 0..0.30")
+        if float(self.auto_budget_min_k) < 0.0:
+            raise ValueError("sizing.auto_budget_min_k must be >= 0")
         return self
 
 

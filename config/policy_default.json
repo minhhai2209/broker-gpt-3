@@ -459,6 +459,15 @@
     // Max lots for the first non-partial NEW entry (caps initial size);
     // leftover redistribution or subsequent adds may increase later.
     "new_first_tranche_lots": 1,
+    // Auto budget: let engine compute daily BUY budget from risk-per-trade and stops
+    // Disabled by default; enable = 1 will ignore buy_budget_frac when allocating, then apply market_filter scaling.
+    "auto_budget_enable": 0,
+    // Hard cap for auto-computed budget as fraction of NAV (0..0.30)
+    "auto_budget_cap_frac": 0.20,
+    // Optional floor on total BUY notional (thousand VND); 0 disables
+    "auto_budget_min_k": 0.0,
+    // Computation mode: 'rpt' (aggregate risk-per-trade); future: 'vol_target'
+    "auto_budget_mode": "none",
     // Grid for calibrating mean-variance hyper-parameters (if enabled)
     "mean_variance_calibration": {
       "enable": 1,

@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from typing import Optional
 
 import pandas as pd
 
@@ -48,7 +49,7 @@ class TestCalibrateLiquidity(unittest.TestCase):
         cl.DEFAULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
         cl.DEFAULTS_PATH.write_text(json.dumps(payload), encoding='utf-8')
 
-    def _write_policy(self, *, new_max: int, min_liq: float | None = None, include_thresholds: bool = True):
+    def _write_policy(self, *, new_max: int, min_liq: Optional[float] = None, include_thresholds: bool = True):
         thresholds = {}
         if include_thresholds and min_liq is not None:
             thresholds['min_liq_norm'] = min_liq

@@ -3634,8 +3634,90 @@ def build_orders(
                 except Exception:
                     pass
 
-    # 2) Compute gross buy budget (base + optional reuse from sells)
-    target_gross_buy = float(regime.buy_budget_frac) * nav_reference
+    # 2) Compute gross buy budget
+    # Default: use configured buy_budget_frac. Optional: auto-budget from risk-per-trade.
+    target_gross_buy = float(regime.buy_budget_frac) * float(nav_reference)
+    auto_budget_used = False
+    try:
+        auto_enable = bool(int(sizing.get('auto_budget_enable', 0)))
+    except Exception:
+        auto_enable = False
+    if auto_enable and nav_reference > 0.0:
+        try:
+            mode = str(sizing.get('auto_budget_mode', 'rpt') or 'rpt').strip().lower()
+        except Exception:
+            mode = 'rpt'
+        try:
+            cap_frac = float(sizing.get('auto_budget_cap_frac', 0.20) or 0.20)
+        except Exception:
+            cap_frac = 0.20
+        try:
+            min_k_floor = float(sizing.get('auto_budget_min_k', 0.0) or 0.0)
+        except Exception:
+            min_k_floor = 0.0
+        rpt = float(sizing.get('risk_per_trade_frac', 0.0) or 0.0)
+        stop_mult = float(sizing.get('default_stop_atr_mult', 0.0) or 0.0)
+        if mode == 'rpt':
+            if rpt <= 0.0:
+                raise SystemExit("sizing.auto_budget_enable=1 requires sizing.risk_per_trade_frac > 0")
+            # Use post‑gate candidate list (ADD + NEW/NEW_PARTIAL)
+            cand = sorted(set([t for t, a in actions.items() if a in {"add","new","new_partial"}]))
+            total_k = 0.0
+            for t in cand:
+                # Estimate BUY limit for sizing; clamp to market if above.
+                if t not in snap.index:
+                    continue
+                s = snap.loc[t]
+                mrow = met.loc[t] if t in met.index else None
+                prow = pre.loc[t] if t in pre.index else None
+                limit_est = pick_limit_price(t, "BUY", s, prow, mrow, regime)
+                mkt_px = to_float(s.get("Price")) or to_float(s.get("P"))
+                if mkt_px is not None and limit_est > float(mkt_px) + 1e-9:
+                    limit_est = float(mkt_px)
+                px_k = float(limit_est)
+                if not math.isfinite(px_k) or px_k <= 0.0:
+                    continue
+                # Infer stop distance in thousand VND: max(default ATR-based, effective static SL when available)
+                atr_k = 0.0
+                if t in pre.index:
+                    av = to_float(pre.loc[t].get('ATR14'))
+                    if av is not None and av > 0:
+                        atr_k = float(av)
+                if (atr_k <= 0.0) and (t in met.index):
+                    ap = to_float(met.loc[t].get('ATR14_Pct'))
+                    if ap is not None and ap > 0:
+                        atr_k = float(ap) / 100.0 * float(px_k)
+                stop_dist_k = max(0.0, float(stop_mult) * float(atr_k))
+                eff = tp_sl_context.get(str(t).upper())
+                if eff and px_k > 0.0:
+                    sl_pct_eff = to_float(eff.get('sl_pct'))
+                    if sl_pct_eff is not None and float(sl_pct_eff) > 0.0:
+                        slv = float(sl_pct_eff)
+                        # Ignore extreme placeholders (>=50%) meaning "no static stop"
+                        if slv < 0.5:
+                            stop_dist_k = max(stop_dist_k, slv * float(px_k))
+                if stop_dist_k <= 0.0:
+                    # Skip tickers without stop estimate; fail-fast would be too strict here
+                    continue
+                allowed_risk_k = float(rpt) * float(nav_reference)
+                # Shares (float) = risk / stop_distance; Budget_k = shares * price
+                shares_f = allowed_risk_k / float(stop_dist_k)
+                if shares_f <= 0.0:
+                    continue
+                total_k += float(shares_f) * float(px_k)
+            cap_k = max(0.0, min(float(cap_frac) * float(nav_reference), float(nav_reference)))
+            auto_k = min(max(total_k, float(min_k_floor)), float(cap_k))
+            # Adopt auto budget if computed; else keep baseline
+            if auto_k > 0.0:
+                target_gross_buy = float(auto_k)
+                # Update base fraction for downstream reporting/scaling
+                try:
+                    regime.buy_budget_frac = float(target_gross_buy) / float(nav_reference)
+                except Exception:
+                    pass
+                auto_budget_used = True
+        # Future mode ('vol_target') can be added here
+    # Add optional reuse from sells
     if reuse_sell_proceeds_frac > 0.0 and expected_proceeds_k > 0.0:
         target_gross_buy += reuse_sell_proceeds_frac * expected_proceeds_k
 
