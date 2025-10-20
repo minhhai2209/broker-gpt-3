@@ -36,6 +36,7 @@ BASE_DIR = Path(__file__).resolve().parents[3]
 OUT_DIR = BASE_DIR / 'out'
 ORDERS_PATH = OUT_DIR / 'orders' / 'policy_overrides.json'
 CONFIG_PATH = BASE_DIR / 'config' / 'policy_overrides.json'
+DEFAULTS_PATH = BASE_DIR / 'config' / 'policy_default.json'
 
 
 def _strip_json_comments(text: str) -> str:
@@ -85,6 +86,28 @@ def _load_metrics() -> pd.DataFrame:
     return ser.to_frame(name='AvgTurnover20D_k')
 
 
+def _load_baseline_min_liq() -> float:
+    if not DEFAULTS_PATH.exists():
+        return 0.3
+    try:
+        raw = DEFAULTS_PATH.read_text(encoding='utf-8')
+        base = json.loads(_strip_json_comments(raw))
+        thresholds = (base.get('thresholds', {}) or {})
+        val = thresholds.get('min_liq_norm')
+        if val is not None:
+            return float(val)
+    except Exception:
+        pass
+    return 0.3
+
+
+def _coerce_float(val):
+    try:
+        return float(val)
+    except Exception:
+        return None
+
+
 def calibrate(write: bool = False) -> float:
     pol = _load_policy()
     targets = (pol.get('calibration_targets', {}) or {}).get('liquidity', {})
@@ -97,6 +120,11 @@ def calibrate(write: bool = False) -> float:
     if multiple <= 0:
         raise SystemExit('adtv_multiple must be > 0')
 
+    thresholds = (pol.get('thresholds', {}) or {})
+    fallback_min_liq = _coerce_float(thresholds.get('min_liq_norm'))
+    if fallback_min_liq is None:
+        fallback_min_liq = _load_baseline_min_liq()
+
     try:
         bb = float(pol['buy_budget_frac'])
         new_max = int(pol['new_max'])
@@ -105,7 +133,20 @@ def calibrate(write: bool = False) -> float:
     except Exception as exc:
         raise SystemExit(f'Missing or invalid policy fields for liquidity calibration: {exc}') from exc
     if new_max <= 0:
-        raise SystemExit('new_max must be >= 1 to calibrate min_liq_norm')
+        if write:
+            obj = dict(pol)
+            th = dict(thresholds)
+            existing = _coerce_float(th.get('min_liq_norm'))
+            if existing is None:
+                th['min_liq_norm'] = float(fallback_min_liq)
+                obj['thresholds'] = th
+                write_policy(
+                    calibrator=__name__,
+                    policy=obj,
+                    orders_path=ORDERS_PATH,
+                    config_path=CONFIG_PATH,
+                )
+        return float(fallback_min_liq)
     if not (0.0 < bb <= 0.30):
         raise SystemExit('buy_budget_frac must be in (0, 0.30]')
     if not (0.0 < new_share <= 1.0):
