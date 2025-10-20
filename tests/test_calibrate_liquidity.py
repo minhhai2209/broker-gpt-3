@@ -77,6 +77,14 @@ class TestCalibrateLiquidity(unittest.TestCase):
         result = cl.calibrate(write=False)
         self.assertEqual(result, 0.44)
 
+    def test_new_max_zero_with_existing_threshold_writes_policy(self):
+        self._write_policy(new_max=0, min_liq=0.44)
+        result = cl.calibrate(write=True)
+        self.assertEqual(result, 0.44)
+        config = json.loads(cl.CONFIG_PATH.read_text(encoding='utf-8'))
+        thresholds = config.get('thresholds', {})
+        self.assertAlmostEqual(float(thresholds['min_liq_norm']), 0.44)
+
     def test_new_max_zero_without_threshold_falls_back_to_baseline(self):
         self._write_policy(new_max=0, include_thresholds=False)
         result = cl.calibrate(write=True)
@@ -84,6 +92,21 @@ class TestCalibrateLiquidity(unittest.TestCase):
         config = json.loads(cl.CONFIG_PATH.read_text(encoding='utf-8'))
         thresholds = config.get('thresholds', {})
         self.assertAlmostEqual(float(thresholds['min_liq_norm']), 0.31)
+
+    def test_new_max_zero_prefers_orders_runtime_when_present(self):
+        payload = {
+            'buy_budget_frac': 0.10,
+            'new_max': 0,
+            'sizing': {'new_share': 0.5},
+            'calibration_targets': {'liquidity': {'adtv_multiple': 20}},
+            'thresholds': {'min_liq_norm': 0.52},
+        }
+        cl.ORDERS_PATH.write_text(json.dumps(payload), encoding='utf-8')
+        result = cl.calibrate(write=True)
+        self.assertAlmostEqual(result, 0.52)
+        runtime = json.loads(cl.ORDERS_PATH.read_text(encoding='utf-8'))
+        thresholds = runtime.get('thresholds', {})
+        self.assertAlmostEqual(float(thresholds['min_liq_norm']), 0.52)
 
 
 if __name__ == '__main__':

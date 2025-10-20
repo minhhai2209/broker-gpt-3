@@ -137,15 +137,15 @@ def calibrate(write: bool = False) -> float:
             obj = dict(pol)
             th = dict(thresholds)
             existing = _coerce_float(th.get('min_liq_norm'))
-            if existing is None:
-                th['min_liq_norm'] = float(fallback_min_liq)
-                obj['thresholds'] = th
-                write_policy(
-                    calibrator=__name__,
-                    policy=obj,
-                    orders_path=ORDERS_PATH,
-                    config_path=CONFIG_PATH,
-                )
+            floor = float(existing if existing is not None else fallback_min_liq)
+            th['min_liq_norm'] = floor
+            obj['thresholds'] = th
+            write_policy(
+                calibrator=__name__,
+                policy=obj,
+                orders_path=ORDERS_PATH,
+                config_path=CONFIG_PATH,
+            )
         return float(fallback_min_liq)
     if not (0.0 < bb <= 0.30):
         raise SystemExit('buy_budget_frac must be in (0, 0.30]')
