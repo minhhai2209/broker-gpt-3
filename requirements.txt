@@ -1,26 +1,6 @@
-# Core data + IO
 pandas>=2.0
 numpy>=1.25
 requests>=2.31
-openpyxl>=3.1
-openai>=1.40.0
 Flask>=3.0
 Flask-Cors>=4.0
-
-# Config schema validation
-pydantic>=2.7
-
-# Test coverage
-coverage>=7.6
-
-# Technical analysis: implemented via local indicators (no external TA lib)
-
-# Web automation & parsing for fundamentals crawler
-playwright>=1.55
-beautifulsoup4>=4.13
-
-# (Playwright binary download handled via `playwright install` when needed)
-
-# (news/read_url removed in refactor)
 PyYAML>=6.0
-lightgbm>=4.3.0

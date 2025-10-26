@@ -1,170 +1,132 @@
-Broker GPT — Giới thiệu & Sử dụng
+# Broker GPT Data Engine
 
-Lưu ý: Đây không phải lời khuyên đầu tư. Công cụ chỉ hỗ trợ ra quyết định có kỷ luật cho thị trường Việt Nam.
+> Công cụ này không đưa ra lời khuyên đầu tư. Nó chỉ thu thập dữ liệu giá, tính toán chỉ số kỹ thuật và ghi lại kết quả để bạn ra quyết định thủ công.
 
-Phạm vi & giả định
-- Engine mặc định tối ưu cho rổ VN100 (HOSE) và giả định danh mục hiện có ít nhất 1 mã HOSE. Nếu danh mục trống hoặc chứa mã ngoài HOSE, cần cập nhật dữ liệu/luật giao dịch trước khi dùng.
+## Tổng quan
 
-Mục tiêu README
-- Tập trung vào giới thiệu repo và cách sử dụng nhanh. Toàn bộ kiến trúc, thuật toán, calibrations… được trình bày chi tiết tại SYSTEM_DESIGN.md.
+Data engine được thiết kế lại để làm đúng một việc: chuẩn bị dữ liệu sạch cho ChatGPT (hoặc bất kỳ công cụ phân tích nào khác) sử dụng. Mỗi lần chạy engine sẽ:
 
-Yêu cầu hệ thống
-- Python 3.10+ (khuyến nghị 3.11)
-- macOS/Linux/WSL (terminal)
-- (Chỉ cho lệnh `tune`/`policy`) Node.js 18+ với npm để cài Codex CLI
+1. Thu thập dữ liệu lịch sử và intraday cho toàn bộ vũ trụ mã.
+2. Tính toán sẵn các chỉ báo kỹ thuật cơ bản và ghi vào một file CSV duy nhất (`out/market/technical_snapshot.csv`).
+3. Tính toán các mức giá mua/bán theo từng preset và xuất thành từng file CSV riêng (`out/presets/<preset>.csv`).
+4. Đọc danh mục hiện có của từng tài khoản, cập nhật lãi/lỗ theo mã và theo ngành vào `out/portfolios/*.csv`.
+5. Giữ nguyên lịch sử khớp lệnh dạng CSV trong `data/order_history/` (không xoá).
 
-Cài đặt
+Không còn bước tạo lệnh tự động, không còn phụ thuộc Vietstock, không còn overlay policy. Bạn chủ động đọc các file CSV và đưa ra quyết định.
+
+## Chuẩn bị môi trường
+
+- Python 3.10 trở lên.
+- macOS, Linux hoặc WSL đều chạy được.
+- Khuyến nghị tạo virtualenv trước khi chạy.
+
 ```bash
-python -m venv venv && source venv/bin/activate
+python -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-- Nếu dự định dùng `tune`/`policy`: chạy thêm `npm install` (một lần) để bootstrap Codex CLI và cấu hình `~/.codex/config.toml` qua postinstall.
+## Cấu hình engine
 
-Ghi chú Codex CLI (cho `tune`/`policy`)
-- Repo khai báo `@openai/codex` và có script postinstall (`scripts/postinstall-codex-global.js`). Khi chạy `npm install`:
-  - Kiểm tra/cài Codex CLI toàn cục (`npm install -g @openai/codex@latest`), fallback `NPM_CONFIG_PREFIX=$HOME/.npm-global` nếu cần.
-  - Sao chép `.codex/config.toml` từ repo → `~/.codex/config.toml` và đặt quyền `0600`.
-  - Thiếu `.codex/config.toml` trong repo → in `::error::` và thoát `exit 2` (fail‑fast, phù hợp CI policy).
-  - Nếu biến `CODEX_AUTH_JSON` có mặt, ghi `~/.codex/auth.json` (0600). Nếu job bắt buộc auth mà thiếu biến này, CI step sẽ fail.
-- Tuner yêu cầu `codex` có trên PATH; nếu không có sau postinstall, script sẽ fail‑fast và in hướng dẫn bổ sung `PATH`.
-- Không còn biến môi trường để chọn “reasoning effort” hay số vòng phân tích cho Codex: hệ thống mặc định `reasoning_effort=high` và 1 vòng (ổn định, dễ tái lập).
-- Nếu chạy cục bộ mà thiếu Node/npm, các lệnh cần Codex sẽ fail‑fast; cài Node.js (>=18) rồi chạy `npm install` một lần để bootstrap.
+File chính: `config/data_engine.yaml`
 
-Chuẩn bị danh mục (inputs)
-- Thư mục: `in/portfolio/`
-- Hỗ trợ 1 hoặc nhiều CSV cùng schema cơ bản:
-  - `Ticker,Quantity,AvgCost` (đơn vị `AvgCost` là nghìn đồng/cp)
-- Tự chuẩn hoá mã (upper/strip, loại kí tự phụ như `*`). Nhiều file sẽ được hợp nhất theo mã (cộng `Quantity`, bình quân gia quyền `AvgCost`).
-- Tạo nhanh từ mẫu:
-```bash
-mkdir -p in/portfolio
-cp samples/portfolio.csv in/portfolio/portfolio.csv
+```yaml
+universe:
+  csv: data/industry_map.csv    # Danh sách mã + sector
+technical_indicators:
+  moving_averages: [20, 50, 200]
+  rsi_periods: [14]
+  atr_periods: [14]
+  macd:
+    fast: 12
+    slow: 26
+    signal: 9
+presets:
+  balanced:
+    buy_tiers: [-0.03, -0.02, -0.01]
+    sell_tiers: [0.02, 0.04, 0.06]
+portfolio:
+  directory: data/portfolios     # Mỗi tài khoản 1 CSV: Ticker,Quantity,AvgPrice
+  order_history_directory: data/order_history
+output:
+  base_dir: out
+  market_snapshot: market/technical_snapshot.csv
+  presets_dir: presets
+  portfolios_dir: portfolios
 ```
 
-Chạy nhanh (tạo lệnh)
-- Lệnh mặc định: `./broker.sh` (tương đương `./broker.sh orders`).
-- Script sẽ dựng pipeline cần thiết và xuất kết quả vào `out/`.
+Bạn có thể chỉnh preset (tỷ lệ ± so với giá hiện tại), đường dẫn output hoặc bổ sung chỉ báo tuỳ nhu cầu.
 
-Kết quả chính (out/)
-- `out/orders/orders_final.csv` — file để nhập lệnh: `Ticker,Side,Quantity,LimitPrice` (BUY trước SELL; chỉ 4 cột tối giản).
-- `out/orders/orders_watchlist.csv` — các lệnh BUY bị đẩy ra watchlist do tín hiệu/yếu tố vi mô.
-- `out/orders/orders_quality.csv` — bảng tham chiếu giàu thông tin (MarketPrice, FillProb, FillRateExp, ExpR, Priority, TTL_Min, SlipBps/Pct, Signal, LimitLock, Notes).
-- `out/portfolio_evaluation.txt|.csv` — đánh giá danh mục: phân bổ ngành, HHI/top‑N, thanh khoản, ATR%/Beta.
-- Các file hỗ trợ khác có thể xuất hiện: `orders_print.txt`, `orders_reasoning.csv`, `orders_analysis.txt`, `trade_suggestions.txt`.
+## Cách chạy
 
-Lệnh tiện ích
-- `./broker.sh orders` — chạy Order Engine (mặc định).
-- `./broker.sh tests` — chạy test; bật coverage: `BROKER_COVERAGE=1 ./broker.sh tests`.
-- `./broker.sh tune` — chạy calibrators + AI (Codex). Kết quả hợp nhất ghi `out/orders/policy_overrides.json` và được publish sang `config/policy_overrides.json` (tuner copy) để phục vụ audit/rollback.
-  - Calibrators đáng chú ý: `calibrate_ticker_stops.py` tự động đặt `ticker_overrides` (SL động theo trend & ATR) cho từng mã; có hiệu lực dài hạn và được engine áp dụng khi tính TP/SL.
-- `./broker.sh server` — chạy API server cục bộ (Flask) phục vụ extension/ứng dụng (mặc định `PORT=8787`). Server KHÔNG có cron/scheduler nội bộ; việc refresh policy do GitHub Actions hoặc lệnh `./broker.sh policy` thực hiện.
-- `python scripts/data_fetching/run_data_jobs.py --group nightly` — chạy toàn bộ nhóm collector chạy đêm (Vietstock fundamentals/events, global factors). Dùng `--dry-run` để kiểm tra config mà không gọi mạng. Log từng job nằm tại `out/logs/data_jobs/<group>/`.
-- `python scripts/data_fetching/run_data_jobs.py --job collect_global_factors` (hoặc `collect_vietstock_fundamentals`, `collect_vietstock_events`) — chạy riêng từng collector khi muốn refresh cục bộ mà không ảnh hưởng job khác.
+### Engine
 
-Phân loại collector dữ liệu:
-- Nightly (chạy đêm, lâu): cấu hình trong `config/data_jobs.json` nhóm `nightly` gồm Vietstock fundamentals/events và global factors. Các job hỗ trợ chạy song song khi được đánh dấu `allow_parallel=true`, còn Playwright job vẫn chạy tuần tự để tránh tranh chấp trình duyệt.
-- Real-time (chạy nhanh trong phiên): nhóm `real_time` hiện tại chỉ bao gồm `ensure_intraday_latest` để cập nhật snapshot phút. Có thể gọi `python scripts/data_fetching/run_data_jobs.py --group real_time` khi cần refresh tức thời (ví dụ sau giờ nghỉ trưa).
-- Script tiện ích `scripts/data_fetching/run_collect_all.sh` chỉ là wrapper gọi lần lượt hai nhóm trên; có thể dùng cho cron đơn giản nhưng khuyến nghị dùng trực tiếp `run_data_jobs.py` hoặc `--job` để kiểm soát nhóm/concurrency.
-- GitHub Actions tách riêng theo dataset: `Data - Global Factors`, `Data - Vietstock Fundamentals`, `Data - Vietstock Events` (lần lượt chạy `--job` tương ứng sau khi thiết lập Playwright/phụ thuộc). Các workflow này được cron sau giờ đóng cửa HOSE và upload artefact CSV/log để kiểm tra nhanh.
+```bash
+./broker.sh             # tương đương ./broker.sh engine
+```
 
-Curated bias (dài hạn, cập nhật thủ công)
-- File: `config/policy_curated_overrides.json` (đã được engine merge tự động ở runtime, sau baseline và các overlay khác).
-- Chỉ nên khai báo `ticker_bias` (map `{ "TICKER": bias }`, bias ∈ [-0.20..0.20]).
-- Nếu không muốn ảnh hưởng logic hạ EXIT→TRIM khi gãy MA50 + RSI thấp, giữ bias < 0.05 (ngưỡng `thresholds.tilt_exit_downgrade_min`).
-- TUYỆT ĐỐI không sửa tay `config/policy_overrides.json`; dùng file này cho phần curated lâu dài (bạn có thể cập nhật mỗi tuần).
+Engine sẽ:
 
-Curated signals (điều kiện giá dài hạn, dùng tự động mỗi lần chạy)
-- Nguồn dữ liệu: `data/curated_signals.json` — lưu Pullback/Breakout/Stop theo từng mã, cập nhật hàng tuần.
-- Khi chạy `./broker.sh orders`, engine build snapshot → `scripts/curated/emit_curated_patch.py` đọc file này và sinh `out/orders/patch_tune.json`.
-- Quy tắc mặc định:
-  - Pullback → bias +0.06; Breakout → bias +0.08; ngoài vùng: Tier A +0.02, Tier B +0.01 (đều clamp [-0.20..0.20]).
-  - Patch có TTL hết ngày; thông tin gốc vẫn lưu dài hạn trong `data/curated_signals.json`.
-  - Đường xử lý riêng: patch còn đính kèm `gate.curated` và `force=buy`, engine sẽ ưu tiên giữ slot NEW/ADD cho các mã curated khi cắt top‑N (nếu đang nắm giữ → ADD; chưa nắm → NEW), vẫn tôn trọng guard tổng.
+- Gọi API VNDIRECT để cập nhật giá lịch sử + intraday.
+- Tính SMA/RSI/ATR/MACD theo cấu hình.
+- Xuất các file CSV đã nêu ở trên.
 
-Curated bias (dài hạn, cập nhật thủ công)
-- File: `config/policy_curated_overrides.json` (đã được engine merge tự động ở runtime, sau baseline và các overlay khác).
-- Chỉ nên khai báo `ticker_bias` (map `{ "TICKER": bias }`, bias ∈ [-0.20..0.20]).
-- Nếu không muốn ảnh hưởng logic hạ EXIT→TRIM khi gãy MA50 + RSI thấp, giữ bias < 0.05 (ngưỡng `thresholds.tilt_exit_downgrade_min`).
-- TUYỆT ĐỐI không sửa tay `config/policy_overrides.json`; dùng file này cho phần curated lâu dài (bạn có thể cập nhật mỗi tuần).
+### Server upload
 
-Curated signals (điều kiện giá dài hạn, dùng tự động mỗi lần chạy)
-- Nguồn dữ liệu: `data/curated_signals.json` — lưu đủ Pullback/Breakout/Stop theo từng mã, cập nhật hàng tuần.
-- Khi chạy `./broker.sh orders`, engine đọc snapshot giá hiện tại rồi tự sinh patch runtime `out/orders/patch_tune.json` từ file này (via `scripts/curated/emit_curated_patch.py`).
-- Quy tắc mặc định:
-  - Giá trong vùng Pullback → cộng bias +0.06 cho mã đó (ưu tiên “gom thêm”).
-  - Giá breakout qua ngưỡng → cộng bias +0.08.
-  - Ngược lại bias nền theo Tier (A: +0.02, B: +0.01). Tất cả đều bị clamp trong [-0.20..0.20].
-  - Patch có TTL hết ngày; thông tin gốc vẫn lưu dài hạn trong `data/curated_signals.json`.
+Server Flask nhỏ cho phép cập nhật danh mục qua HTTP.
 
-  
+```bash
+./broker.sh server
+```
 
-Diagnostics & calibrations
-- Chi tiết về mô hình chi phí giao dịch, slippage, xác suất khớp (FillProb/FillRateExp), LimitLock, và cơ chế hiệu chỉnh TTL theo biến động thị trường được tài liệu hóa tại `SYSTEM_DESIGN.md` (mục Calibrations & Execution Diagnostics).
+- Endpoint duy nhất: `POST /upload`
+- JSON body ví dụ:
 
-API server (tùy chọn)
-- Chạy: `./broker.sh server` → http://localhost:8787
-- Endpoint chính:
-  - `GET /health` — kiểm tra sống.
-  - `POST /portfolio/reset` — xoá các CSV trong `in/portfolio/`.
-  - `POST /portfolio/upload` — nạp 1 CSV (JSON body: `{name, content}`).
-  - `POST /done` — chạy `./broker.sh orders` trên các CSV đã upload và trả về danh sách file đầu vào/đầu ra cùng log thực thi.
-- Ghi chú: server chỉ ghi file vào `in/portfolio/` cục bộ và chạy pipeline ngay trong process; không còn bước commit/push hoặc thư mục `runs/`. Policy vẫn được refresh riêng qua `./broker.sh policy` hoặc CI trên nhánh `main`.
+```json
+{
+  "profile": "alpha",
+  "portfolio": [
+    {"Ticker": "AAA", "Quantity": 1000, "AvgPrice": 13.2}
+  ],
+  "fills": [
+    {"timestamp": "2024-07-01T09:00:00+07:00", "ticker": "AAA", "side": "BUY", "quantity": 1000, "price": 13.2}
+  ]
+}
+```
 
-Môi trường (env)
-- Repo loại bỏ hầu hết biến môi trường “hành vi”. Mặc định chỉ còn:
-  - `PORT` (server): cổng HTTP, mặc định 8787.
-  - Các biến cấu hình CI riêng cho workflow AI (ví dụ `BROKER_CX_GEN_ROUNDS`) không ảnh hưởng hành vi engine.
+Server sẽ ghi `data/portfolios/alpha.csv` (ghi đè) và thêm lịch sử vào `data/order_history/alpha_fills.csv`.
 
-Policy & cấu hình
-- Baseline: `config/policy_default.json` (nguồn sự thật, cố định; không bị workflow ghi đè).
-- Overlays: `config/policy_nightly_overrides.json` (tuỳ chọn, do calibrators sinh; commit riêng) và unified overlay `config/policy_overrides.json` (hiện hành, do tuner publish).
-- ❗ `config/policy_overrides.json` là artefact được sinh tự động sau mỗi lần tune/calibration. Không chỉnh tay, không tạo PR chỉnh tay, và không yêu cầu agent sửa trực tiếp file này — mọi thay đổi sẽ bị lần tune kế tiếp ghi đè và phá vỡ audit trail. Muốn thay đổi hành vi, cập nhật baseline/overlays hợp lệ hoặc chạy lại pipeline.
-- Back‑compat: `config/policy_ai_overrides.json` trước đây do tuner sinh; hiện không còn được tạo mặc định, nhưng nếu tồn tại engine vẫn merge.
-- Runtime merge: engine hợp nhất baseline → nightly (nếu có) → ai (nếu có) → `config/policy_overrides.json` (legacy) và ghi policy runtime vào `out/orders/policy_overrides.json`. Khi publish trên nhánh `main`, CI giữ `config/policy_overrides.json` làm bản audit.
- - Machine‑generated snapshot: `out/orders/policy_overrides.json` được sinh tự động cho mỗi lần chạy/tune và có trường `"_meta"` như:
-   `{ "_meta": { "machine_generated": true, "generated_by": "broker-gpt runtime merge", "generated_at": "..." }, ... }`.
-  Không chỉnh tay file này — mọi chỉnh sửa sẽ bị ghi đè. Thay vào đó, cập nhật các overlay trong `config/`.
+### Kiểm thử
 
-Slim runtime (policy cleanup)
-- Từ 2025‑10‑16, runtime policy được “làm gọn” khi ghi ra `out/orders/policy_overrides.json`:
-  - Remove: `calibration`, `thresholds_profiles`, `execution.filter_buy_limit_gt_market`, `execution.fill`.
-  - Keep: `thresholds.tp_pct`, `thresholds.sl_pct` luôn hiện diện để hỗ trợ calibrations (engine có thể bỏ qua khi ở chế độ ATR‑dynamic).
-  - KEEP: `features.normalization_robust`, `pricing.tc_sell_tax_frac`, `market_bias`, `global_tilts` (được engine dùng runtime).
-- Baseline vẫn giữ `tp_pct`/`sl_pct`=0.0 cho tương thích test/schema; chúng được strip ở runtime khi đủ điều kiện.
-- Engine luôn kẹp (clamp) BUY Limit xuống Market nếu Limit>Market; không còn filter lệnh tại bước này.
+```bash
+./broker.sh tests
+```
 
-Market filter (VNINDEX)
-- Từ 2025-10-16, baseline đặt `market_filter.guard_behavior = "scale_only"`:
-  - `scale_only`: không lọc bỏ BUY khi tape yếu thông thường; chỉ co ngân sách bằng các cap (`guard_new_scale_cap`, `atr_soft_scale_cap`) và thang theo `market_score`. Các điều kiện “hard/severe” vẫn đóng băng mua (scale → 0).
-  - `pause` (legacy): tạm dừng NEW và hoãn ADD khi guard kích hoạt; chỉ cho phép một số NEW dạng leader-bypass.
-- Cách đổi hành vi hợp lệ:
-  - Dài hạn: sửa `config/policy_default.json` → `market_filter.guard_behavior` thành `"pause"` hoặc `"scale_only"`, kèm PR cập nhật `SYSTEM_DESIGN.md` (bắt buộc). Không sửa tay `config/policy_overrides.json`.
-  - Ngắn hạn (1 phiên): nếu cần “dừng NEW”, tạo patch runtime `out/orders/patch_tune.json` với:
-    ```json
-    {"meta": {"ttl": "<ISO8601>"}, "exec": {"event_pause_new": 1}}
-    ```
-    Patch này không thay `guard_behavior` mà chỉ chặn NEW trong phiên, đúng theo engine hỗ trợ runtime.
+Test bao gồm:
+- Bảo đảm engine sinh đầy đủ output khi dùng nguồn dữ liệu giả lập.
+- Xác thực API `/upload` lưu danh mục và lịch sử khớp lệnh đúng.
 
-Auto Budget (tùy chọn)
-- Mục tiêu: để engine tự tính ngân sách BUY trong ngày mà không cần `buy_budget_frac` cố định.
-- Bật bằng cách đặt trong baseline hoặc patch runtime (DEV cục bộ):
-  - `sizing.auto_budget_enable = 1`
-  - `sizing.auto_budget_mode = 'rpt'` (aggregate theo risk‑per‑trade)
-  - Dùng các khóa đã có để định rủi ro: `sizing.risk_per_trade_frac` và `sizing.default_stop_atr_mult` (hoặc SL% hiệu dụng từ ATR/thresholds).
-- Công thức (tóm tắt): với mỗi mã ứng viên, ước lượng khoảng dừng `stop_dist_k` (nghìn đồng/cp). Ngân sách thô cho mã ≈ `(risk_per_trade_frac * NAV) / stop_dist_k * Price`. Tổng ngân sách là tổng các mã, kẹp trần bởi `sizing.auto_budget_cap_frac * NAV` và đáy `sizing.auto_budget_min_k`.
-- Engine vẫn áp dụng các cap vị thế/ngành, ADTV và “market filter scaling” ở bước sau. Mặc định tắt (giữ hành vi `buy_budget_frac`).
+## Output chính
 
-FAQ (ngắn)
-- Vì sao giá đặt trong file lệnh đôi khi bằng giá thị trường? Trong phiên (bao gồm nghỉ trưa), nếu BUY có `LimitPrice` > giá thị trường, hệ thống kẹp về giá thị trường; SELL nếu `LimitPrice` < giá thị trường cũng kẹp về giá thị trường. Quy tắc này chỉ áp ở lớp xuất lệnh, không thay đổi khái niệm “in‑session” ở các module khác.
+| File | Ý nghĩa |
+| ---- | ------- |
+| `out/market/technical_snapshot.csv` | Bảng tổng hợp theo mã: giá hiện tại, thay đổi %, SMA/RSI/ATR/MACD, sector |
+| `out/presets/<preset>.csv` | Mỗi preset một file; chứa giá mua/bán theo từng bậc |
+| `out/portfolios/<profile>_positions.csv` | Phân tích lãi/lỗ theo mã cho danh mục `profile` |
+| `out/portfolios/<profile>_sector.csv` | Tổng hợp lãi/lỗ theo ngành |
+| `data/order_history/<profile>_fills.csv` | Lịch sử khớp lệnh (luỹ kế) |
 
-Tài liệu chi tiết
-- Kiến trúc, pipeline, nhận diện market regime, thuật toán quyết định lệnh, calibrations, chi tiết merge policy: xem `SYSTEM_DESIGN.md`.
+## GitHub Actions
 
-FAQ nhanh / khắc phục sự cố
-- Danh mục rỗng hoặc sai đơn vị giá vốn → kiểm tra `in/portfolio/*.csv` (AvgCost tính theo nghìn đồng/cp), xem `out/portfolio_clean.csv` để xác nhận ingest.
-- Thiếu dữ liệu lịch sử → chạy lại `./broker.sh orders` (engine tự dựng cache trong `out/data/`).
-- Muốn audit thêm lý do/điểm số → xem `out/orders/orders_reasoning.csv` và `out/orders/orders_quality.csv`.
+Repo chỉ còn một workflow: `.github/workflows/data-engine.yml`. Workflow này chạy 10 phút/lần và luôn có thể kích hoạt thủ công (`workflow_dispatch`). Sau khi engine hoàn tất, workflow sẽ commit và push trực tiếp các thư mục `out/market`, `out/presets`, `out/portfolios`, `out/diagnostics` cùng với `data/order_history` vào nhánh hiện hành (nếu có thay đổi).
 
-Góp ý & đóng góp
-- Mở issue/PR nếu phát hiện lỗi tài liệu/UX; nội dung chuyên sâu xin bổ sung vào `SYSTEM_DESIGN.md` để tránh lặp lại trong README.
+## Hỏi nhanh
+
+**Có cần sửa danh mục thủ công?** — Có. Mỗi tài khoản là một CSV trong `data/portfolios/`. Engine chỉ đọc và ghi báo cáo, không can thiệp vào file gốc.
+
+**Lịch sử khớp lệnh lưu ở đâu?** — Luôn append vào `data/order_history/<profile>_fills.csv`. Engine không xoá.
+
+**Muốn thêm chỉ báo mới?** — Bổ sung vào `scripts/indicators/` hoặc tính trực tiếp trong `scripts/engine/data_engine.py`, sau đó khai báo trong `config/data_engine.yaml` nếu cần tham số.
+
+**Có còn chính sách/overlay?** — Không. Engine không sinh lệnh nên mọi cấu hình policy trước đây đã bị loại bỏ.
+

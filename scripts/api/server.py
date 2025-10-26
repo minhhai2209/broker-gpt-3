@@ -1,169 +1,119 @@
+"""Minimal API for uploading account portfolios."""
 from __future__ import annotations
 
+import logging
 import os
-import subprocess
-import threading
-import time
-from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, Optional
 
+import pandas as pd
 from flask import Flask, jsonify, make_response, request
 from flask_cors import CORS
 
-BASE_DIR = Path(__file__).resolve().parents[2]
-IN_PORTFOLIO_DIR = BASE_DIR / 'in' / 'portfolio'
-OUT_DIR = BASE_DIR / 'out'
+from scripts.engine.data_engine import EngineConfig
 
-"""Note: The server exposes only on-demand endpoints.
-All scheduling/automation is handled by GitHub Actions.
-"""
+LOGGER = logging.getLogger(__name__)
 
 
-@dataclass
-class PolicyRunRecord:
-    started_at: datetime
-    finished_at: datetime
-    scheduled_for: Optional[datetime]
-    trigger: str
-    ok: bool
-    out: str
-
-    def to_api(self) -> Dict[str, Any]:
-        return {
-            'ok': self.ok,
-            'out': self.out,
-            'trigger': self.trigger,
-            'started_at': self.started_at.isoformat(),
-            'finished_at': self.finished_at.isoformat(),
-            'scheduled_for': self.scheduled_for.isoformat() if self.scheduled_for else None,
-        }
+def _create_response(payload: Dict[str, object], status: int = 200):
+    resp = make_response(jsonify(payload), status)
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
-# No background scheduler: policy refresh is handled via GitHub Actions or
-# explicit CLI (`./broker.sh policy`).
+class PortfolioStorage:
+    """Handle persistence of portfolios and order history per profile."""
+
+    def __init__(self, portfolio_dir: Path, order_history_dir: Path) -> None:
+        self._portfolio_dir = portfolio_dir
+        self._order_history_dir = order_history_dir
+        self._portfolio_dir.mkdir(parents=True, exist_ok=True)
+        self._order_history_dir.mkdir(parents=True, exist_ok=True)
+
+    def save_portfolio(self, profile: str, rows: list[dict]) -> Path:
+        if not rows:
+            raise ValueError("portfolio list is empty")
+        df = pd.DataFrame(rows)
+        required = {"Ticker", "Quantity", "AvgPrice"}
+        if not required.issubset(df.columns):
+            missing = required - set(df.columns)
+            raise ValueError(f"missing columns in portfolio: {sorted(missing)}")
+        df["Ticker"] = df["Ticker"].astype(str).str.upper()
+        df["Quantity"] = pd.to_numeric(df["Quantity"], errors="coerce").fillna(0.0)
+        df["AvgPrice"] = pd.to_numeric(df["AvgPrice"], errors="coerce").fillna(0.0)
+        path = self._portfolio_dir / f"{profile}.csv"
+        df.to_csv(path, index=False)
+        return path
+
+    def append_fills(self, profile: str, rows: list[dict]) -> Optional[Path]:
+        if not rows:
+            return None
+        df = pd.DataFrame(rows)
+        if df.empty:
+            return None
+        if "timestamp" not in df.columns:
+            df["timestamp"] = datetime.now(timezone.utc).isoformat()
+        df["timestamp"] = df["timestamp"].astype(str)
+        df["ticker"] = df.get("ticker", df.get("Ticker", "")).astype(str).str.upper()
+        df["side"] = df.get("side", "").astype(str).str.upper()
+        df["quantity"] = pd.to_numeric(df.get("quantity", df.get("Quantity", 0.0)), errors="coerce").fillna(0.0)
+        df["price"] = pd.to_numeric(df.get("price", df.get("Price", 0.0)), errors="coerce").fillna(0.0)
+        path = self._order_history_dir / f"{profile}_fills.csv"
+        header = not path.exists()
+        df.to_csv(path, mode="a", index=False, header=header)
+        return path
 
 
-def _resp(data: Dict[str, Any], status: int = 200):
-    r = make_response(jsonify(data), status)
-    r.headers['Cache-Control'] = 'no-store'
-    return r
+def create_app(config_path: Optional[Path] = None) -> Flask:
+    logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
+    cfg_path = config_path or Path(os.environ.get("DATA_ENGINE_CONFIG", "config/data_engine.yaml"))
+    engine_cfg = EngineConfig.from_yaml(cfg_path)
+    storage = PortfolioStorage(engine_cfg.portfolio_dir, engine_cfg.order_history_dir)
 
-
-def ensure_dirs():
-    IN_PORTFOLIO_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def reset_portfolio() -> Dict[str, Any]:
-    ensure_dirs()
-    removed: List[str] = []
-    for p in IN_PORTFOLIO_DIR.iterdir():
-        if p.is_file() and not p.name.startswith('.'):
-            p.unlink(missing_ok=True)
-            removed.append(p.name)
-    return {"status": "ok", "removed": removed}
-
-
-def write_csv_exact(name: str, content_text: str) -> Dict[str, Any]:
-    ensure_dirs()
-    safe = ''.join(ch for ch in (name or '') if ch.isalnum() or ch in ('-', '_')).strip('_')
-    if not safe:
-        safe = f"pf_{int(time.time())}"
-    dest = IN_PORTFOLIO_DIR / f"{safe}.csv"
-    data = content_text.encode('utf-8')
-    with dest.open('wb') as f:
-        f.write(data)
-    return {
-        "status": "ok",
-        "saved": str(dest.relative_to(BASE_DIR)),
-        "bytes": len(data),
-    }
-
-
-def run_cmd(cmd: list[str]) -> Dict[str, Any]:
-    print(f"[srv] $ {' '.join(cmd)}", flush=True)
-    out_lines: list[str] = []
-    proc = subprocess.Popen(
-        cmd,
-        cwd=str(BASE_DIR),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-    )
-    assert proc.stdout is not None
-    for line in proc.stdout:
-        print(line, end='')
-        out_lines.append(line)
-    rc = proc.wait()
-    ok = (rc == 0)
-    return {"ok": ok, "out": ''.join(out_lines)}
-def finalize_and_run() -> Dict[str, Any]:
-    """Run the order pipeline on the uploaded portfolio files."""
-    ensure_dirs()
-    files: List[Path] = [p for p in IN_PORTFOLIO_DIR.glob('*.csv') if p.is_file()]
-    if not files:
-        return {
-            "status": "error",
-            "error": "no_files",
-            "hint": f"No CSV files found in {str(IN_PORTFOLIO_DIR.relative_to(BASE_DIR))}",
-        }
-    result = run_cmd(['bash', 'broker.sh', 'orders'])
-    ok = bool(result.get('ok'))
-    orders_dir = OUT_DIR / 'orders'
-    outputs: List[str] = []
-    if ok and orders_dir.exists():
-        outputs = [str(p.relative_to(BASE_DIR)) for p in sorted(orders_dir.glob('*')) if p.is_file()]
-    return {
-        "status": "ok" if ok else "error",
-        "inputs": [str(p.relative_to(BASE_DIR)) for p in sorted(files)],
-        "outputs": outputs,
-        "run": result,
-    }
-
-
-def create_app() -> Flask:
     app = Flask(__name__)
     CORS(app)
 
-    @app.route('/health', methods=['GET'])
-    def health():
-        return _resp({"status": "ok", "ts": datetime.utcnow().isoformat() + 'Z'})
-
-    @app.route('/portfolio/reset', methods=['POST', 'OPTIONS'])
-    def api_reset():
-        if request.method == 'OPTIONS':
-            return _resp({"ok": True})
-        return _resp(reset_portfolio())
-
-    @app.route('/portfolio/upload', methods=['POST', 'OPTIONS'])
-    def api_upload():
-        if request.method == 'OPTIONS':
-            return _resp({"ok": True})
-        js = request.get_json(force=True, silent=True)
-        if js is None:
-            return _resp({"status": "error", "error": "invalid_json", "hint": "expect {name, content}"}, 400)
-        if not isinstance(js, dict):
-            return _resp({"status": "error", "error": "json_schema"}, 400)
-        name = js.get('name')
-        content = js.get('content')
-        if not isinstance(name, str) or not isinstance(content, str):
-            return _resp({"status": "error", "error": "json_schema", "hint": "name:string, content:string"}, 400)
-        return _resp(write_csv_exact(name, content))
-
-    @app.route('/done', methods=['POST', 'OPTIONS'])
-    def api_done():
-        if request.method == 'OPTIONS':
-            return _resp({"ok": True})
-        # Determine skip_policy from query param or env BROKER_SKIP_POLICY
-        return _resp(finalize_and_run())
+    @app.post("/upload")
+    def upload():
+        payload = request.get_json(force=True, silent=True)
+        if not isinstance(payload, dict):
+            return _create_response({"status": "error", "error": "invalid_json"}, 400)
+        profile = str(payload.get("profile", "")).strip()
+        if not profile:
+            return _create_response({"status": "error", "error": "missing_profile"}, 400)
+        safe_profile = "".join(ch for ch in profile if ch.isalnum() or ch in ("-", "_")).strip()
+        if not safe_profile:
+            return _create_response({"status": "error", "error": "invalid_profile"}, 400)
+        portfolio_rows = payload.get("portfolio", [])
+        if not isinstance(portfolio_rows, list):
+            return _create_response({"status": "error", "error": "portfolio_must_be_list"}, 400)
+        fills_rows = payload.get("fills", [])
+        if fills_rows is not None and not isinstance(fills_rows, list):
+            return _create_response({"status": "error", "error": "fills_must_be_list"}, 400)
+        try:
+            portfolio_path = storage.save_portfolio(safe_profile, portfolio_rows)
+        except Exception as exc:  # pragma: no cover - defensive
+            LOGGER.error("Failed to persist portfolio %s: %s", safe_profile, exc)
+            return _create_response({"status": "error", "error": str(exc)}, 400)
+        fills_path = None
+        try:
+            fills_path = storage.append_fills(safe_profile, fills_rows or [])
+        except Exception as exc:  # pragma: no cover - defensive
+            LOGGER.error("Failed to persist fills %s: %s", safe_profile, exc)
+            return _create_response({"status": "error", "error": str(exc)}, 400)
+        response = {
+            "status": "ok",
+            "profile": safe_profile,
+            "portfolio_path": str(portfolio_path),
+        }
+        if fills_path is not None:
+            response["fills_path"] = str(fills_path)
+        return _create_response(response, 200)
 
     return app
 
 
-if __name__ == '__main__':
-    ensure_dirs()
-    port = int(os.getenv('PORT', '8787'))
-    app = create_app()
-    app.run(host='0.0.0.0', port=port)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", "8787"))
+    create_app().run(host="0.0.0.0", port=port)

@@ -1,0 +1,33 @@
+universe:
+  csv: data/industry_map.csv
+  include_indices: false
+technical_indicators:
+  moving_averages: [20, 50, 200]
+  rsi_periods: [14]
+  atr_periods: [14]
+  macd:
+    fast: 12
+    slow: 26
+    signal: 9
+presets:
+  balanced:
+    description: Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+    buy_tiers: [-0.03, -0.02, -0.01]
+    sell_tiers: [0.02, 0.04, 0.06]
+  momentum:
+    description: Mua theo đà, chốt lời nhanh.
+    buy_tiers: [-0.01, 0.0]
+    sell_tiers: [0.03, 0.05, 0.08]
+portfolio:
+  directory: data/portfolios
+  order_history_directory: data/order_history
+output:
+  base_dir: out
+  market_snapshot: market/technical_snapshot.csv
+  presets_dir: presets
+  portfolios_dir: portfolios
+  diagnostics_dir: diagnostics
+data:
+  history_cache: out/data
+  history_min_days: 400
+  intraday_window_minutes: 720

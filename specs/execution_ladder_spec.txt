@@ -1,7 +1,0 @@
-TITLE: Execution Ladder — Scale-In/Scale-Out for VN100 Engine
-VERSION: 1.0
-DATE: 2025-10-12 (UTC+7)
-OWNER: Hai Nguyen
-INTENT: Tăng xác suất khớp và cải thiện EV (expected value) bằng cách chia mỗi lệnh thành nhiều “bậc” (price, qty) có TTL & reprice, tuân thủ tick-size, lot-size, biên độ sàn, ADTV-cap. Tích hợp sau bước quyết định hành động & sizing hiện tại, trước khi ghi orders_final.csv.
-
-[This file mirrors the product spec provided in the request. See implementation in scripts/orders/ladder.py and integration in scripts/orders/order_engine.py.]

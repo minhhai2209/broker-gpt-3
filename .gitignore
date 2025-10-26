@@ -6,7 +6,6 @@ __pycache__/
 
 # Data inputs/outputs
 in/portfolio/*.csv
-out/
 .coverage
 *.xlsx
 
