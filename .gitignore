@@ -5,7 +5,6 @@ __pycache__/
 .DS_Store
 
 # Data inputs/outputs
-in/portfolio/*.csv
 .coverage
 *.xlsx
 
@@ -18,4 +17,3 @@ scratch/
 
 # Python virtual environment
 venv/
-config/policy_ai_overrides.json
