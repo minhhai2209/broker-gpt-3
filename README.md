@@ -140,3 +140,18 @@ Repo chỉ còn một workflow: `.github/workflows/data-engine.yml`. Workflow n�
 **Muốn thêm chỉ báo mới?** — Bổ sung vào `scripts/indicators/` hoặc tính trực tiếp trong `scripts/engine/data_engine.py`, sau đó khai báo trong `config/data_engine.yaml` nếu cần tham số.
 
 **Có còn chính sách/overlay?** — Không. Engine không sinh lệnh nên mọi cấu hình policy trước đây đã bị loại bỏ.
+
+## Prompt gợi ý cho ChatGPT
+
+Bạn có thể copy đoạn prompt ngắn dưới đây khi đã kết nối ChatGPT với repo. Prompt chỉ yêu cầu tra cứu tin tức hiện tại và đọc các file dữ liệu để đề xuất bộ lệnh trong ngày, chỉ dùng lệnh LO.
+
+```
+Hãy tra cứu tin tức hiện tại liên quan tới các mã và đọc các file sau (đường dẫn tương đối) để đề xuất bộ lệnh hôm nay, chỉ dùng lệnh LO:
+- out/market/technical_snapshot.csv — ảnh chụp kỹ thuật theo mã (giá hiện tại, thay đổi %, SMA/EMA/RSI/ATR, MACD, Z‑score, returns, ADV, 52w range)
+- out/presets/balanced.csv — mức bậc mua/bán theo preset cân bằng
+- out/presets/momentum.csv — mức bậc mua/bán theo preset momentum
+- data/portfolios/alpha.csv — danh mục hiện tại (Ticker, Quantity, AvgPrice)
+- out/portfolios/alpha_positions.csv — PnL theo mã, MarketValue/CostBasis/Unrealized
+- out/portfolios/alpha_sector.csv — tổng hợp PnL theo ngành
+- data/order_history/alpha_fills.csv — các lệnh đã khớp trong hôm nay (để tránh trùng)
+```
