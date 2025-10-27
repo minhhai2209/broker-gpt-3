@@ -153,5 +153,9 @@ Hãy tra cứu tin tức hiện tại liên quan tới các mã và đọc các 
 - data/portfolios/alpha.csv — danh mục hiện tại (Ticker, Quantity, AvgPrice)
 - out/portfolios/alpha_positions.csv — PnL theo mã, MarketValue/CostBasis/Unrealized
 - out/portfolios/alpha_sector.csv — tổng hợp PnL theo ngành
-- data/order_history/alpha_fills.csv — các lệnh đã khớp trong hôm nay (để tránh trùng)
+- data/order_history/alpha_fills.csv — các lệnh đã khớp trong hôm nay
+
+Xuất kết quả duy nhất dưới dạng CSV với header: `Ticker,Side,Quantity,LimitPrice`.
+- `Side` là `BUY` hoặc `SELL`.
+- `LimitPrice` ghi theo đơn vị nghìn đồng.
 ```
