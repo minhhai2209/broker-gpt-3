@@ -95,7 +95,7 @@ Workflow `.github/workflows/data-engine.yml`:
 1. Checkout mã nguồn (fetch đầy đủ lịch sử để có thể push).
 2. Cài đặt Python 3.11 và dependencies (`pip install -r requirements.txt`).
 3. Chạy `python -m scripts.engine.data_engine --config config/data_engine.yaml`.
-4. Commit và push những thay đổi trong `out/market`, `out/presets`, `out/portfolios`, `out/diagnostics`, `data/order_history`.
+4. Nếu workflow chạy theo lịch hoặc được kích hoạt thủ công trên nhánh chính, commit và push những thay đổi trong `out/market`, `out/presets`, `out/portfolios`, `out/diagnostics`, `data/order_history`. Khi chạy trên Pull Request, bước commit được bỏ qua để workflow chỉ dùng cho việc xem log.
 
 Không còn workflow tuning/policy. Nếu cần cập nhật config, commit trực tiếp file YAML.
 

@@ -118,7 +118,7 @@ Test bao gồm:
 
 ## GitHub Actions
 
-Repo chỉ còn một workflow: `.github/workflows/data-engine.yml`. Workflow này chạy 10 phút/lần và luôn có thể kích hoạt thủ công (`workflow_dispatch`). Sau khi engine hoàn tất, workflow sẽ commit và push trực tiếp các thư mục `out/market`, `out/presets`, `out/portfolios`, `out/diagnostics` cùng với `data/order_history` vào nhánh hiện hành (nếu có thay đổi).
+Repo chỉ còn một workflow: `.github/workflows/data-engine.yml`. Workflow này chạy 10 phút/lần, luôn có thể kích hoạt thủ công (`workflow_dispatch`), và cũng tự động chạy trên mọi Pull Request để dễ dàng xem log trước khi merge. Sau khi engine hoàn tất, workflow sẽ commit và push trực tiếp các thư mục `out/market`, `out/presets`, `out/portfolios`, `out/diagnostics` cùng với `data/order_history` vào nhánh hiện hành (nếu có thay đổi, chỉ áp dụng cho chạy theo lịch/thủ công).
 
 ## Hỏi nhanh
 
