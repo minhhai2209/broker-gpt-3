@@ -71,7 +71,8 @@ class EngineConfig:
     def from_yaml(cls, path: Path) -> "EngineConfig":
         if not path.exists():
             raise ConfigurationError(f"Config file not found: {path}")
-        base_dir = path.parent
+        config_dir = path.parent.resolve()
+        repo_root = _find_repo_root(config_dir)
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         if not isinstance(data, dict):
             raise ConfigurationError("Engine config must be a mapping")
@@ -81,7 +82,7 @@ class EngineConfig:
         csv_path = uni.get("csv")
         if not isinstance(csv_path, str):
             raise ConfigurationError("universe.csv must be a string path")
-        universe_csv = (base_dir / Path(csv_path)).resolve() if not Path(csv_path).is_absolute() else Path(csv_path)
+        universe_csv = _resolve_path(csv_path, config_dir, repo_root)
         include_indices = bool(uni.get("include_indices", False))
 
         technical = data.get("technical_indicators", {}) or {}
@@ -105,13 +106,17 @@ class EngineConfig:
         portfolio_cfg = data.get("portfolio", {}) or {}
         if not isinstance(portfolio_cfg, dict):
             raise ConfigurationError("portfolio section must be a mapping")
-        portfolio_dir = _resolve_path(portfolio_cfg.get("directory", "data/portfolios"), base_dir)
-        order_history_dir = _resolve_path(portfolio_cfg.get("order_history_directory", "data/order_history"), base_dir)
+        portfolio_dir = _resolve_path(
+            portfolio_cfg.get("directory", "data/portfolios"), config_dir, repo_root
+        )
+        order_history_dir = _resolve_path(
+            portfolio_cfg.get("order_history_directory", "data/order_history"), config_dir, repo_root
+        )
 
         output_cfg = data.get("output", {}) or {}
         if not isinstance(output_cfg, dict):
             raise ConfigurationError("output section must be a mapping")
-        output_base_dir = _resolve_path(output_cfg.get("base_dir", "out"), base_dir)
+        output_base_dir = _resolve_path(output_cfg.get("base_dir", "out"), config_dir, repo_root)
         market_snapshot_rel = output_cfg.get("market_snapshot", "market/technical_snapshot.csv")
         presets_rel = output_cfg.get("presets_dir", "presets")
         portfolios_rel = output_cfg.get("portfolios_dir", "portfolios")
@@ -124,7 +129,7 @@ class EngineConfig:
         data_cfg = data.get("data", {}) or {}
         if not isinstance(data_cfg, dict):
             raise ConfigurationError("data section must be a mapping")
-        market_cache_dir = _resolve_path(data_cfg.get("history_cache", "out/data"), base_dir)
+        market_cache_dir = _resolve_path(data_cfg.get("history_cache", "out/data"), config_dir, repo_root)
         history_min_days = int(data_cfg.get("history_min_days", 400))
         intraday_window_minutes = int(data_cfg.get("intraday_window_minutes", 12 * 60))
 
@@ -151,11 +156,39 @@ class EngineConfig:
         )
 
 
-def _resolve_path(candidate: str, base_dir: Path) -> Path:
+def _find_repo_root(start: Path) -> Path:
+    current = start
+    for candidate in [current, *current.parents]:
+        if (candidate / ".git").exists():
+            return candidate
+    return start
+
+
+def _resolve_path(candidate: str, config_dir: Path, repo_root: Path) -> Path:
     if not isinstance(candidate, str):
         raise ConfigurationError(f"Expected string path, got {type(candidate).__name__}")
     path = Path(candidate)
-    return path.resolve() if path.is_absolute() else (base_dir / path).resolve()
+    if path.is_absolute():
+        return path.resolve()
+
+    config_candidate = (config_dir / path).resolve()
+    try:
+        config_candidate.relative_to(repo_root)
+    except ValueError:
+        raise ConfigurationError(
+            f"Path '{candidate}' escapes repository root {repo_root}. Use absolute paths for external locations."
+        )
+    if config_candidate.exists():
+        return config_candidate
+
+    root_candidate = (repo_root / path).resolve()
+    try:
+        root_candidate.relative_to(repo_root)
+    except ValueError:
+        raise ConfigurationError(
+            f"Path '{candidate}' escapes repository root {repo_root}. Use absolute paths for external locations."
+        )
+    return root_candidate
 
 
 class MarketDataService(Protocol):
