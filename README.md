@@ -159,3 +159,21 @@ Xuất kết quả duy nhất dưới dạng CSV với header: `Ticker,Side,Quan
 - `Side` là `BUY` hoặc `SELL`.
 - `LimitPrice` ghi theo đơn vị nghìn đồng.
 ```
+
+### Quy tắc HOSE để tính giá/khối lượng hợp lệ
+
+Áp dụng đúng quy chế HOSE (QĐ 352/QĐ-SGDHCM, hiệu lực 05/07/2021) để tránh bước giá không hợp lệ:
+
+- Đơn vị yết giá (tick) cổ phiếu/CCQ đóng:
+  - < 10.000 VND: bước 10 VND
+  - 10.000 – 49.950 VND: bước 50 VND
+  - ≥ 50.000 VND: bước 100 VND
+- ETF và chứng quyền: bước 10 VND cho mọi mức giá.
+- Lô chẵn: bội số 100 cổ phiếu; khối lượng tối đa mỗi lệnh: 500.000 cổ.
+- Biên độ giá trong ngày HOSE: ±7% so với giá tham chiếu.
+- Làm tròn giá trần/sàn theo quy chế: trần làm tròn xuống, sàn làm tròn lên theo đúng đơn vị yết giá.
+
+Gợi ý kiểm tra nhanh (giá báo theo nghìn đồng):
+- `p_vnd = round(LimitPrice * 1000)`, chọn `tick` theo bảng trên tại mức `p_vnd`.
+- Hợp lệ khi `(p_vnd % tick == 0)` và `floor_to_tick(ref*1.07) ≥ p_vnd ≥ ceil_to_tick(ref*0.93)`; `ref` là giá tham chiếu VND.
+- `Quantity` là bội số 100 và ≤ 500.000.
