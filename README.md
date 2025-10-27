@@ -154,6 +154,8 @@ Hãy tra cứu tin tức hiện tại và đọc các file sau (đường dẫn 
 - out/portfolios/alpha_positions.csv — PnL theo mã, MarketValue/CostBasis/Unrealized
 - out/portfolios/alpha_sector.csv — tổng hợp PnL theo ngành
 - data/order_history/alpha_fills.csv — các lệnh đã khớp trong hôm nay
+
+Lệnh mua có thể là mua thêm mã có sẵn hoặc mua mới mã chưa có. Lệnh bán có thể là bạn một phần hoặc bán hết.
  
 Quy tắc HOSE (áp dụng khi tính LimitPrice/Quantity):
 - Bước giá: < 10.000 VND → 10 VND; 10.000–49.950 VND → 50 VND; ≥ 50.000 VND → 100 VND. ETF/CW: 10 VND.
