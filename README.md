@@ -35,8 +35,16 @@ universe:
   csv: data/industry_map.csv    # Danh sách mã + sector
 technical_indicators:
   moving_averages: [20, 50, 200]
+  ema_periods: [20, 50]
   rsi_periods: [14]
   atr_periods: [14]
+  returns_periods: [20, 60]
+  bollinger:
+    windows: [20]
+    k: 2
+    include_bands: false
+  range_lookback_days: 252
+  adv_periods: [20]
   macd:
     fast: 12
     slow: 26
@@ -113,6 +121,7 @@ Test bao gồm:
 | File | Ý nghĩa |
 | ---- | ------- |
 | `out/market/technical_snapshot.csv` | Bảng tổng hợp theo mã: giá hiện tại, thay đổi %, SMA/RSI/ATR/MACD, sector |
+| (mở rộng) | EMA_*, ATRPct_*, Return_*, Z_*, Hi_252, Lo_252, PctFromHi_252, PctToLo_252, ADV_* |
 | `out/presets/<preset>.csv` | Mỗi preset một file; chứa giá mua/bán theo từng bậc |
 | `out/portfolios/<profile>_positions.csv` | Phân tích lãi/lỗ theo mã cho danh mục `profile` |
 | `out/portfolios/<profile>_sector.csv` | Tổng hợp lãi/lỗ theo ngành |

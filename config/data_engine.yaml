@@ -3,8 +3,16 @@ universe:
   include_indices: false
 technical_indicators:
   moving_averages: [20, 50, 200]
+  ema_periods: [20, 50]
   rsi_periods: [14]
   atr_periods: [14]
+  returns_periods: [20, 60]
+  bollinger:
+    windows: [20]
+    k: 2
+    include_bands: false
+  range_lookback_days: 252
+  adv_periods: [20]
   macd:
     fast: 12
     slow: 26

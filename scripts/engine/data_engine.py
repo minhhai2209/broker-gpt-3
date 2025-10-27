@@ -13,7 +13,7 @@ import yaml
 
 from scripts.data_fetching.collect_intraday import ensure_intraday_latest_df
 from scripts.data_fetching.fetch_ticker_data import ensure_and_load_history_df
-from scripts.indicators import atr_wilder, macd_hist, ma, rsi_wilder
+from scripts.indicators import atr_wilder, macd_hist, ma, rsi_wilder, ema
 
 LOGGER = logging.getLogger(__name__)
 
@@ -52,6 +52,13 @@ class EngineConfig:
     moving_averages: List[int]
     rsi_periods: List[int]
     atr_periods: List[int]
+    ema_periods: List[int]
+    returns_periods: List[int]
+    bollinger_windows: List[int]
+    bollinger_k: float
+    bollinger_include_bands: bool
+    range_lookback_days: int
+    adv_periods: List[int]
     macd_fast: int
     macd_slow: int
     macd_signal: int
@@ -91,6 +98,16 @@ class EngineConfig:
         moving_averages = [int(x) for x in technical.get("moving_averages", [])]
         rsi_periods = [int(x) for x in technical.get("rsi_periods", [])]
         atr_periods = [int(x) for x in technical.get("atr_periods", [])]
+        ema_periods = [int(x) for x in technical.get("ema_periods", [])]
+        returns_periods = [int(x) for x in technical.get("returns_periods", [])]
+        bb_cfg = technical.get("bollinger", {}) or {}
+        if not isinstance(bb_cfg, dict):
+            raise ConfigurationError("technical_indicators.bollinger must be a mapping if provided")
+        bollinger_windows = [int(x) for x in bb_cfg.get("windows", [])]
+        bollinger_k = float(bb_cfg.get("k", 2.0))
+        bollinger_include_bands = bool(bb_cfg.get("include_bands", False))
+        range_lookback_days = int(technical.get("range_lookback_days", 252))
+        adv_periods = [int(x) for x in technical.get("adv_periods", [])]
         macd_cfg = technical.get("macd", {}) or {}
         if not isinstance(macd_cfg, dict):
             raise ConfigurationError("technical_indicators.macd must be a mapping")
@@ -139,6 +156,13 @@ class EngineConfig:
             moving_averages=moving_averages,
             rsi_periods=rsi_periods,
             atr_periods=atr_periods,
+            ema_periods=ema_periods,
+            returns_periods=returns_periods,
+            bollinger_windows=bollinger_windows,
+            bollinger_k=bollinger_k,
+            bollinger_include_bands=bollinger_include_bands,
+            range_lookback_days=range_lookback_days,
+            adv_periods=adv_periods,
             macd_fast=macd_fast,
             macd_slow=macd_slow,
             macd_signal=macd_signal,
@@ -260,6 +284,7 @@ class TechnicalSnapshotBuilder:
             close_series = pd.to_numeric(series["Close"], errors="coerce")
             high_series = pd.to_numeric(series.get("High"), errors="coerce") if "High" in series else close_series
             low_series = pd.to_numeric(series.get("Low"), errors="coerce") if "Low" in series else close_series
+            vol_series = pd.to_numeric(series.get("Volume"), errors="coerce") if "Volume" in series else pd.Series([float("nan")]*len(close_series))
 
             data: Dict[str, object] = {
                 "Ticker": ticker,
@@ -293,6 +318,15 @@ class TechnicalSnapshotBuilder:
                     data[col] = float(ma(close_series, window).iloc[-1])
                 else:
                     data[col] = float("nan")
+            # EMA
+            for period in self._config.ema_periods:
+                if period <= 0:
+                    continue
+                col = f"EMA_{period}"
+                if len(close_series) >= period:
+                    data[col] = float(ema(close_series, period).iloc[-1])
+                else:
+                    data[col] = float("nan")
             for period in self._config.rsi_periods:
                 if period <= 0:
                     continue
@@ -306,9 +340,16 @@ class TechnicalSnapshotBuilder:
                     continue
                 col = f"ATR_{period}"
                 if len(close_series) > period:
-                    data[col] = float(atr_wilder(high_series, low_series, close_series, period).iloc[-1])
+                    atr_val = float(atr_wilder(high_series, low_series, close_series, period).iloc[-1])
+                    data[col] = atr_val
+                    # ATR percentage vs last price
+                    if last_close and not pd.isna(last_close) and last_close != 0:
+                        data[f"ATRPct_{period}"] = atr_val / last_close * 100.0
+                    else:
+                        data[f"ATRPct_{period}"] = float("nan")
                 else:
                     data[col] = float("nan")
+                    data[f"ATRPct_{period}"] = float("nan")
             if len(close_series) >= max(self._config.macd_fast, self._config.macd_slow):
                 data["MACD_Hist"] = float(
                     macd_hist(
@@ -320,6 +361,63 @@ class TechnicalSnapshotBuilder:
                 )
             else:
                 data["MACD_Hist"] = float("nan")
+            # Bollinger and z-score
+            for w in self._config.bollinger_windows:
+                if w <= 1:
+                    continue
+                if len(close_series) >= w:
+                    sma_w = ma(close_series, w).iloc[-1]
+                    std_w = pd.to_numeric(close_series, errors="coerce").rolling(w).std().iloc[-1]
+                    if pd.isna(sma_w) or pd.isna(std_w) or std_w == 0:
+                        data[f"Z_{w}"] = float("nan")
+                    else:
+                        data[f"Z_{w}"] = float((last_close - float(sma_w)) / float(std_w))
+                    if self._config.bollinger_include_bands:
+                        k = self._config.bollinger_k
+                        data[f"BBU_{w}_{int(k)}"] = float(sma_w + k * std_w) if not pd.isna(sma_w) and not pd.isna(std_w) else float("nan")
+                        data[f"BBL_{w}_{int(k)}"] = float(sma_w - k * std_w) if not pd.isna(sma_w) and not pd.isna(std_w) else float("nan")
+                else:
+                    data[f"Z_{w}"] = float("nan")
+                    if self._config.bollinger_include_bands:
+                        k = self._config.bollinger_k
+                        data[f"BBU_{w}_{int(k)}"] = float("nan")
+                        data[f"BBL_{w}_{int(k)}"] = float("nan")
+            # Rolling returns
+            for p in self._config.returns_periods:
+                if p <= 0:
+                    continue
+                col = f"Return_{p}"
+                if len(close_series) > p and close_series.iloc[-p-1] and not pd.isna(close_series.iloc[-p-1]):
+                    base = float(close_series.iloc[-p-1])
+                    data[col] = (last_close / base - 1.0) * 100.0 if base else float("nan")
+                else:
+                    data[col] = float("nan")
+            # ADV periods
+            for p in self._config.adv_periods:
+                if p <= 0:
+                    continue
+                col = f"ADV_{p}"
+                if len(vol_series) >= p:
+                    data[col] = float(pd.to_numeric(vol_series, errors="coerce").rolling(p).mean().iloc[-1])
+                else:
+                    data[col] = float("nan")
+            # 52-week range context (close-based hi/lo)
+            L = self._config.range_lookback_days
+            if L > 1 and len(high_series) >= 1:
+                # Use High/Low if available; fallback to Close
+                window = min(L, len(high_series))
+                max_hi = float(pd.concat([high_series.tail(window)], axis=1).max().iloc[-1]) if "High" in series else float(close_series.tail(window).max())
+                min_lo = float(pd.concat([low_series.tail(window)], axis=1).min().iloc[-1]) if "Low" in series else float(close_series.tail(window).min())
+                data["Hi_252"] = max_hi if L == 252 else max_hi
+                data["Lo_252"] = min_lo if L == 252 else min_lo
+                if max_hi and not pd.isna(max_hi):
+                    data["PctFromHi_252"] = (last_close / max_hi - 1.0) * 100.0
+                else:
+                    data["PctFromHi_252"] = float("nan")
+                if min_lo and not pd.isna(min_lo):
+                    data["PctToLo_252"] = (last_close / min_lo - 1.0) * 100.0
+                else:
+                    data["PctToLo_252"] = float("nan")
             rows.append(data)
         snapshot = pd.DataFrame(rows)
         snapshot = snapshot.sort_values("Ticker").reset_index(drop=True)
