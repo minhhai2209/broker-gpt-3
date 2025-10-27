@@ -39,10 +39,8 @@ run_tests() {
 }
 
 run_server() {
-  ensure_venv
-  echo "[server] Using: $PY_BIN"
-  export DATA_ENGINE_CONFIG="${DATA_ENGINE_CONFIG:-config/data_engine.yaml}"
-  PORT="${PORT:-8787}" "$PY_BIN" -m scripts.api.server
+  echo "[server] Deprecated. Use TCBS scraper instead." >&2
+  exit 2
 }
 
 main() {
@@ -56,7 +54,26 @@ main() {
       run_tests "$@"
       ;;
     server)
-      run_server "$@"
+      run_server "$@" # kept for compatibility; now deprecated
+      ;;
+    tcbs)
+      ensure_venv
+      echo "[tcbs] Using: $PY_BIN"
+      # Ensure Chromium is installed for Playwright (best-effort)
+      "$PY_BIN" -m playwright install chromium >/dev/null 2>&1 || true
+      # Helper to read TCBS_PROFILE without sourcing the entire .env (password may contain $)
+      env_profile="${TCBS_PROFILE:-}"
+      if [[ -z "$env_profile" && -f .env ]]; then
+        env_profile="$(grep -E '^TCBS_PROFILE=' .env | tail -n 1 | cut -d= -f2- | tr -d '\r' | sed 's/^\"//; s/\"$//')"
+      fi
+      # If first arg looks like a flag, do not treat as profile; fall back to env or 'tcbs'
+      if [[ "${1:-}" =~ ^- || -z "${1:-}" ]]; then
+        profile="${env_profile:-tcbs}"
+      else
+        profile="${1}"
+        shift || true
+      fi
+      "$PY_BIN" -m scripts.scrapers.tcbs --profile "$profile" "$@"
       ;;
     *)
       echo "Usage: $0 [engine|tests|server]" >&2

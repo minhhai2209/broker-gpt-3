@@ -6,7 +6,7 @@ Phiên bản này bỏ hoàn toàn order engine. Toàn bộ hệ thống chỉ c
 
 1. **Engine thu thập dữ liệu** (`scripts/engine/data_engine.py`): tải dữ liệu giá, tính chỉ số kỹ thuật, sinh preset và cập nhật báo cáo danh mục.
 2. **Kho dữ liệu danh mục** (`data/portfolios/`, `data/order_history/`): lưu trữ danh mục hiện tại và lịch sử khớp lệnh của từng tài khoản.
-3. **API upload** (`scripts/api/server.py`): nhận dữ liệu danh mục từ client và ghi vào kho.
+3. **TCBS Scraper** (`scripts/scrapers/tcbs.py`): đăng nhập TCBS bằng Playwright và ghi `data/portfolios/<profile>.csv`.
 4. **GitHub Action** (`.github/workflows/data-engine.yml`): chạy engine định kỳ và commit kết quả mới lên nhánh hiện hành.
 
 Mọi quyết định giao dịch sẽ do người vận hành xử lý dựa trên dữ liệu CSV đầu ra.
@@ -25,7 +25,7 @@ Mọi quyết định giao dịch sẽ do người vận hành xử lý dựa tr
       │            └───────────────────────────────┘      │      │
       │                     ▲                            │      │
       │                     │                            │      │
-      └────── server.py ◄───┴────────── Upload JSON ◄────┘      │
+      └────── tcbs.py ◄────┴────────── Fetch via browser ◄──────┘      │
 ```
 
 - Engine đọc universe từ `config/data_engine.yaml` (tối thiểu cột `Ticker` và `Sector`).
@@ -80,13 +80,12 @@ Mọi đường dẫn được chuẩn hoá thành `Path.resolve()`. Thiếu tr�
 - Tổng hợp theo ngành -> `out/portfolios/<profile>_sector.csv`.
 - Không chạm vào file danh mục gốc; chỉ đọc.
 
-### PortfolioStorage (API server)
+### TCBS Scraper
 
-- Endpoint duy nhất `POST /upload` nhận JSON `{profile, portfolio: [...], fills: [...]}`.
-- `profile` được làm sạch chỉ giữ lại ký tự chữ, số, `_` hoặc `-`.
-- `portfolio` phải có cột `Ticker,Quantity,AvgPrice`; server ghi đè file `data/portfolios/<profile>.csv`.
-- `fills` (nếu có) được append vào `data/order_history/<profile>_fills.csv` với header tự động.
-- Trả về `{status:"ok", profile, portfolio_path, fills_path?}`.
+- Đọc `TCBS_USERNAME` và `TCBS_PASSWORD` từ `.env` hoặc biến môi trường.
+- Dùng Chromium persistent profile tại `.playwright/tcbs-user-data` để giữ fingerprint/session giữa các lần chạy (bỏ qua bước xác nhận thiết bị sau lần đầu).
+- Điều hướng: login -> `my-asset` -> tab `Cổ phiếu` -> `Tài sản` -> bảng danh mục.
+- Parse bảng một cách resilient theo header (`Mã`, `SL Tổng`/`Được GD`, `Giá vốn`) và ghi `data/portfolios/<profile>.csv`.
 
 ## Quy trình chạy GitHub Action
 
@@ -108,11 +107,10 @@ Không còn workflow tuning/policy. Nếu cần cập nhật config, commit tr�
 ## Kiểm thử
 
 - `tests/test_data_engine.py` tạo dữ liệu giả, chạy engine và xác minh tất cả output tồn tại.
-- `tests/test_server.py` khởi tạo server với config tạm, gửi POST `/upload` và kiểm tra file sinh ra.
+- `tests/test_tcbs_parser.py` xác minh bộ phân tích bảng TCBS với dữ liệu giả lập (không gọi mạng/trình duyệt).
 
 ## Mở rộng
 
 - Có thể bổ sung chỉ báo mới bằng cách thêm vào `scripts/indicators/` và cập nhật `TechnicalSnapshotBuilder`.
 - Nếu cần nguồn dữ liệu khác, triển khai class mới implement `MarketDataService` rồi truyền vào `DataEngine` (ví dụ trong test).
 - Để đồng bộ với hệ thống khác, bạn chỉ cần đọc các CSV trong `out/` (được commit sẵn) hoặc pull nhánh mới nhất từ repo.
-

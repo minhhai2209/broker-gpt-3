@@ -7,7 +7,7 @@
 - Prefer simple, well-documented logic backed by references or existing conventions; no speculative trading algorithms.
 
 ## Scope Guardrails
-- The repository now only contains the data engine (`scripts/engine`), supporting fetchers/indicators, and the minimal Flask upload API. Do **not** reintroduce order generation, policy overlays, tuners, or patch aggregators.
+- The repository contains the data engine (`scripts/engine`), supporting fetchers/indicators, and a Playwright-based TCBS portfolio scraper (`scripts/scrapers/tcbs.py`). Do not reintroduce order generation, policy overlays, tuners, or patch aggregators.
 - All generated analytics live under `out/`. Portfolio sources and fill history stay under `data/`. Never mutate the source portfolio CSVs inside the engine.
 - Paths must resolve relative to the repo root unless explicitly absolute; keep configuration in `config/data_engine.yaml` unless requirements change.
 

@@ -71,30 +71,32 @@ Engine sẽ:
 - Tính SMA/RSI/ATR/MACD theo cấu hình.
 - Xuất các file CSV đã nêu ở trên.
 
-### Server upload
+### Lấy danh mục (TCBS, Playwright)
 
-Server Flask nhỏ cho phép cập nhật danh mục qua HTTP.
+Thay cho server HTTP, repo cung cấp scraper Playwright để đăng nhập TCBS và trích xuất danh mục.
+
+Chuẩn bị:
+- Tạo file `.env` ở repo root:
+
+```
+TCBS_USERNAME=0366673634
+TCBS_PASSWORD=your-password-here
+TCBS_PROFILE=alpha
+```
+
+Chạy lần đầu (headful để xác nhận thiết bị nếu TCBS yêu cầu):
 
 ```bash
-./broker.sh server
+./broker.sh tcbs --headful
 ```
 
-- Endpoint duy nhất: `POST /upload`
-- JSON body ví dụ:
+Chạy các lần sau (headless, fingerprint được lưu trong `.playwright/tcbs-user-data`):
 
-```json
-{
-  "profile": "alpha",
-  "portfolio": [
-    {"Ticker": "AAA", "Quantity": 1000, "AvgPrice": 13.2}
-  ],
-  "fills": [
-    {"timestamp": "2024-07-01T09:00:00+07:00", "ticker": "AAA", "side": "BUY", "quantity": 1000, "price": 13.2}
-  ]
-}
+```bash
+./broker.sh tcbs
 ```
 
-Server sẽ ghi `data/portfolios/alpha.csv` (ghi đè) và thêm lịch sử vào `data/order_history/alpha_fills.csv`.
+Kết quả sẽ ghi đè `data/portfolios/alpha.csv` với cột `Ticker,Quantity,AvgPrice`.
 
 ### Kiểm thử
 
@@ -104,7 +106,7 @@ Server sẽ ghi `data/portfolios/alpha.csv` (ghi đè) và thêm lịch sử và
 
 Test bao gồm:
 - Bảo đảm engine sinh đầy đủ output khi dùng nguồn dữ liệu giả lập.
-- Xác thực API `/upload` lưu danh mục và lịch sử khớp lệnh đúng.
+- Xác thực bộ phân tích bảng TCBS tạo đúng schema `Ticker,Quantity,AvgPrice` từ dữ liệu giả lập.
 
 ## Output chính
 
@@ -114,19 +116,18 @@ Test bao gồm:
 | `out/presets/<preset>.csv` | Mỗi preset một file; chứa giá mua/bán theo từng bậc |
 | `out/portfolios/<profile>_positions.csv` | Phân tích lãi/lỗ theo mã cho danh mục `profile` |
 | `out/portfolios/<profile>_sector.csv` | Tổng hợp lãi/lỗ theo ngành |
-| `data/order_history/<profile>_fills.csv` | Lịch sử khớp lệnh (luỹ kế) |
+| `data/order_history/<profile>_fills.csv` | Lịch sử khớp lệnh (tuỳ hệ thống khác, không thay đổi bởi scraper) |
 
 ## GitHub Actions
 
-Repo chỉ còn một workflow: `.github/workflows/data-engine.yml`. Workflow này chạy 10 phút/lần, luôn có thể kích hoạt thủ công (`workflow_dispatch`), và cũng tự động chạy trên mọi Pull Request để dễ dàng xem log trước khi merge. Sau khi engine hoàn tất, workflow sẽ commit và push trực tiếp các thư mục `out/market`, `out/presets`, `out/portfolios`, `out/diagnostics` cùng với `data/order_history` vào nhánh hiện hành (nếu có thay đổi, chỉ áp dụng cho chạy theo lịch/thủ công).
+Repo chỉ còn một workflow: `.github/workflows/data-engine.yml`. Workflow này chạy 10 phút/lần, luôn có thể kích hoạt thủ công (`workflow_dispatch`), và cũng tự động chạy trên mọi Pull Request để dễ dàng xem log trước khi merge. Sau khi engine hoàn tất, workflow sẽ commit và push trực tiếp các thư mục `out/market`, `out/presets`, `out/portfolios`, `out/diagnostics` cùng với `data/order_history` vào nhánh hiện hành (nếu có thay đổi, chỉ áp dụng cho chạy theo lịch/thủ công). Lưu ý: scraper TCBS chạy thủ công trên máy cá nhân (cần trình duyệt), không chạy trong CI.
 
 ## Hỏi nhanh
 
 **Có cần sửa danh mục thủ công?** — Có. Mỗi tài khoản là một CSV trong `data/portfolios/`. Engine chỉ đọc và ghi báo cáo, không can thiệp vào file gốc.
 
-**Lịch sử khớp lệnh lưu ở đâu?** — Luôn append vào `data/order_history/<profile>_fills.csv`. Engine không xoá.
+**Lịch sử khớp lệnh lưu ở đâu?** — `data/order_history/<profile>_fills.csv` là nơi lưu từ hệ thống khác nếu có. Scraper TCBS hiện chỉ lấy danh mục, không động tới lịch sử khớp lệnh.
 
 **Muốn thêm chỉ báo mới?** — Bổ sung vào `scripts/indicators/` hoặc tính trực tiếp trong `scripts/engine/data_engine.py`, sau đó khai báo trong `config/data_engine.yaml` nếu cần tham số.
 
 **Có còn chính sách/overlay?** — Không. Engine không sinh lệnh nên mọi cấu hình policy trước đây đã bị loại bỏ.
-
