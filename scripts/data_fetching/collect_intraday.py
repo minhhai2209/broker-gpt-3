@@ -1,49 +1,16 @@
-"""
-Collect or ensure intraday snapshots in a self-contained way.
-See scripts/prep/data/collect_intraday.py original for details; this is the moved version.
-"""
+"""Minimal helpers to fetch and enrich intraday data from VNDIRECT."""
 from __future__ import annotations
-import argparse
-import sys
+
 import time
 from datetime import datetime, timezone, timedelta
-from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import List, Optional
 
 import pandas as pd
 import requests
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
-
 from scripts.indicators import rsi_wilder
 
 VN_TZ = timezone(timedelta(hours=7))
-
-
-def fetch_last_price(symbol: stremor) -> float | None:
-    now = int(datetime.now(VN_TZ).timestamp())
-    url = f"https://dchart-api.vndirect.com.vn/dchart/history?symbol={symbol}&resolution=1&from={now-1200}&to={now}"
-    headers = {'User-Agent':'Mozilla/5.0','Referer':'https://dchart.vndirect.com.vn/'}
-    last_exc: Exception | None = None
-    for attempt in range(3):
-        try:
-            r = requests.get(url, timeout=10, headers=headers)
-            r.raise_for_status()
-            if not r.text or not r.text.strip():
-                raise ValueError('empty body')
-            js = r.json()
-            if js.get('s') == 'ok' and js.get('c'):
-                return float(js['c'][-1])
-            return None
-        except Exception as exc:
-            last_exc = exc
-            time.sleep(0.5 * (attempt + 1))
-            continue
-    # Give up silently (intraday is best-effort)
-    print(f"[warn] intraday last price fetch failed for {symbol}: {type(last_exc).__name__}: {last_exc}")
-    return None
 
 
 def fetch_intraday_series(
@@ -60,7 +27,9 @@ def fetch_intraday_series(
 
     base_window = max(60, int(window_minutes))
     windows: List[int] = [base_window]
-    extra_windows = fallback_windows if fallback_windows is not None else [24 * 60, 48 * 60, 72 * 60, 7 * 24 * 60]
+    extra_windows = (
+        fallback_windows if fallback_windows is not None else [24 * 60, 48 * 60, 72 * 60, 7 * 24 * 60]
+    )
     for candidate in extra_windows:
         if candidate is None:
             continue
@@ -71,7 +40,10 @@ def fetch_intraday_series(
     now = int(datetime.now(VN_TZ).timestamp())
     for minutes in windows:
         frm = now - minutes * 60
-        url = f"https://dchart-api.vndirect.com.vn/dchart/history?symbol={symbol}&resolution=1&from={frm}&to={now}"
+        url = (
+            f"https://dchart-api.vndirect.com.vn/dchart/history?symbol={symbol}"  # noqa: E501
+            f"&resolution=1&from={frm}&to={now}"
+        )
         headers = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://dchart.vndirect.com.vn/'}
         last_exc: Exception | None = None
         for attempt in range(2):
@@ -87,7 +59,11 @@ def fetch_intraday_series(
                 df = df.dropna()
                 if df.empty:
                     break
-                df['time_vn'] = pd.to_datetime(df['ts'], unit='s', utc=True).dt.tz_convert(VN_TZ).dt.strftime('%Y-%m-%d %H:%M:%S')
+                df['time_vn'] = (
+                    pd.to_datetime(df['ts'], unit='s', utc=True)
+                    .dt.tz_convert(VN_TZ)
+                    .dt.strftime('%Y-%m-%d %H:%M:%S')
+                )
                 return df
             except Exception as exc:
                 last_exc = exc
@@ -105,89 +81,7 @@ def compute_intraday_indicators(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def collect_intraday(tickers: List[str], interval: int = 30, duration: int = 900, outdir: str = 'out/intraday') -> None:
-    tickers = [t.strip().upper() for t in tickers if str(t).strip()]
-    outdir = Path(outdir)
-    outdir.mkdir(parents=True, exist_ok=True)
-    start = time.time()
-    frames: dict[str, pd.DataFrame] = {t: pd.DataFrame(columns=['ts','price']) for t in tickers}
-
-    while time.time() - start < duration:
-        ts = int(datetime.now(VN_TZ).timestamp())
-        for t in tickers:
-            px = fetch_last_price(t)
-            if px is None:
-                continue
-            df = frames[t]
-            frames[t] = pd.concat([df, pd.DataFrame([{'ts': ts, 'price': px}])], ignore_index=True).tail(600)
-        rows = []
-        for t, df in frames.items():
-            if df.empty:
-                continue
-            ind = compute_intraday_indicators(df)
-            ind['time_vn'] = pd.to_datetime(ind['ts'], unit='s', utc=True).dt.tz_convert(VN_TZ).dt.strftime('%Y-%m-%d %H:%M:%S')
-            last = ind.iloc[-1]
-            rsi_val = last.get('rsi14')
-            rsi_num = float(rsi_val) if (rsi_val is not None and not pd.isna(rsi_val)) else 0.0
-            tv = last.get('time_vn')
-            time_vn_str = '' if (tv is None or pd.isna(tv)) else str(tv)
-            ts_value = last['ts']
-            price_value = last['price']
-            if pd.isna(ts_value) or pd.isna(price_value):
-                raise ValueError(f"Missing intraday data for {t}")
-            rows.append({'Ticker': t, 'Ts': int(ts_value), 'Price': float(price_value), 'RSI14': rsi_num, 'TimeVN': time_vn_str})
-            (outdir / f'{t}_intraday.csv').write_text(ind.to_csv(index=False))
-        if rows:
-            pd.DataFrame(rows).to_csv(outdir / 'latest.csv', index=False)
-        time.sleep(interval)
-
-
-def ensure_intraday_latest(tickers: List[str], outdir: str = 'out/intraday', window_minutes: int = 12*60) -> None:
-    tickers = [t.strip().upper() for t in tickers if str(t).strip()]
-    outdir = Path(outdir)
-    outdir.mkdir(parents=True, exist_ok=True)
-    rows = []
-    for t in tickers:
-        series = fetch_intraday_series(t, window_minutes=window_minutes)
-        if series is None or series.empty:
-            p = outdir / f"{t}_intraday.csv"
-            if p.exists() and p.stat().st_size > 0:
-                ind = pd.read_csv(p)
-                if not ind.empty:
-                    last = ind.iloc[-1]
-                    rsi_val = last.get('rsi14')
-                    rsi_num = float(rsi_val) if (rsi_val is not None and not pd.isna(rsi_val)) else 0.0
-                    tv = last.get('time_vn')
-                    time_vn_str = '' if (tv is None or pd.isna(tv)) else str(tv)
-                    ts_value = last['ts']
-                    price_value = last['price']
-                    if pd.isna(ts_value) or pd.isna(price_value):
-                        raise ValueError(f"Missing cached intraday data for {t}")
-                    rows.append({'Ticker': t, 'Ts': int(ts_value), 'Price': float(price_value), 'RSI14': rsi_num, 'TimeVN': time_vn_str})
-            continue
-        ind = compute_intraday_indicators(series)
-        (outdir / f"{t}_intraday.csv").write_text(ind.to_csv(index=False))
-        last = ind.iloc[-1]
-        rsi_val = last.get('rsi14')
-        rsi_num = float(rsi_val) if (rsi_val is not None and not pd.isna(rsi_val)) else 0.0
-        tv = last.get('time_vn')
-        time_vn_str = '' if (tv is None or pd.isna(tv)) else str(tv)
-        ts_value = last['ts']
-        price_value = last['price']
-        if pd.isna(ts_value) or pd.isna(price_value):
-            raise ValueError(f"Missing intraday data for {t}")
-        rows.append({'Ticker': t, 'Ts': int(ts_value), 'Price': float(price_value), 'RSI14': rsi_num, 'TimeVN': time_vn_str})
-    latest_path = outdir / 'latest.csv'
-    if rows:
-        pd.DataFrame(rows).to_csv(latest_path, index=False)
-    elif not latest_path.exists():
-        raise RuntimeError(
-            "Intraday snapshot missing and upstream API returned no data; "
-            "run scripts/collect_intraday.collect_intraday to seed caches or rerun later when the market is active." 
-        )
-
-
-def ensure_intraday_latest_df(tickers: List[str], window_minutes: int = 12*60) -> pd.DataFrame:
+def ensure_intraday_latest_df(tickers: List[str], window_minutes: int = 12 * 60) -> pd.DataFrame:
     tickers = [t.strip().upper() for t in tickers if str(t).strip()]
     rows = []
     for t in tickers:
@@ -206,104 +100,3 @@ def ensure_intraday_latest_df(tickers: List[str], window_minutes: int = 12*60) -
             raise ValueError(f"Missing intraday data for {t}")
         rows.append({'Ticker': t, 'Ts': int(ts_value), 'Price': float(price_value), 'RSI14': rsi_num, 'TimeVN': time_vn_str})
     return pd.DataFrame(rows)
-
-
-def _load_tickers_from_source(source: Path, exclude_labels: Iterable[str]) -> List[str]:
-    if not source.exists():
-        raise FileNotFoundError(f"Ticker source not found: {source}")
-    df = pd.read_csv(source)
-    if 'Ticker' not in df.columns:
-        raise ValueError(f"'Ticker' column missing in {source}")
-    tickers = df['Ticker'].astype(str).str.upper().tolist()
-    exclude_set = {label.upper() for label in exclude_labels}
-    filtered = [t for t in tickers if t and t not in exclude_set]
-    return list(dict.fromkeys(filtered))
-
-
-def _dedupe_preserve_order(items: Iterable[str]) -> List[str]:
-    seen: dict[str, None] = {}
-    for item in items:
-        key = item.strip().upper()
-        if not key or key in seen:
-            continue
-        seen[key] = None
-    return list(seen.keys())
-
-
-def _parse_args(argv: Optional[List[str]]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Collect or refresh intraday caches.")
-    parser.add_argument(
-        "--mode",
-        choices=["ensure-latest", "collect"],
-        default="ensure-latest",
-        help="ensure-latest writes the freshest snapshot once; collect loops for live sampling.",
-    )
-    parser.add_argument(
-        "--tickers",
-        nargs="+",
-        help="Explicit tickers to process. Combine with --tickers-from to merge sources.",
-    )
-    parser.add_argument(
-        "--tickers-from",
-        type=Path,
-        dest="tickers_from",
-        help="CSV file with a 'Ticker' column (e.g. data/industry_map.csv).",
-    )
-    parser.add_argument(
-        "--keep-index-labels",
-        action="store_true",
-        help="Keep index labels such as VNINDEX/VN30/VN100 when loading from CSV.",
-    )
-    parser.add_argument(
-        "--outdir",
-        type=Path,
-        default=Path("out/intraday"),
-        help="Output directory for intraday CSV snapshots.",
-    )
-    parser.add_argument(
-        "--window-minutes",
-        type=int,
-        default=12 * 60,
-        help="Lookback window (minutes) for ensure-latest mode.",
-    )
-    parser.add_argument(
-        "--interval",
-        type=int,
-        default=30,
-        help="Sampling interval in seconds for collect mode.",
-    )
-    parser.add_argument(
-        "--duration",
-        type=int,
-        default=900,
-        help="Total runtime in seconds for collect mode.",
-    )
-    return parser.parse_args(argv)
-
-
-def _resolve_tickers(args: argparse.Namespace) -> List[str]:
-    candidates: List[str] = []
-    if args.tickers:
-        candidates.extend(args.tickers)
-    exclude = [] if args.keep_index_labels else ["VNINDEX", "VN30", "VN100"]
-    if args.tickers_from:
-        candidates.extend(_load_tickers_from_source(args.tickers_from, exclude))
-    tickers = _dedupe_preserve_order(candidates)
-    if not tickers:
-        raise SystemExit("No tickers specified. Provide --tickers and/or --tickers-from.")
-    return tickers
-
-
-def main(argv: Optional[List[str]] = None) -> int:
-    args = _parse_args(argv)
-    tickers = _resolve_tickers(args)
-    outdir = str(Path(args.outdir))
-    if args.mode == "collect":
-        collect_intraday(tickers, interval=int(args.interval), duration=int(args.duration), outdir=outdir)
-        return 0
-    ensure_intraday_latest(tickers, outdir=outdir, window_minutes=int(args.window_minutes))
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1:]))
