@@ -9,6 +9,7 @@ __pycache__/
 # Data inputs/outputs
 .coverage
 *.xlsx
+out/data/
 
 # VSCode
 .vscode/
