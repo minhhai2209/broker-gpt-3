@@ -146,7 +146,7 @@ Repo chỉ còn một workflow: `.github/workflows/data-engine.yml`. Workflow n�
 Bạn có thể copy đoạn prompt ngắn dưới đây khi đã kết nối ChatGPT với repo. Prompt chỉ yêu cầu tra cứu tin tức hiện tại và đọc các file dữ liệu để đề xuất bộ lệnh trong ngày, chỉ dùng lệnh LO.
 
 ```
-Hãy tra cứu tin tức hiện tại liên quan tới các mã và đọc các file sau (đường dẫn tương đối) để đề xuất bộ lệnh hôm nay, chỉ dùng lệnh LO:
+Hãy tra cứu tin tức hiện tại và đọc các file sau (đường dẫn tương đối) để đề xuất bộ lệnh cho phiên VNINDEX tới, chỉ dùng lệnh LO:
 - out/market/technical_snapshot.csv — ảnh chụp kỹ thuật theo mã (giá hiện tại, thay đổi %, SMA/EMA/RSI/ATR, MACD, Z‑score, returns, ADV, 52w range)
 - out/presets/balanced.csv — mức bậc mua/bán theo preset cân bằng
 - out/presets/momentum.csv — mức bậc mua/bán theo preset momentum
