@@ -154,6 +154,11 @@ Hãy tra cứu tin tức hiện tại và đọc các file sau (đường dẫn 
 - out/portfolios/alpha_positions.csv — PnL theo mã, MarketValue/CostBasis/Unrealized
 - out/portfolios/alpha_sector.csv — tổng hợp PnL theo ngành
 - data/order_history/alpha_fills.csv — các lệnh đã khớp trong hôm nay
+ 
+Quy tắc HOSE (áp dụng khi tính LimitPrice/Quantity):
+- Bước giá: < 10.000 VND → 10 VND; 10.000–49.950 VND → 50 VND; ≥ 50.000 VND → 100 VND. ETF/CW: 10 VND.
+- Lô chẵn: bội số 100; tối đa 500.000 cổ/lệnh. Biên độ HOSE: ±7% so với tham chiếu; trần làm tròn xuống, sàn làm tròn lên theo tick.
+- Kiểm tra nhanh: `p_vnd = round(LimitPrice*1000)`; chọn `tick` theo mức `p_vnd`; hợp lệ khi `p_vnd % tick == 0` và `Quantity % 100 == 0`.
 
 Xuất kết quả duy nhất dưới dạng CSV với header: `Ticker,Side,Quantity,LimitPrice`.
 - `Side` là `BUY` hoặc `SELL`.
