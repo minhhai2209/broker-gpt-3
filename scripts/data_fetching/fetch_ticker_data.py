@@ -1,14 +1,4 @@
-"""
-Self-contained OHLCV cache using VNDIRECT dchart API.
-
-Key behavior (self-contained):
-- ensure_ohlc_cache(ticker, ...) guarantees the per-ticker CSV exists
-  under outdir and contains at least `min_days` days of data,
-  and includes the latest available bars; only missing ranges are fetched.
-
-- fetch_for_tickers(...) is a convenience wrapper that calls ensure_ohlc_cache
-  for each ticker.
-"""
+"""Self-contained OHLCV cache using VNDIRECT dchart API."""
 from __future__ import annotations
 import time
 from datetime import datetime, timedelta, timezone
@@ -138,41 +128,19 @@ def first_timestamp_and_count(path: Path) -> Tuple[Optional[int], int]:
     return int(ts.min()), int(len(ts))
 
 
-def session_status(now: Optional[datetime] = None) -> str:
-    if now is None:
-        now = datetime.now(VN_TZ)
-    t = now.time()
-    if t < datetime(now.year, now.month, now.day, 9, 0, tzinfo=VN_TZ).time():
-        return 'trước phiên'
-    if datetime(now.year, now.month, now.day, 9, 0, tzinfo=VN_TZ).time() <= t < datetime(now.year, now.month, now.day, 11, 30, tzinfo=VN_TZ).time():
-        return 'phiên sáng'
-    if datetime(now.year, now.month, now.day, 11, 30, tzinfo=VN_TZ).time() <= t < datetime(now.year, now.month, now.day, 13, 0, tzinfo=VN_TZ).time():
-        return 'nghỉ trưa'
-    if datetime(now.year, now.month, now.day, 13, 0, tzinfo=VN_TZ).time() <= t < datetime(now.year, now.month, now.day, 14, 30, tzinfo=VN_TZ).time():
-        return 'phiên chiều'
-    if datetime(now.year, now.month, now.day, 14, 30, tzinfo=VN_TZ).time() <= t < datetime(now.year, now.month, now.day, 14, 45, tzinfo=VN_TZ).time():
-        return 'ATC'
-    return 'sau phiên'
-
-
 def ensure_ohlc_cache(ticker: str,
                       outdir: str = 'out/data',
                       min_days: int = 400,
-                      resolution: str = 'D',
-                      eod_only: bool = False) -> None:
+                      resolution: str = 'D') -> None:
     """Ensure per-ticker OHLC CSV exists and is up-to-date.
 
     - Creates file if missing with at least `min_days` history.
     - Backfills older data if existing file has fewer than `min_days` rows.
     - Appends missing recent bars to current time.
-    - Respects `eod_only`: if true, only runs when after session close.
     """
     outp = Path(outdir) / f"{ticker}_daily.csv"
     outp.parent.mkdir(parents=True, exist_ok=True)
     now_ts = int(datetime.now(VN_TZ).timestamp())
-    if eod_only and session_status() != 'sau phiên':
-        # Silent no-op if not after close
-        return
 
     # 1) If file missing, fetch full window [now - min_days, now]
     if not outp.exists() or outp.stat().st_size == 0:
@@ -215,15 +183,6 @@ def ensure_ohlc_cache(ticker: str,
             pass
 
 
-def fetch_for_tickers(tickers: List[str], outdir: str = 'out/data', days: int = 400, resolution: str = 'D', eod_only: bool = False) -> None:
-    """Compatibility wrapper: ensure cache for a list of tickers.
-    - `days` kept for compatibility; maps to `min_days`.
-    """
-    tickers = [t.strip().upper() for t in tickers if str(t).strip()]
-    for t in tickers:
-        ensure_ohlc_cache(t, outdir=outdir, min_days=days, resolution=resolution, eod_only=eod_only)
-
-
 def ensure_and_load_history_df(tickers: List[str], outdir: str = 'out/data', min_days: int = 400, resolution: str = 'D'):
     """Ensure caches for tickers, then load and merge into a single DataFrame.
     Returns columns: Date,Ticker,Open,High,Low,Close,Volume,t
@@ -237,7 +196,7 @@ def ensure_and_load_history_df(tickers: List[str], outdir: str = 'out/data', min
     except Exception:
         pass
     for t in tickers:
-        ensure_ohlc_cache(t, outdir=outdir, min_days=min_days, resolution=resolution, eod_only=False)
+        ensure_ohlc_cache(t, outdir=outdir, min_days=min_days, resolution=resolution)
     rows = []
     for t in tickers:
         path = Path(outdir) / f"{t}_daily.csv"
