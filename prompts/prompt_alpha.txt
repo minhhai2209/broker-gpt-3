@@ -10,6 +10,7 @@ Danh sách các file:
   7) https://raw.githubusercontent.com/minhhai2209/broker-gpt-3/refs/heads/main/out/portfolios/alpha_positions.csv — PnL theo mã, MarketValue/CostBasis/Unrealized
   8) https://raw.githubusercontent.com/minhhai2209/broker-gpt-3/refs/heads/main/out/portfolios/alpha_sector.csv — tổng hợp PnL theo ngành
   9) https://raw.githubusercontent.com/minhhai2209/broker-gpt-3/refs/heads/main/data/order_history/alpha_fills.csv — các lệnh đã khớp trong hôm nay
+- Các file này public nên bạn có thể lấy trực tiếp bằng URL đã để trong danh sách, không cần đọc Github repo.
 - Thiếu bất kỳ file nào: trả về thông báo lỗi ngắn gọn và dừng.
 
 Phạm vi & dữ liệu:
@@ -27,5 +28,4 @@ Validation HOSE (ngắn gọn):
 - Lô chẵn bội 100; ≤500,000 cổ/lệnh. Biên độ ±7%; trần làm tròn xuống, sàn làm tròn lên.
 - Check nhanh (LimitPrice theo nghìn): p=round(LimitPrice*1000) ⇒ hợp lệ nếu p%tick==0, Quantity%100==0, p∈[sàn,trần].
 
-Output:
-- Trả về **một code block** CSV (```csv ... ```), header: Ticker,Side,Quantity,LimitPrice.
+Output các lệnh dưới dạng CSV với các cột: Ticker,Side,Quantity,LimitPrice.
