@@ -76,6 +76,23 @@ def _log_step(name: str, **fields: object):
         LOGGER.info("✓ %s done in %.3fs", name, dt)
 
 
+def _log_url_after_goto(page, tag: str) -> None:
+    """Log the current page URL immediately after goto and after a short settle.
+
+    Accept a Playwright `page` to make this usable across functions.
+    """
+    try:
+        LOGGER.info("current_url=%s tag=%s", page.url, f"{tag}.after_goto")
+        page.wait_for_load_state("domcontentloaded")
+    except Exception:
+        pass
+    try:
+        page.wait_for_timeout(700)
+    except Exception:
+        pass
+    LOGGER.info("current_url=%s tag=%s", page.url, f"{tag}.after_settle")
+
+
 def _load_env_if_present(root: Path) -> None:
     env_path = root / ".env"
     if not env_path.exists():
@@ -375,19 +392,7 @@ def fetch_tcbs_portfolio(
                     continue
             return False
 
-        # Helper to record URL immediately and after a short settle period
-        def _log_url_after_goto(tag: str) -> None:
-            try:
-                LOGGER.info("current_url=%s tag=%s", page.url, f"{tag}.after_goto")
-                # Give client-side redirects time to fire
-                page.wait_for_load_state("domcontentloaded")
-            except Exception:
-                pass
-            try:
-                page.wait_for_timeout(700)
-            except Exception:
-                pass
-            LOGGER.info("current_url=%s tag=%s", page.url, f"{tag}.after_settle")
+        # URL logging moved to module scope as _log_url_after_goto(page, tag)
 
         def attempt_login() -> None:
             LOGGER.info("login: attempt begin")
@@ -455,7 +460,7 @@ def fetch_tcbs_portfolio(
                 LOGGER.info("goto_response_url=%s status=%s", getattr(resp, "url", None), getattr(resp, "status", None))
             except Exception:
                 pass
-            _log_url_after_goto("/home")
+            _log_url_after_goto(page, "/home")
         if _has_login_ui():
             attempt_login()
 
@@ -466,7 +471,7 @@ def fetch_tcbs_portfolio(
                 LOGGER.info("goto_response_url=%s status=%s", getattr(resp, "url", None), getattr(resp, "status", None))
             except Exception:
                 pass
-            _log_url_after_goto("/my-asset")
+            _log_url_after_goto(page, "/my-asset")
         # If redirected back to login, the user likely needs OTP/device confirm; allow manual action in headful mode
         if _has_login_ui():
             LOGGER.warning("login: still on login; complete OTP/device confirm if prompted")
@@ -479,7 +484,7 @@ def fetch_tcbs_portfolio(
                     LOGGER.info("goto_response_url=%s status=%s", getattr(resp, "url", None), getattr(resp, "status", None))
                 except Exception:
                     pass
-                _log_url_after_goto("/my-asset.retry")
+                _log_url_after_goto(page, "/my-asset.retry")
         # Avoid blocking on long-lived sockets
         page.wait_for_load_state("domcontentloaded")
 
@@ -490,7 +495,7 @@ def fetch_tcbs_portfolio(
                 LOGGER.info("goto_response_url=%s status=%s", getattr(resp, "url", None), getattr(resp, "status", None))
             except Exception:
                 pass
-            _log_url_after_goto("/my-asset.2")
+            _log_url_after_goto(page, "/my-asset.2")
         # If redirected back to login, the user likely needs OTP/device confirm; allow manual action in headful mode
         if _has_login_ui():
             LOGGER.warning("login: still on login; complete OTP/device confirm if prompted")
@@ -502,7 +507,7 @@ def fetch_tcbs_portfolio(
                     LOGGER.info("goto_response_url=%s status=%s", getattr(resp, "url", None), getattr(resp, "status", None))
                 except Exception:
                     pass
-                _log_url_after_goto("/my-asset.3")
+                _log_url_after_goto(page, "/my-asset.3")
         # Avoid blocking on long-lived sockets
         page.wait_for_load_state("domcontentloaded")
 
@@ -576,7 +581,7 @@ def _fetch_statement_today(page, root: Path, profile: str) -> Tuple[Path, Path]:
             LOGGER.info("goto_response_url=%s status=%s", getattr(resp, "url", None), getattr(resp, "status", None))
         except Exception:
             pass
-        _log_url_after_goto("/lookup")
+        _log_url_after_goto(page, "/lookup")
     # Click search
     with _log_step("click_search"):
         try:
