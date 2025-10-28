@@ -1,5 +1,5 @@
 Ticker,Sector,LastPrice,LastClose,PriceSource,Buy_1,Buy_2,Sell_1,Sell_2,Sell_3
-AAA,Nguyên vật liệu,7.61,7.63,intraday,7.5339,7.61,7.8383,7.9905,8.2188
+AAA,Nguyên vật liệu,7.61,7.61,intraday,7.5339,7.61,7.8383,7.9905,8.2188
 ACB,Tài chính,25.4,25.4,intraday,25.146,25.4,26.162,26.67,27.432
 AGG,Bất động sản,16.25,16.25,intraday,16.0875,16.25,16.7375,17.0625,17.55
 ANV,Hàng tiêu dùng thiết yếu,28.95,28.95,intraday,28.6605,28.95,29.8185,30.3975,31.266
