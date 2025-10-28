@@ -388,12 +388,14 @@ def fetch_tcbs_portfolio(
         # Step 0: Open home; if redirected to login, perform login
         with _log_step("navigate", url="/home"):
             page.goto("https://tcinvest.tcbs.com.vn/home", wait_until="domcontentloaded")
+            LOGGER.info("current_url=%s", page.url)
         if "guest/login" in page.url:
             attempt_login()
 
         # Always navigate explicitly to my-asset (site may not redirect)
         with _log_step("navigate", url="/my-asset"):
             page.goto("https://tcinvest.tcbs.com.vn/my-asset", wait_until="domcontentloaded")
+            LOGGER.info("current_url=%s", page.url)
         # If redirected back to login, the user likely needs OTP/device confirm; allow manual action in headful mode
         if "guest/login" in page.url:
             LOGGER.warning("login: still on login; complete OTP/device confirm if prompted")
@@ -402,12 +404,14 @@ def fetch_tcbs_portfolio(
             attempt_login()
             with _log_step("navigate", url="/my-asset"):
                 page.goto("https://tcinvest.tcbs.com.vn/my-asset", wait_until="domcontentloaded")
+                LOGGER.info("current_url=%s", page.url)
         # Avoid blocking on long-lived sockets
         page.wait_for_load_state("domcontentloaded")
 
         # Always navigate explicitly to my-asset (site may not redirect)
         with _log_step("navigate", url="/my-asset"):
             page.goto("https://tcinvest.tcbs.com.vn/my-asset", wait_until="domcontentloaded")
+            LOGGER.info("current_url=%s", page.url)
         # If redirected back to login, the user likely needs OTP/device confirm; allow manual action in headful mode
         if "guest/login" in page.url:
             LOGGER.warning("login: still on login; complete OTP/device confirm if prompted")
@@ -415,6 +419,7 @@ def fetch_tcbs_portfolio(
             page.wait_for_timeout(5000)
             with _log_step("navigate", url="/my-asset"):
                 page.goto("https://tcinvest.tcbs.com.vn/my-asset", wait_until="domcontentloaded")
+                LOGGER.info("current_url=%s", page.url)
         # Avoid blocking on long-lived sockets
         page.wait_for_load_state("domcontentloaded")
 
@@ -484,6 +489,7 @@ def _fetch_statement_today(page, root: Path, profile: str) -> Tuple[Path, Path]:
 
     with _log_step("navigate", url="/lookup?tabName=statementStock"):
         page.goto("https://tcinvest.tcbs.com.vn/lookup?tabName=statementStock", wait_until="domcontentloaded")
+        LOGGER.info("current_url=%s", page.url)
     # Click search
     with _log_step("click_search"):
         try:
