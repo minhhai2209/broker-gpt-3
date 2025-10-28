@@ -1,6 +1,4 @@
-Kết hợp tin tức hiện thời (tự tra cứu) với dữ liệu trong GitHub repo dưới đây để đề xuất bộ lệnh cho phiên VNINDEX tới, chỉ dùng lệnh LO. Nếu không truy cập được repo, dừng lại và báo lỗi.
-
-Đọc các file sau (đường dẫn tương đối):
+Kết hợp tin tức hiện thời với dữ liệu trong GitHub repo dưới đây để đề xuất bộ lệnh cho phiên VNINDEX tới. Nếu không truy cập được repo, dừng lại và báo lỗi.
 1) out/market/technical_snapshot.csv — ảnh chụp kỹ thuật theo mã (giá hiện tại, thay đổi %, SMA/EMA/RSI/ATR, MACD, Z‑score, returns, ADV, 52w range)
 2) out/presets/balanced.csv — mức bậc mua/bán theo preset balanced
 3) out/presets/momentum.csv — mức bậc mua/bán theo preset momentum
@@ -9,7 +7,7 @@ Kết hợp tin tức hiện thời (tự tra cứu) với dữ liệu trong Git
 6) out/portfolios/alpha_sector.csv — tổng hợp PnL theo ngành
 7) data/order_history/alpha_fills.csv — các lệnh đã khớp trong hôm nay
 
-Dựa trên dữ liệu và mô tả preset sau đây, chọn chiến lược phù hợp:
+Ý nghĩa của các presets:
 - balanced: thiết lập cân bằng giữa tích lũy và chốt lời. Mua từng phần khi giá điều chỉnh nhẹ; chốt lời theo các bậc tăng dần.
 - momentum: mua theo đà và chốt lời nhanh. Ưu tiên mã có động lượng; dừng lỗ sớm nếu đà gãy.
 
