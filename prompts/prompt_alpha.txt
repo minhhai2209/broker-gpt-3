@@ -1,10 +1,17 @@
 Nhiệm vụ: tra cứu tin tức hiện tại và đọc các file sau (đường dẫn tương đối) để đề xuất bộ lệnh cho phiên VNINDEX tới, chỉ dùng lệnh LO.
 
 Danh sách file cần đọc:
-{{FILE_LIST}}
+1) out/market/technical_snapshot.csv — ảnh chụp kỹ thuật theo mã (giá hiện tại, thay đổi %, SMA/EMA/RSI/ATR, MACD, Z‑score, returns, ADV, 52w range)
+2) out/presets/balanced.csv — mức bậc mua/bán theo preset balanced
+3) out/presets/momentum.csv — mức bậc mua/bán theo preset momentum
+4) data/portfolios/alpha.csv — danh mục hiện tại (Ticker, Quantity, AvgPrice)
+5) out/portfolios/alpha_positions.csv — PnL theo mã, MarketValue/CostBasis/Unrealized
+6) out/portfolios/alpha_sector.csv — tổng hợp PnL theo ngành
+7) data/order_history/alpha_fills.csv — các lệnh đã khớp trong hôm nay
 
 Mô tả preset để áp dụng khi ra quyết định:
-{{PRESET_DESCRIPTIONS}}
+- balanced: Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+- momentum: Mua theo đà, chốt lời nhanh.
 
 Yêu cầu ra quyết định:
 - chỉ dùng lệnh LO; LimitPrice tính theo nghìn đồng.
@@ -20,4 +27,4 @@ Quy tắc HOSE để kiểm tra giá/khối lượng hợp lệ:
 - làm tròn trần/sàn theo quy chế: trần làm tròn xuống, sàn làm tròn lên theo đúng tick.
 - kiểm tra nhanh (giá báo theo nghìn đồng): p_vnd = round(LimitPrice*1000); chọn tick theo p_vnd; hợp lệ khi (p_vnd % tick == 0) và (Quantity % 100 == 0).
 
-Lưu ý: profile đang dùng là {{PROFILE}}. Nếu thay profile, cập nhật lại đường dẫn tương ứng.
+Lưu ý: profile đang dùng là alpha. Nếu thay profile, cập nhật lại đường dẫn tương ứng.

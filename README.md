@@ -162,9 +162,11 @@ Repo chỉ còn một workflow: `.github/workflows/data-engine.yml`. Workflow n�
 
 ## Prompt gợi ý cho ChatGPT
 
-Prompt mẫu đã tách riêng để dễ copy/cập nhật: xem `prompts/SAMPLE_PROMPT.txt` (thuần văn bản, không dùng Markdown).
+- Prompt mẫu (template): `prompts/SAMPLE_PROMPT.txt` — thuần văn bản, có placeholder `{{PROFILE}}`, `{{FILE_LIST}}`, `{{PRESET_DESCRIPTIONS}}`.
+- Sinh prompt theo từng profile: `./broker.sh prompts` (quét `data/portfolios/*.csv` và tạo `prompts/prompt_<profile>.txt`).
+- Sinh cho một số profile cụ thể: `./broker.sh prompts --profiles alpha,beta`.
 
-Ghi chú: Mô tả preset được viết thẳng trong prompt để tránh lặp lại trên từng dòng CSV. Các file `out/presets/<preset>.csv` chỉ chứa mức giá Buy_i/Sell_i.
+Ghi chú: Mô tả preset được viết thẳng trong prompt; CSV preset chỉ còn các cột Buy_i/Sell_i.
 
 ### Quy tắc HOSE để tính giá/khối lượng hợp lệ
 

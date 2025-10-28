@@ -43,6 +43,12 @@ run_server() {
   exit 2
 }
 
+run_prompts() {
+  ensure_venv
+  echo "[prompts] Using: $PY_BIN"
+  "$PY_BIN" -m scripts.tools.gen_prompts "$@"
+}
+
 main() {
   local task="${1:-all}"
   shift || true
@@ -63,6 +69,9 @@ main() {
       ;;
     server)
       run_server "$@" # kept for compatibility; now deprecated
+      ;;
+    prompts)
+      run_prompts "$@"
       ;;
     tcbs)
       ensure_venv
