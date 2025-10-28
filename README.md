@@ -164,7 +164,7 @@ Repo chỉ còn một workflow: `.github/workflows/data-engine.yml`. Workflow n�
 
 Prompt mẫu đã tách riêng để dễ copy/cập nhật: xem `prompts/SAMPLE_PROMPT.md`.
 
-Ghi chú: Prompt này yêu cầu ChatGPT đọc cột `PresetDescription` trong từng file `out/presets/<preset>.csv` để tự hiểu và áp dụng đúng ý nghĩa của mỗi preset (ví dụ: `balanced`, `momentum`).
+Ghi chú: Mô tả preset được viết thẳng trong prompt để tránh lặp lại trên từng dòng CSV. Các file `out/presets/<preset>.csv` chỉ chứa mức giá Buy_i/Sell_i.
 
 ### Quy tắc HOSE để tính giá/khối lượng hợp lệ
 

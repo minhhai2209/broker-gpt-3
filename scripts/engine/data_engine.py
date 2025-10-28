@@ -443,8 +443,6 @@ class PresetWriter:
                 for idx, adj in enumerate(preset.sell_tiers, start=1):
                     col = f"Sell_{idx}"
                     df[col] = (df["LastPrice"] * (1.0 + float(adj))).round(4)
-                if preset.description:
-                    df["PresetDescription"] = preset.description
             out_path = self._output_dir / f"{name}.csv"
             df.to_csv(out_path, index=False)
 

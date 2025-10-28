@@ -68,7 +68,7 @@ Mọi đường dẫn được chuẩn hoá thành `Path.resolve()`. Thiếu tr�
 
 - Đọc snapshot, tạo file cho từng preset dưới `out/presets/`.
 - Mỗi file gồm `Ticker`, `Sector`, `LastPrice`, `LastClose`, `PriceSource`, các cột `Buy_i`, `Sell_i` (round 4 chữ số).
-- Nếu preset có mô tả (`description`), cột `PresetDescription` được thêm vào.
+- Mô tả preset được trình bày trong prompt mẫu (không lặp lại dưới dạng cột trong CSV để tránh dư thừa).
 
 ### PortfolioReporter
 
