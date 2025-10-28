@@ -162,31 +162,9 @@ Repo chỉ còn một workflow: `.github/workflows/data-engine.yml`. Workflow n�
 
 ## Prompt gợi ý cho ChatGPT
 
-Bạn có thể copy đoạn prompt ngắn dưới đây khi đã kết nối ChatGPT với repo. Prompt chỉ yêu cầu tra cứu tin tức hiện tại và đọc các file dữ liệu để đề xuất bộ lệnh trong ngày, chỉ dùng lệnh LO. Prompt này áp dụng cho profile `alpha`.
+Prompt mẫu đã tách riêng để dễ copy/cập nhật: xem `prompts/SAMPLE_PROMPT.md`.
 
-```
-Hãy tra cứu tin tức hiện tại và đọc các file sau (đường dẫn tương đối) để đề xuất bộ lệnh cho phiên VNINDEX tới, chỉ dùng lệnh LO:
-- out/market/technical_snapshot.csv — ảnh chụp kỹ thuật theo mã (giá hiện tại, thay đổi %, SMA/EMA/RSI/ATR, MACD, Z‑score, returns, ADV, 52w range)
-- out/presets/balanced.csv — mức bậc mua/bán theo preset cân bằng
-- out/presets/momentum.csv — mức bậc mua/bán theo preset momentum
-- data/portfolios/alpha.csv — danh mục hiện tại (Ticker, Quantity, AvgPrice)
-- out/portfolios/alpha_positions.csv — PnL theo mã, MarketValue/CostBasis/Unrealized
-- out/portfolios/alpha_sector.csv — tổng hợp PnL theo ngành
-- data/order_history/alpha_fills.csv — các lệnh đã khớp trong hôm nay
-
-Lệnh mua có thể là mua thêm mã có sẵn hoặc mua mới mã chưa có. Lệnh bán có thể là bạn một phần hoặc bán hết.
-
-Các file đều ở trong Github repo mà tôi đã liên kết trong prompt. Nếu bạn không thể truy cập, hãy dừng lại vào báo ngay.
- 
-Quy tắc HOSE (áp dụng khi tính LimitPrice/Quantity):
-- Bước giá: < 10.000 VND → 10 VND; 10.000–49.950 VND → 50 VND; ≥ 50.000 VND → 100 VND. ETF/CW: 10 VND.
-- Lô chẵn: bội số 100; tối đa 500.000 cổ/lệnh. Biên độ HOSE: ±7% so với tham chiếu; trần làm tròn xuống, sàn làm tròn lên theo tick.
-- Kiểm tra nhanh: `p_vnd = round(LimitPrice*1000)`; chọn `tick` theo mức `p_vnd`; hợp lệ khi `p_vnd % tick == 0` và `Quantity % 100 == 0`.
-
-Xuất kết quả duy nhất dưới dạng CSV với header: `Ticker,Side,Quantity,LimitPrice`.
-- `Side` là `BUY` hoặc `SELL`.
-- `LimitPrice` ghi theo đơn vị nghìn đồng.
-```
+Ghi chú: Prompt này yêu cầu ChatGPT đọc cột `PresetDescription` trong từng file `out/presets/<preset>.csv` để tự hiểu và áp dụng đúng ý nghĩa của mỗi preset (ví dụ: `balanced`, `momentum`).
 
 ### Quy tắc HOSE để tính giá/khối lượng hợp lệ
 
