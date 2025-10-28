@@ -1,103 +1,103 @@
 Ticker,Sector,LastPrice,LastClose,PriceSource,Buy_1,Buy_2,Buy_3,Sell_1,Sell_2,Sell_3,PresetDescription
-AAA,Nguyên vật liệu,7.59,7.57,intraday,7.3623,7.4382,7.5141,7.7418,7.8936,8.0454,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-ACB,Tài chính,25.2,25.2,intraday,24.444,24.696,24.948,25.704,26.208,26.712,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-AGG,Bất động sản,16.0,16.05,intraday,15.52,15.68,15.84,16.32,16.64,16.96,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-ANV,Hàng tiêu dùng thiết yếu,27.85,27.9,intraday,27.0145,27.293,27.5715,28.407,28.964,29.521,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-ASM,Hàng tiêu dùng thiết yếu,6.8,6.81,intraday,6.596,6.664,6.732,6.936,7.072,7.208,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+AAA,Nguyên vật liệu,7.58,7.58,intraday,7.3526,7.4284,7.5042,7.7316,7.8832,8.0348,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+ACB,Tài chính,25.1,25.1,intraday,24.347,24.598,24.849,25.602,26.104,26.606,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+AGG,Bất động sản,16.0,15.95,intraday,15.52,15.68,15.84,16.32,16.64,16.96,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+ANV,Hàng tiêu dùng thiết yếu,27.35,27.35,intraday,26.5295,26.803,27.0765,27.897,28.444,28.991,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+ASM,Hàng tiêu dùng thiết yếu,6.77,6.77,intraday,6.5669,6.6346,6.7023,6.9054,7.0408,7.1762,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
 BCG,Công nghiệp,2.53,2.53,close,2.4541,2.4794,2.5047,2.5806,2.6312,2.6818,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-BCM,Bất động sản,65.7,65.7,intraday,63.729,64.386,65.043,67.014,68.328,69.642,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-BID,Tài chính,37.05,37.05,intraday,35.9385,36.309,36.6795,37.791,38.532,39.273,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-BMP,Nguyên vật liệu,168.1,168.1,intraday,163.057,164.738,166.419,171.462,174.824,178.186,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-BSI,Tài chính,42.95,42.8,intraday,41.6615,42.091,42.5205,43.809,44.668,45.527,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-BVH,Tài chính,49.7,49.65,intraday,48.209,48.706,49.203,50.694,51.688,52.682,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-BWE,Dịch vụ tiện ích,47.95,47.95,intraday,46.5115,46.991,47.4705,48.909,49.868,50.827,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-CII,Công nghiệp,24.7,24.7,intraday,23.959,24.206,24.453,25.194,25.688,26.182,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-CMG,Công nghệ thông tin,40.05,40.1,intraday,38.8485,39.249,39.6495,40.851,41.652,42.453,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-CRE,Bất động sản,9.69,9.69,intraday,9.3993,9.4962,9.5931,9.8838,10.0776,10.2714,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-CTD,Công nghiệp,86.8,86.8,intraday,84.196,85.064,85.932,88.536,90.272,92.008,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-CTG,Tài chính,48.3,48.25,intraday,46.851,47.334,47.817,49.266,50.232,51.198,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-CTR,Công nghiệp,91.1,91.0,intraday,88.367,89.278,90.189,92.922,94.744,96.566,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-DBC,Hàng tiêu dùng thiết yếu,25.6,25.6,intraday,24.832,25.088,25.344,26.112,26.624,27.136,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-DCM,Nguyên vật liệu,34.55,34.6,intraday,33.5135,33.859,34.2045,35.241,35.932,36.623,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-DGC,Nguyên vật liệu,94.6,94.6,intraday,91.762,92.708,93.654,96.492,98.384,100.276,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-DGW,Công nghệ thông tin,39.15,39.15,intraday,37.9755,38.367,38.7585,39.933,40.716,41.499,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-DHC,Nguyên vật liệu,34.75,35.0,intraday,33.7075,34.055,34.4025,35.445,36.14,36.835,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-DIG,Bất động sản,20.3,20.35,intraday,19.691,19.894,20.097,20.706,21.112,21.518,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-DPM,Nguyên vật liệu,23.5,23.5,intraday,22.795,23.03,23.265,23.97,24.44,24.91,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-DXG,Bất động sản,20.35,20.4,intraday,19.7395,19.943,20.1465,20.757,21.164,21.571,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-DXS,Bất động sản,10.45,10.4,intraday,10.1365,10.241,10.3455,10.659,10.868,11.077,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-EIB,Tài chính,22.55,22.5,intraday,21.8735,22.099,22.3245,23.001,23.452,23.903,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-EVF,Tài chính,12.65,12.65,intraday,12.2705,12.397,12.5235,12.903,13.156,13.409,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-FPT,Công nghệ thông tin,101.7,101.7,intraday,98.649,99.666,100.683,103.734,105.768,107.802,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-FRT,Hàng tiêu dùng không thiết yếu,146.4,146.3,intraday,142.008,143.472,144.936,149.328,152.256,155.184,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-FTS,Tài chính,35.45,35.4,intraday,34.3865,34.741,35.0955,36.159,36.868,37.577,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-GAS,Dịch vụ tiện ích,59.5,59.6,intraday,57.715,58.31,58.905,60.69,61.88,63.07,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-GEX,Công nghiệp,49.2,49.0,intraday,47.724,48.216,48.708,50.184,51.168,52.152,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-GMD,Công nghiệp,65.3,65.4,intraday,63.341,63.994,64.647,66.606,67.912,69.218,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-GVR,Nguyên vật liệu,27.25,27.25,intraday,26.4325,26.705,26.9775,27.795,28.34,28.885,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-HAG,Hàng tiêu dùng thiết yếu,15.5,15.55,intraday,15.035,15.19,15.345,15.81,16.12,16.43,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-HCM,Tài chính,23.8,23.75,intraday,23.086,23.324,23.562,24.276,24.752,25.228,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-HDB,Tài chính,31.5,31.4,intraday,30.555,30.87,31.185,32.13,32.76,33.39,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-HDC,Bất động sản,33.5,33.4,intraday,32.495,32.83,33.165,34.17,34.84,35.51,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-HDG,Công nghiệp,30.1,30.0,intraday,29.197,29.498,29.799,30.702,31.304,31.906,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-HHV,Công nghiệp,14.4,14.4,intraday,13.968,14.112,14.256,14.688,14.976,15.264,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-HPG,Nguyên vật liệu,26.45,26.4,intraday,25.6565,25.921,26.1855,26.979,27.508,28.037,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-HSG,Nguyên vật liệu,16.7,16.7,intraday,16.199,16.366,16.533,17.034,17.368,17.702,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-HT1,Nguyên vật liệu,17.0,17.0,intraday,16.49,16.66,16.83,17.34,17.68,18.02,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-IDC,Bất động sản,36.3,36.3,intraday,35.211,35.574,35.937,37.026,37.752,38.478,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-IMP,Y tế,48.95,48.95,intraday,47.4815,47.971,48.4605,49.929,50.908,51.887,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-KBC,Bất động sản,34.35,34.35,intraday,33.3195,33.663,34.0065,35.037,35.724,36.411,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+BCM,Bất động sản,64.7,64.7,intraday,62.759,63.406,64.053,65.994,67.288,68.582,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+BID,Tài chính,37.0,37.0,intraday,35.89,36.26,36.63,37.74,38.48,39.22,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+BMP,Nguyên vật liệu,167.1,167.1,intraday,162.087,163.758,165.429,170.442,173.784,177.126,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+BSI,Tài chính,42.6,42.6,intraday,41.322,41.748,42.174,43.452,44.304,45.156,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+BVH,Tài chính,49.6,49.6,intraday,48.112,48.608,49.104,50.592,51.584,52.576,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+BWE,Dịch vụ tiện ích,47.9,47.9,intraday,46.463,46.942,47.421,48.858,49.816,50.774,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+CII,Công nghiệp,24.25,24.3,intraday,23.5225,23.765,24.0075,24.735,25.22,25.705,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+CMG,Công nghệ thông tin,40.0,40.0,intraday,38.8,39.2,39.6,40.8,41.6,42.4,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+CRE,Bất động sản,9.51,9.51,intraday,9.2247,9.3198,9.4149,9.7002,9.8904,10.0806,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+CTD,Công nghiệp,85.8,85.8,intraday,83.226,84.084,84.942,87.516,89.232,90.948,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+CTG,Tài chính,48.05,48.0,intraday,46.6085,47.089,47.5695,49.011,49.972,50.933,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+CTR,Công nghiệp,91.2,91.1,intraday,88.464,89.376,90.288,93.024,94.848,96.672,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+DBC,Hàng tiêu dùng thiết yếu,25.45,25.5,intraday,24.6865,24.941,25.1955,25.959,26.468,26.977,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+DCM,Nguyên vật liệu,34.5,34.5,intraday,33.465,33.81,34.155,35.19,35.88,36.57,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+DGC,Nguyên vật liệu,93.6,93.6,intraday,90.792,91.728,92.664,95.472,97.344,99.216,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+DGW,Công nghệ thông tin,39.05,39.05,intraday,37.8785,38.269,38.6595,39.831,40.612,41.393,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+DHC,Nguyên vật liệu,34.95,34.9,intraday,33.9015,34.251,34.6005,35.649,36.348,37.047,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+DIG,Bất động sản,19.95,20.05,intraday,19.3515,19.551,19.7505,20.349,20.748,21.147,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+DPM,Nguyên vật liệu,23.45,23.45,intraday,22.7465,22.981,23.2155,23.919,24.388,24.857,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+DXG,Bất động sản,20.05,20.05,intraday,19.4485,19.649,19.8495,20.451,20.852,21.253,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+DXS,Bất động sản,10.3,10.3,intraday,9.991,10.094,10.197,10.506,10.712,10.918,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+EIB,Tài chính,22.4,22.35,intraday,21.728,21.952,22.176,22.848,23.296,23.744,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+EVF,Tài chính,12.6,12.65,intraday,12.222,12.348,12.474,12.852,13.104,13.356,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+FPT,Công nghệ thông tin,101.5,101.5,intraday,98.455,99.47,100.485,103.53,105.56,107.59,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+FRT,Hàng tiêu dùng không thiết yếu,145.8,145.9,intraday,141.426,142.884,144.342,148.716,151.632,154.548,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+FTS,Tài chính,35.1,35.1,intraday,34.047,34.398,34.749,35.802,36.504,37.206,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+GAS,Dịch vụ tiện ích,59.4,59.4,intraday,57.618,58.212,58.806,60.588,61.776,62.964,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+GEX,Công nghiệp,48.15,48.15,intraday,46.7055,47.187,47.6685,49.113,50.076,51.039,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+GMD,Công nghiệp,65.0,65.1,intraday,63.05,63.7,64.35,66.3,67.6,68.9,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+GVR,Nguyên vật liệu,27.15,27.1,intraday,26.3355,26.607,26.8785,27.693,28.236,28.779,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+HAG,Hàng tiêu dùng thiết yếu,15.45,15.45,intraday,14.9865,15.141,15.2955,15.759,16.068,16.377,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+HCM,Tài chính,23.6,23.6,intraday,22.892,23.128,23.364,24.072,24.544,25.016,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+HDB,Tài chính,31.2,31.15,intraday,30.264,30.576,30.888,31.824,32.448,33.072,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+HDC,Bất động sản,33.1,33.1,intraday,32.107,32.438,32.769,33.762,34.424,35.086,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+HDG,Công nghiệp,29.8,29.75,intraday,28.906,29.204,29.502,30.396,30.992,31.588,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+HHV,Công nghiệp,14.35,14.35,intraday,13.9195,14.063,14.2065,14.637,14.924,15.211,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+HPG,Nguyên vật liệu,26.3,26.3,intraday,25.511,25.774,26.037,26.826,27.352,27.878,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+HSG,Nguyên vật liệu,16.7,16.65,intraday,16.199,16.366,16.533,17.034,17.368,17.702,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+HT1,Nguyên vật liệu,16.8,16.8,intraday,16.296,16.464,16.632,17.136,17.472,17.808,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+IDC,Bất động sản,36.4,36.4,intraday,35.308,35.672,36.036,37.128,37.856,38.584,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+IMP,Y tế,48.25,48.95,intraday,46.8025,47.285,47.7675,49.215,50.18,51.145,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+KBC,Bất động sản,34.05,34.15,intraday,33.0285,33.369,33.7095,34.731,35.412,36.093,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
 KDC,Hàng tiêu dùng thiết yếu,51.6,51.6,intraday,50.052,50.568,51.084,52.632,53.664,54.696,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-KDH,Bất động sản,32.25,32.2,intraday,31.2825,31.605,31.9275,32.895,33.54,34.185,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-KOS,Bất động sản,38.65,38.65,intraday,37.4905,37.877,38.2635,39.423,40.196,40.969,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-LPB,Tài chính,53.0,53.0,intraday,51.41,51.94,52.47,54.06,55.12,56.18,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-MBB,Tài chính,23.5,23.5,intraday,22.795,23.03,23.265,23.97,24.44,24.91,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-MSB,Tài chính,12.0,12.0,intraday,11.64,11.76,11.88,12.24,12.48,12.72,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-MSN,Hàng tiêu dùng thiết yếu,77.8,77.7,intraday,75.466,76.244,77.022,79.356,80.912,82.468,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-MWG,Hàng tiêu dùng không thiết yếu,81.5,81.4,intraday,79.055,79.87,80.685,83.13,84.76,86.39,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-NKG,Nguyên vật liệu,15.85,15.9,intraday,15.3745,15.533,15.6915,16.167,16.484,16.801,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-NLG,Bất động sản,35.95,35.95,intraday,34.8715,35.231,35.5905,36.669,37.388,38.107,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-NT2,Dịch vụ tiện ích,23.1,23.1,intraday,22.407,22.638,22.869,23.562,24.024,24.486,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-OCB,Tài chính,12.6,12.65,intraday,12.222,12.348,12.474,12.852,13.104,13.356,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-PAN,Hàng tiêu dùng thiết yếu,30.85,30.9,intraday,29.9245,30.233,30.5415,31.467,32.084,32.701,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-PC1,Công nghiệp,22.25,22.15,intraday,21.5825,21.805,22.0275,22.695,23.14,23.585,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-PDR,Bất động sản,21.75,21.75,intraday,21.0975,21.315,21.5325,22.185,22.62,23.055,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-PHR,Nguyên vật liệu,53.3,53.3,intraday,51.701,52.234,52.767,54.366,55.432,56.498,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-PLX,Năng lượng,34.15,34.1,intraday,33.1255,33.467,33.8085,34.833,35.516,36.199,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-PNJ,Hàng tiêu dùng không thiết yếu,92.6,92.3,intraday,89.822,90.748,91.674,94.452,96.304,98.156,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-POW,Dịch vụ tiện ích,13.8,13.8,intraday,13.386,13.524,13.662,14.076,14.352,14.628,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-PPC,Dịch vụ tiện ích,10.15,10.15,intraday,9.8455,9.947,10.0485,10.353,10.556,10.759,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-PTB,Công nghiệp,51.6,51.6,intraday,50.052,50.568,51.084,52.632,53.664,54.696,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-PVD,Năng lượng,20.1,20.1,intraday,19.497,19.698,19.899,20.502,20.904,21.306,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-PVT,Năng lượng,17.15,17.1,intraday,16.6355,16.807,16.9785,17.493,17.836,18.179,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-REE,Công nghiệp,62.7,62.7,intraday,60.819,61.446,62.073,63.954,65.208,66.462,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-SAB,Hàng tiêu dùng thiết yếu,45.6,45.6,intraday,44.232,44.688,45.144,46.512,47.424,48.336,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-SBT,Hàng tiêu dùng thiết yếu,25.25,25.2,intraday,24.4925,24.745,24.9975,25.755,26.26,26.765,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-SCS,Công nghiệp,55.2,55.2,intraday,53.544,54.096,54.648,56.304,57.408,58.512,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-SHB,Tài chính,16.15,16.1,intraday,15.6655,15.827,15.9885,16.473,16.796,17.119,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-SJS,Bất động sản,61.7,60.5,intraday,59.849,60.466,61.083,62.934,64.168,65.402,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-SSB,Tài chính,17.7,17.7,intraday,17.169,17.346,17.523,18.054,18.408,18.762,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-SSI,Tài chính,35.3,35.25,intraday,34.241,34.594,34.947,36.006,36.712,37.418,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-STB,Tài chính,54.1,54.1,intraday,52.477,53.018,53.559,55.182,56.264,57.346,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-SZC,Công nghiệp,30.0,30.0,intraday,29.1,29.4,29.7,30.6,31.2,31.8,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-TCB,Tài chính,34.75,34.7,intraday,33.7075,34.055,34.4025,35.445,36.14,36.835,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-TCH,Công nghiệp,21.4,21.35,intraday,20.758,20.972,21.186,21.828,22.256,22.684,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+KDH,Bất động sản,31.75,31.8,intraday,30.7975,31.115,31.4325,32.385,33.02,33.655,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+KOS,Bất động sản,38.7,38.7,intraday,37.539,37.926,38.313,39.474,40.248,41.022,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+LPB,Tài chính,52.8,52.6,intraday,51.216,51.744,52.272,53.856,54.912,55.968,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+MBB,Tài chính,23.25,23.3,intraday,22.5525,22.785,23.0175,23.715,24.18,24.645,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+MSB,Tài chính,11.95,12.0,intraday,11.5915,11.711,11.8305,12.189,12.428,12.667,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+MSN,Hàng tiêu dùng thiết yếu,77.1,77.2,intraday,74.787,75.558,76.329,78.642,80.184,81.726,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+MWG,Hàng tiêu dùng không thiết yếu,80.8,80.9,intraday,78.376,79.184,79.992,82.416,84.032,85.648,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+NKG,Nguyên vật liệu,15.8,15.8,intraday,15.326,15.484,15.642,16.116,16.432,16.748,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+NLG,Bất động sản,35.65,35.65,intraday,34.5805,34.937,35.2935,36.363,37.076,37.789,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+NT2,Dịch vụ tiện ích,22.9,22.9,intraday,22.213,22.442,22.671,23.358,23.816,24.274,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+OCB,Tài chính,12.55,12.55,intraday,12.1735,12.299,12.4245,12.801,13.052,13.303,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+PAN,Hàng tiêu dùng thiết yếu,30.8,30.75,intraday,29.876,30.184,30.492,31.416,32.032,32.648,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+PC1,Công nghiệp,22.1,22.1,intraday,21.437,21.658,21.879,22.542,22.984,23.426,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+PDR,Bất động sản,21.5,21.55,intraday,20.855,21.07,21.285,21.93,22.36,22.79,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+PHR,Nguyên vật liệu,53.4,53.4,intraday,51.798,52.332,52.866,54.468,55.536,56.604,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+PLX,Năng lượng,33.95,33.95,intraday,32.9315,33.271,33.6105,34.629,35.308,35.987,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+PNJ,Hàng tiêu dùng không thiết yếu,92.0,92.0,intraday,89.24,90.16,91.08,93.84,95.68,97.52,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+POW,Dịch vụ tiện ích,13.65,13.65,intraday,13.2405,13.377,13.5135,13.923,14.196,14.469,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+PPC,Dịch vụ tiện ích,10.1,10.1,intraday,9.797,9.898,9.999,10.302,10.504,10.706,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+PTB,Công nghiệp,51.2,51.2,intraday,49.664,50.176,50.688,52.224,53.248,54.272,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+PVD,Năng lượng,20.05,20.05,intraday,19.4485,19.649,19.8495,20.451,20.852,21.253,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+PVT,Năng lượng,17.1,17.0,intraday,16.587,16.758,16.929,17.442,17.784,18.126,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+REE,Công nghiệp,62.6,62.6,intraday,60.722,61.348,61.974,63.852,65.104,66.356,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+SAB,Hàng tiêu dùng thiết yếu,45.5,45.4,intraday,44.135,44.59,45.045,46.41,47.32,48.23,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+SBT,Hàng tiêu dùng thiết yếu,25.15,25.15,intraday,24.3955,24.647,24.8985,25.653,26.156,26.659,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+SCS,Công nghiệp,55.2,55.1,intraday,53.544,54.096,54.648,56.304,57.408,58.512,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+SHB,Tài chính,16.1,16.05,intraday,15.617,15.778,15.939,16.422,16.744,17.066,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+SJS,Bất động sản,61.8,61.8,intraday,59.946,60.564,61.182,63.036,64.272,65.508,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+SSB,Tài chính,17.45,17.45,intraday,16.9265,17.101,17.2755,17.799,18.148,18.497,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+SSI,Tài chính,35.05,35.0,intraday,33.9985,34.349,34.6995,35.751,36.452,37.153,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+STB,Tài chính,53.7,53.8,intraday,52.089,52.626,53.163,54.774,55.848,56.922,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+SZC,Công nghiệp,29.95,29.95,intraday,29.0515,29.351,29.6505,30.549,31.148,31.747,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+TCB,Tài chính,34.55,34.6,intraday,33.5135,33.859,34.2045,35.241,35.932,36.623,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+TCH,Công nghiệp,21.3,21.3,intraday,20.661,20.874,21.087,21.726,22.152,22.578,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
 TLG,Công nghiệp,53.0,53.0,intraday,51.41,51.94,52.47,54.06,55.12,56.18,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-TPB,Tài chính,17.7,17.7,intraday,17.169,17.346,17.523,18.054,18.408,18.762,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-VCB,Tài chính,59.8,59.8,intraday,58.006,58.604,59.202,60.996,62.192,63.388,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-VCG,Công nghiệp,25.4,25.45,intraday,24.638,24.892,25.146,25.908,26.416,26.924,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-VCI,Tài chính,37.9,37.85,intraday,36.763,37.142,37.521,38.658,39.416,40.174,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-VCS,Bất động sản,46.9,46.9,intraday,45.493,45.962,46.431,47.838,48.776,49.714,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-VGC,Nguyên vật liệu,46.75,46.75,intraday,45.3475,45.815,46.2825,47.685,48.62,49.555,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-VHC,Hàng tiêu dùng thiết yếu,55.0,55.0,intraday,53.35,53.9,54.45,56.1,57.2,58.3,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-VHM,Bất động sản,103.7,104.1,intraday,100.589,101.626,102.663,105.774,107.848,109.922,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-VIB,Tài chính,18.5,18.5,intraday,17.945,18.13,18.315,18.87,19.24,19.61,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-VIC,Bất động sản,207.2,208.0,intraday,200.984,203.056,205.128,211.344,215.488,219.632,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-VIX,Tài chính,31.65,31.6,intraday,30.7005,31.017,31.3335,32.283,32.916,33.549,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-VJC,Công nghiệp,187.4,187.5,intraday,181.778,183.652,185.526,191.148,194.896,198.644,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-VND,Tài chính,20.3,20.3,intraday,19.691,19.894,20.097,20.706,21.112,21.518,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-VNM,Hàng tiêu dùng thiết yếu,57.3,57.1,intraday,55.581,56.154,56.727,58.446,59.592,60.738,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-VPB,Tài chính,28.4,28.45,intraday,27.548,27.832,28.116,28.968,29.536,30.104,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-VPI,Bất động sản,54.8,54.8,intraday,53.156,53.704,54.252,55.896,56.992,58.088,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-VRE,Bất động sản,35.1,35.1,intraday,34.047,34.398,34.749,35.802,36.504,37.206,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-VSH,Dịch vụ tiện ích,43.85,43.85,intraday,42.5345,42.973,43.4115,44.727,45.604,46.481,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+TPB,Tài chính,17.5,17.45,intraday,16.975,17.15,17.325,17.85,18.2,18.55,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+VCB,Tài chính,59.6,59.6,intraday,57.812,58.408,59.004,60.792,61.984,63.176,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+VCG,Công nghiệp,25.4,25.4,intraday,24.638,24.892,25.146,25.908,26.416,26.924,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+VCI,Tài chính,37.8,37.8,intraday,36.666,37.044,37.422,38.556,39.312,40.068,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+VCS,Bất động sản,47.0,47.0,intraday,45.59,46.06,46.53,47.94,48.88,49.82,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+VGC,Nguyên vật liệu,46.45,46.45,intraday,45.0565,45.521,45.9855,47.379,48.308,49.237,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+VHC,Hàng tiêu dùng thiết yếu,54.9,55.0,intraday,53.253,53.802,54.351,55.998,57.096,58.194,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+VHM,Bất động sản,102.6,102.3,intraday,99.522,100.548,101.574,104.652,106.704,108.756,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+VIB,Tài chính,18.4,18.45,intraday,17.848,18.032,18.216,18.768,19.136,19.504,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+VIC,Bất động sản,205.3,205.2,intraday,199.141,201.194,203.247,209.406,213.512,217.618,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+VIX,Tài chính,31.15,31.1,intraday,30.2155,30.527,30.8385,31.773,32.396,33.019,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+VJC,Công nghiệp,184.1,184.0,intraday,178.577,180.418,182.259,187.782,191.464,195.146,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+VND,Tài chính,20.1,20.15,intraday,19.497,19.698,19.899,20.502,20.904,21.306,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+VNM,Hàng tiêu dùng thiết yếu,57.0,57.0,intraday,55.29,55.86,56.43,58.14,59.28,60.42,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+VPB,Tài chính,28.25,28.25,intraday,27.4025,27.685,27.9675,28.815,29.38,29.945,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+VPI,Bất động sản,54.3,54.3,intraday,52.671,53.214,53.757,55.386,56.472,57.558,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+VRE,Bất động sản,34.35,34.3,intraday,33.3195,33.663,34.0065,35.037,35.724,36.411,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
+VSH,Dịch vụ tiện ích,43.95,43.95,intraday,42.6315,43.071,43.5105,44.829,45.708,46.587,Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
