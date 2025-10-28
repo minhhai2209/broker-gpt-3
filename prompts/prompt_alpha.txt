@@ -1,4 +1,6 @@
-Đọc các file sau (đường dẫn tương đối) và đề xuất bộ lệnh cho phiên VNINDEX tới, chỉ dùng lệnh LO:
+Kết hợp tin tức hiện thời (tự tra cứu) với dữ liệu trong GitHub repo dưới đây để đề xuất bộ lệnh cho phiên VNINDEX tới, chỉ dùng lệnh LO. Nếu không truy cập được repo, dừng lại và báo lỗi.
+
+Đọc các file sau (đường dẫn tương đối):
 1) out/market/technical_snapshot.csv — ảnh chụp kỹ thuật theo mã (giá hiện tại, thay đổi %, SMA/EMA/RSI/ATR, MACD, Z‑score, returns, ADV, 52w range)
 2) out/presets/balanced.csv — mức bậc mua/bán theo preset balanced
 3) out/presets/momentum.csv — mức bậc mua/bán theo preset momentum
