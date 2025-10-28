@@ -1,0 +1,103 @@
+Ticker,Sector,LastPrice,LastClose,PriceSource,Sell_1,Sell_2,Sell_3,Sell_4
+AAA,Nguyên vật liệu,7.61,7.61,intraday,7.4578,7.3056,7.0773,7.8383
+ACB,Tài chính,25.4,25.4,intraday,24.892,24.384,23.622,26.162
+AGG,Bất động sản,16.25,16.25,intraday,15.925,15.6,15.1125,16.7375
+ANV,Hàng tiêu dùng thiết yếu,28.95,28.95,intraday,28.371,27.792,26.9235,29.8185
+ASM,Hàng tiêu dùng thiết yếu,6.87,6.87,intraday,6.7326,6.5952,6.3891,7.0761
+BCG,Công nghiệp,2.53,2.53,close,2.4794,2.4288,2.3529,2.6059
+BCM,Bất động sản,66.5,66.5,intraday,65.17,63.84,61.845,68.495
+BID,Tài chính,37.1,37.1,intraday,36.358,35.616,34.503,38.213
+BMP,Nguyên vật liệu,169.8,169.8,intraday,166.404,163.008,157.914,174.894
+BSI,Tài chính,42.85,42.85,intraday,41.993,41.136,39.8505,44.1355
+BVH,Tài chính,49.9,49.9,intraday,48.902,47.904,46.407,51.397
+BWE,Dịch vụ tiện ích,48.1,48.1,intraday,47.138,46.176,44.733,49.543
+CII,Công nghiệp,25.0,25.0,intraday,24.5,24.0,23.25,25.75
+CMG,Công nghệ thông tin,39.7,39.7,intraday,38.906,38.112,36.921,40.891
+CRE,Bất động sản,9.6,9.6,intraday,9.408,9.216,8.928,9.888
+CTD,Công nghiệp,93.3,93.3,intraday,91.434,89.568,86.769,96.099
+CTG,Tài chính,49.0,49.0,intraday,48.02,47.04,45.57,50.47
+CTR,Công nghiệp,90.5,90.5,intraday,88.69,86.88,84.165,93.215
+DBC,Hàng tiêu dùng thiết yếu,25.8,25.8,intraday,25.284,24.768,23.994,26.574
+DCM,Nguyên vật liệu,34.8,34.8,intraday,34.104,33.408,32.364,35.844
+DGC,Nguyên vật liệu,94.0,94.0,intraday,92.12,90.24,87.42,96.82
+DGW,Công nghệ thông tin,40.05,40.05,intraday,39.249,38.448,37.2465,41.2515
+DHC,Nguyên vật liệu,33.999,33.999,intraday,33.319,32.639,31.6191,35.019
+DIG,Bất động sản,20.95,20.95,intraday,20.531,20.112,19.4835,21.5785
+DPM,Nguyên vật liệu,23.7,23.7,intraday,23.226,22.752,22.041,24.411
+DXG,Bất động sản,21.0,21.0,intraday,20.58,20.16,19.53,21.63
+DXS,Bất động sản,10.8,10.8,intraday,10.584,10.368,10.044,11.124
+EIB,Tài chính,22.85,22.85,intraday,22.393,21.936,21.2505,23.5355
+EVF,Tài chính,12.9,12.9,intraday,12.642,12.384,11.997,13.287
+FPT,Công nghệ thông tin,102.2,102.2,intraday,100.156,98.112,95.046,105.266
+FRT,Hàng tiêu dùng không thiết yếu,148.0,148.0,intraday,145.04,142.08,137.64,152.44
+FTS,Tài chính,35.4,35.4,intraday,34.692,33.984,32.922,36.462
+GAS,Dịch vụ tiện ích,60.0,60.0,intraday,58.8,57.6,55.8,61.8
+GEX,Công nghiệp,51.0,51.0,intraday,49.98,48.96,47.43,52.53
+GMD,Công nghiệp,66.5,66.5,intraday,65.17,63.84,61.845,68.495
+GVR,Nguyên vật liệu,27.55,27.55,intraday,26.999,26.448,25.6215,28.3765
+HAG,Hàng tiêu dùng thiết yếu,15.85,15.85,intraday,15.533,15.216,14.7405,16.3255
+HCM,Tài chính,24.0,24.0,intraday,23.52,23.04,22.32,24.72
+HDB,Tài chính,32.2,32.2,intraday,31.556,30.912,29.946,33.166
+HDC,Bất động sản,34.1,34.1,intraday,33.418,32.736,31.713,35.123
+HDG,Công nghiệp,30.7,30.7,intraday,30.086,29.472,28.551,31.621
+HHV,Công nghiệp,14.6,14.6,intraday,14.308,14.016,13.578,15.038
+HPG,Nguyên vật liệu,26.8,26.8,intraday,26.264,25.728,24.924,27.604
+HSG,Nguyên vật liệu,16.85,16.85,intraday,16.513,16.176,15.6705,17.3555
+HT1,Nguyên vật liệu,17.1,17.1,intraday,16.758,16.416,15.903,17.613
+IDC,Bất động sản,36.9,36.9,intraday,36.162,35.424,34.317,38.007
+IMP,Y tế,48.95,48.95,intraday,47.971,46.992,45.5235,50.4185
+KBC,Bất động sản,34.7,34.7,intraday,34.006,33.312,32.271,35.741
+KDC,Hàng tiêu dùng thiết yếu,52.0,52.0,intraday,50.96,49.92,48.36,53.56
+KDH,Bất động sản,33.5,33.5,intraday,32.83,32.16,31.155,34.505
+KOS,Bất động sản,38.7,38.7,intraday,37.926,37.152,35.991,39.861
+LPB,Tài chính,52.8,52.8,intraday,51.744,50.688,49.104,54.384
+MBB,Tài chính,24.0,24.0,intraday,23.52,23.04,22.32,24.72
+MSB,Tài chính,12.2,12.2,intraday,11.956,11.712,11.346,12.566
+MSN,Hàng tiêu dùng thiết yếu,79.0,79.0,intraday,77.42,75.84,73.47,81.37
+MWG,Hàng tiêu dùng không thiết yếu,84.2,84.2,intraday,82.516,80.832,78.306,86.726
+NKG,Nguyên vật liệu,16.2,16.2,intraday,15.876,15.552,15.066,16.686
+NLG,Bất động sản,36.65,36.65,intraday,35.917,35.184,34.0845,37.7495
+NT2,Dịch vụ tiện ích,23.3,23.3,intraday,22.834,22.368,21.669,23.999
+OCB,Tài chính,13.0,13.0,intraday,12.74,12.48,12.09,13.39
+PAN,Hàng tiêu dùng thiết yếu,31.1,31.1,intraday,30.478,29.856,28.923,32.033
+PC1,Công nghiệp,22.4,22.4,intraday,21.952,21.504,20.832,23.072
+PDR,Bất động sản,23.0,23.0,intraday,22.54,22.08,21.39,23.69
+PHR,Nguyên vật liệu,54.0,54.0,intraday,52.92,51.84,50.22,55.62
+PLX,Năng lượng,34.05,34.05,intraday,33.369,32.688,31.6665,35.0715
+PNJ,Hàng tiêu dùng không thiết yếu,94.9,94.9,intraday,93.002,91.104,88.257,97.747
+POW,Dịch vụ tiện ích,13.85,13.85,intraday,13.573,13.296,12.8805,14.2655
+PPC,Dịch vụ tiện ích,10.15,10.15,intraday,9.947,9.744,9.4395,10.4545
+PTB,Công nghiệp,51.7,51.7,intraday,50.666,49.632,48.081,53.251
+PVD,Năng lượng,20.15,20.15,intraday,19.747,19.344,18.7395,20.7545
+PVT,Năng lượng,17.3,17.3,intraday,16.954,16.608,16.089,17.819
+REE,Công nghiệp,63.5,63.5,intraday,62.23,60.96,59.055,65.405
+SAB,Hàng tiêu dùng thiết yếu,45.45,45.45,intraday,44.541,43.632,42.2685,46.8135
+SBT,Hàng tiêu dùng thiết yếu,25.2,25.2,intraday,24.696,24.192,23.436,25.956
+SCS,Công nghiệp,55.0,55.0,intraday,53.9,52.8,51.15,56.65
+SHB,Tài chính,16.35,16.35,intraday,16.023,15.696,15.2055,16.8405
+SJS,Bất động sản,64.1,64.1,intraday,62.818,61.536,59.613,66.023
+SSB,Tài chính,17.75,17.75,intraday,17.395,17.04,16.5075,18.2825
+SSI,Tài chính,35.85,35.85,intraday,35.133,34.416,33.3405,36.9255
+STB,Tài chính,56.8,56.8,intraday,55.664,54.528,52.824,58.504
+SZC,Công nghiệp,30.25,30.25,intraday,29.645,29.04,28.1325,31.1575
+TCB,Tài chính,36.0,36.0,intraday,35.28,34.56,33.48,37.08
+TCH,Công nghiệp,21.95,21.95,intraday,21.511,21.072,20.4135,22.6085
+TLG,Công nghiệp,53.4,53.4,intraday,52.332,51.264,49.662,55.002
+TPB,Tài chính,17.95,17.95,intraday,17.591,17.232,16.6935,18.4885
+VCB,Tài chính,60.0,60.0,intraday,58.8,57.6,55.8,61.8
+VCG,Công nghiệp,26.0,26.0,intraday,25.48,24.96,24.18,26.78
+VCI,Tài chính,38.2,38.2,intraday,37.436,36.672,35.526,39.346
+VCS,Bất động sản,47.2,47.2,intraday,46.256,45.312,43.896,48.616
+VGC,Nguyên vật liệu,47.3,47.3,intraday,46.354,45.408,43.989,48.719
+VHC,Hàng tiêu dùng thiết yếu,56.2,56.2,intraday,55.076,53.952,52.266,57.886
+VHM,Bất động sản,107.0,107.0,intraday,104.86,102.72,99.51,110.21
+VIB,Tài chính,19.2,19.2,intraday,18.816,18.432,17.856,19.776
+VIC,Bất động sản,220.1,220.1,intraday,215.698,211.296,204.693,226.703
+VIX,Tài chính,32.0,32.0,intraday,31.36,30.72,29.76,32.96
+VJC,Công nghiệp,187.5,187.5,intraday,183.75,180.0,174.375,193.125
+VND,Tài chính,20.75,20.75,intraday,20.335,19.92,19.2975,21.3725
+VNM,Hàng tiêu dùng thiết yếu,57.4,57.4,intraday,56.252,55.104,53.382,59.122
+VPB,Tài chính,29.45,29.45,intraday,28.861,28.272,27.3885,30.3335
+VPI,Bất động sản,55.7,55.7,intraday,54.586,53.472,51.801,57.371
+VRE,Bất động sản,36.8,36.8,intraday,36.064,35.328,34.224,37.904
+VSH,Dịch vụ tiện ích,43.9,43.9,intraday,43.022,42.144,40.827,45.217

@@ -2,14 +2,18 @@ Kết hợp tin tức hiện thời với dữ liệu trong GitHub repo dưới 
 1) out/market/technical_snapshot.csv — ảnh chụp kỹ thuật theo mã (giá hiện tại, thay đổi %, SMA/EMA/RSI/ATR, MACD, Z‑score, returns, ADV, 52w range)
 2) out/presets/balanced.csv — mức bậc mua/bán theo preset balanced
 3) out/presets/momentum.csv — mức bậc mua/bán theo preset momentum
-4) data/portfolios/{{PROFILE}}.csv — danh mục hiện tại (Ticker, Quantity, AvgPrice)
-5) out/portfolios/{{PROFILE}}_positions.csv — PnL theo mã, MarketValue/CostBasis/Unrealized
-6) out/portfolios/{{PROFILE}}_sector.csv — tổng hợp PnL theo ngành
-7) data/order_history/{{PROFILE}}_fills.csv — các lệnh đã khớp trong hôm nay
+4) out/presets/mean_reversion.csv — mức bậc mua/bán theo preset mean_reversion (pullback)
+5) out/presets/risk_off.csv — mức bậc bán/giảm tỷ trọng theo preset risk_off (de‑leverage/trim)
+6) data/portfolios/{{PROFILE}}.csv — danh mục hiện tại (Ticker, Quantity, AvgPrice)
+7) out/portfolios/{{PROFILE}}_positions.csv — PnL theo mã, MarketValue/CostBasis/Unrealized
+8) out/portfolios/{{PROFILE}}_sector.csv — tổng hợp PnL theo ngành
+9) data/order_history/{{PROFILE}}_fills.csv — các lệnh đã khớp trong hôm nay
 
 Ý nghĩa của các presets:
 - balanced: thiết lập cân bằng giữa tích lũy và chốt lời. Mua từng phần khi giá điều chỉnh nhẹ; chốt lời theo các bậc tăng dần.
 - momentum: mua theo đà và chốt lời nhanh. Ưu tiên mã có động lượng; dừng lỗ sớm nếu đà gãy.
+- mean_reversion: bắt nhịp hồi ở vùng quá bán/điều chỉnh nông; vào theo các bậc mua dưới giá hiện tại, chốt lời mỏng.
+- risk_off: ưu tiên cắt/giảm khi tín hiệu xấu (tin tức/sector/đà yếu); có thể đặt bậc bán dưới giá hiện tại để giảm dần.
 
 Ràng buộc khi ra quyết định:
 - Phạm vi: chỉ xem xét các mã thuộc rổ VN100.

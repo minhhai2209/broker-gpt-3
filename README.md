@@ -65,6 +65,22 @@ output:
 
 Bạn có thể chỉnh preset (tỷ lệ ± so với giá hiện tại), đường dẫn output hoặc bổ sung chỉ báo tuỳ nhu cầu.
 
+### Shortlist cho presets (tuỳ chọn nhưng bật sẵn)
+
+Để chỉ loại các mã “xấu hẳn” khỏi danh sách cân nhắc, engine hỗ trợ bộ lọc bảo thủ cho presets. Cấu hình tại `filters.shortlist` trong `config/data_engine.yaml`:
+
+- `enabled`: bật/tắt shortlist.
+- Điều kiện “rất yếu” (mặc định yêu cầu hội tụ tất cả):
+  - `RSI_14` ≤ `rsi14_max` (mặc định 25)
+  - `PctToLo_252` ≤ `max_pct_to_lo_252` (mặc định 2%) — giá sát đáy 52w
+  - `Return_20` ≤ `return20_max` (mặc định -15%) và `Return_60` ≤ `return60_max` (mặc định -25%)
+  - Giá dưới cả `SMA_50` và `SMA_200`
+  - (tuỳ chọn) `ADV_20` ≤ `min_adv_20` để loại mã quá kém thanh khoản
+- `drop_logic_all`: nếu `true` (mặc định), chỉ loại khi tất cả điều kiện cùng thoả.
+- `keep`/`exclude`: danh sách mã luôn giữ lại/luôn loại bỏ (mặc định để trống). Ví dụ: có thể thêm `FPT` vào `keep` nếu muốn minh hoạ, nhưng không bật sẵn để tránh lọc quá “aggressive”.
+
+Mục tiêu là giảm nhiễu, không làm nghèo vũ trụ cơ hội; vì vậy mặc định bộ lọc rất bảo thủ.
+
 ## Cách chạy
 
 ### Engine + Scraper (mặc định)

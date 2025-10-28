@@ -26,6 +26,27 @@ presets:
     description: Mua theo đà, chốt lời nhanh.
     buy_tiers: [-0.01, 0.0]
     sell_tiers: [0.03, 0.05, 0.08]
+  mean_reversion:
+    description: Bắt nhịp hồi ở vùng quá bán/điều chỉnh nông.
+    buy_tiers: [-0.015, -0.03, -0.05]
+    sell_tiers: [0.02, 0.035, 0.05]
+  risk_off:
+    description: De-leverage/trim khi tín hiệu xấu (tin tức/sector/đà yếu). Ưu tiên cắt/giảm.
+    buy_tiers: []
+    sell_tiers: [-0.02, -0.04, -0.07, 0.03]
+filters:
+  shortlist:
+    enabled: true
+    # Chỉ loại mã *rất yếu*: thỏa TẤT CẢ điều kiện dưới đây mới loại
+    rsi14_max: 25        # RSI_14 <= 25 (quá bán mạnh)
+    max_pct_to_lo_252: 2 # Cách đáy 52w <= 2%
+    return20_max: -15    # Return_20 <= -15%
+    return60_max: -25    # Return_60 <= -25%
+    require_below_sma50_and_200: true  # Giá dưới cả SMA50 và SMA200
+    min_adv_20: null     # Không lọc theo thanh khoản mặc định (có thể đặt, ví dụ 100000)
+    drop_logic_all: true # Yêu cầu hội tụ tất cả điều kiện để loại (bảo thủ)
+    keep: []             # Danh sách luôn giữ lại (mặc định để trống; ví dụ: [FPT])
+    exclude: []          # Danh sách luôn loại bỏ (tùy chọn)
 portfolio:
   directory: data/portfolios
   order_history_directory: data/order_history

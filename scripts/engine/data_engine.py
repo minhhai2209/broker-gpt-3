@@ -46,6 +46,35 @@ class PresetConfig:
 
 
 @dataclass
+class ShortlistFilterConfig:
+    """Configuration for conservative preset shortlisting.
+
+    The intention is to remove only the *very weak* tickers from preset outputs,
+    while keeping everything else for consideration. Users can also force-keep or
+    force-exclude specific tickers.
+    """
+
+    enabled: bool = False
+    # Technical weakness thresholds (all must be met to exclude unless logic says otherwise)
+    rsi14_max: Optional[float] = 25.0  # RSI_14 <= rsi14_max
+    max_pct_to_lo_252: Optional[float] = 2.0  # PctToLo_252 <= X (near 52w low)
+    return20_max: Optional[float] = -15.0  # Return_20 <= X
+    return60_max: Optional[float] = -25.0  # Return_60 <= X
+    require_below_sma50_and_200: bool = True  # LastPrice < SMA_50 and < SMA_200
+    min_adv_20: Optional[float] = None  # ADV_20 <= X means illiquid (optional)
+    # Compose: if True, require all active conditions to be true to drop; if False, any.
+    drop_logic_all: bool = True
+    # Manual overrides
+    keep: List[str] | None = None
+    exclude: List[str] | None = None
+
+    def normalized_keep(self) -> List[str]:
+        return sorted({t.strip().upper() for t in (self.keep or []) if isinstance(t, str) and t.strip()})
+
+    def normalized_exclude(self) -> List[str]:
+        return sorted({t.strip().upper() for t in (self.exclude or []) if isinstance(t, str) and t.strip()})
+
+@dataclass
 class EngineConfig:
     universe_csv: Path
     include_indices: bool
@@ -73,6 +102,7 @@ class EngineConfig:
     market_cache_dir: Path
     history_min_days: int
     intraday_window_minutes: int
+    shortlist_filter: Optional[ShortlistFilterConfig]
 
     @classmethod
     def from_yaml(cls, path: Path) -> "EngineConfig":
@@ -150,6 +180,31 @@ class EngineConfig:
         history_min_days = int(data_cfg.get("history_min_days", 400))
         intraday_window_minutes = int(data_cfg.get("intraday_window_minutes", 12 * 60))
 
+        # Optional shortlist filter
+        filters_cfg = data.get("filters", {}) or {}
+        if not isinstance(filters_cfg, dict):
+            raise ConfigurationError("filters section must be a mapping if provided")
+        shortlist_cfg_raw = filters_cfg.get("shortlist", {}) or {}
+        if shortlist_cfg_raw is not None and not isinstance(shortlist_cfg_raw, dict):
+            raise ConfigurationError("filters.shortlist must be a mapping if provided")
+        shortlist_filter: Optional[ShortlistFilterConfig]
+        if shortlist_cfg_raw:
+            # Map YAML keys to dataclass fields with type coercion
+            shortlist_filter = ShortlistFilterConfig(
+                enabled=bool(shortlist_cfg_raw.get("enabled", False)),
+                rsi14_max=(float(shortlist_cfg_raw["rsi14_max"]) if "rsi14_max" in shortlist_cfg_raw and shortlist_cfg_raw["rsi14_max"] is not None else ShortlistFilterConfig.rsi14_max),
+                max_pct_to_lo_252=(float(shortlist_cfg_raw["max_pct_to_lo_252"]) if "max_pct_to_lo_252" in shortlist_cfg_raw and shortlist_cfg_raw["max_pct_to_lo_252"] is not None else ShortlistFilterConfig.max_pct_to_lo_252),
+                return20_max=(float(shortlist_cfg_raw["return20_max"]) if "return20_max" in shortlist_cfg_raw and shortlist_cfg_raw["return20_max"] is not None else ShortlistFilterConfig.return20_max),
+                return60_max=(float(shortlist_cfg_raw["return60_max"]) if "return60_max" in shortlist_cfg_raw and shortlist_cfg_raw["return60_max"] is not None else ShortlistFilterConfig.return60_max),
+                require_below_sma50_and_200=bool(shortlist_cfg_raw.get("require_below_sma50_and_200", True)),
+                min_adv_20=(float(shortlist_cfg_raw["min_adv_20"]) if "min_adv_20" in shortlist_cfg_raw and shortlist_cfg_raw["min_adv_20"] is not None else None),
+                drop_logic_all=bool(shortlist_cfg_raw.get("drop_logic_all", True)),
+                keep=[str(x).upper() for x in shortlist_cfg_raw.get("keep", [])],
+                exclude=[str(x).upper() for x in shortlist_cfg_raw.get("exclude", [])],
+            )
+        else:
+            shortlist_filter = None
+
         return cls(
             universe_csv=universe_csv,
             include_indices=include_indices,
@@ -177,6 +232,7 @@ class EngineConfig:
             market_cache_dir=market_cache_dir,
             history_min_days=history_min_days,
             intraday_window_minutes=intraday_window_minutes,
+            shortlist_filter=shortlist_filter,
         )
 
 
@@ -425,13 +481,18 @@ class TechnicalSnapshotBuilder:
 
 
 class PresetWriter:
-    def __init__(self, presets: Dict[str, PresetConfig], output_dir: Path) -> None:
+    def __init__(self, presets: Dict[str, PresetConfig], output_dir: Path, shortlist: Optional[ShortlistFilterConfig] = None) -> None:
         self._presets = presets
         self._output_dir = output_dir
+        self._shortlist = shortlist
 
     def write(self, snapshot: pd.DataFrame) -> None:
         self._output_dir.mkdir(parents=True, exist_ok=True)
         base_cols = ["Ticker", "Sector", "LastPrice", "LastClose", "PriceSource"]
+        if self._shortlist and self._shortlist.enabled and not snapshot.empty:
+            before = len(snapshot)
+            snapshot = self._apply_shortlist(snapshot)
+            LOGGER.info("Shortlist filter: %d -> %d tickers", before, len(snapshot))
         for name, preset in self._presets.items():
             if snapshot.empty:
                 df = pd.DataFrame(columns=base_cols)
@@ -445,6 +506,69 @@ class PresetWriter:
                     df[col] = (df["LastPrice"] * (1.0 + float(adj))).round(4)
             out_path = self._output_dir / f"{name}.csv"
             df.to_csv(out_path, index=False)
+
+    def _apply_shortlist(self, snapshot: pd.DataFrame) -> pd.DataFrame:
+        cfg = self._shortlist
+        assert cfg is not None  # guarded by caller
+        df = snapshot.copy()
+        # Normalize tickers for overrides
+        keep = set(cfg.normalized_keep())
+        ban = set(cfg.normalized_exclude())
+        df["Ticker"] = df["Ticker"].astype(str).str.upper()
+
+        # Manual banlist first
+        manual_ban_mask = df["Ticker"].isin(ban) if ban else pd.Series([False] * len(df), index=df.index)
+
+        # Compose technical weakness conditions (safe with missing columns)
+        def col(name: str) -> pd.Series:
+            return pd.to_numeric(df.get(name, pd.Series([float("nan")] * len(df), index=df.index)), errors="coerce")
+
+        last_price = col("LastPrice")
+        rsi14 = col("RSI_14")
+        sma50 = col("SMA_50")
+        sma200 = col("SMA_200")
+        ret20 = col("Return_20")
+        ret60 = col("Return_60")
+        pct_to_lo = col("PctToLo_252")
+        adv20 = col("ADV_20")
+
+        conds: List[pd.Series] = []
+        # Avoid invalid comparisons by checking threshold presence
+        if cfg.rsi14_max is not None:
+            conds.append(rsi14 <= float(cfg.rsi14_max))
+        if cfg.max_pct_to_lo_252 is not None:
+            conds.append(pct_to_lo <= float(cfg.max_pct_to_lo_252))
+        if cfg.return20_max is not None:
+            conds.append(ret20 <= float(cfg.return20_max))
+        if cfg.return60_max is not None:
+            conds.append(ret60 <= float(cfg.return60_max))
+        if cfg.require_below_sma50_and_200:
+            below_ma = (last_price < sma50) & (last_price < sma200)
+            conds.append(below_ma)
+        if cfg.min_adv_20 is not None:
+            conds.append(adv20 <= float(cfg.min_adv_20))
+
+        if not conds:
+            # No active conditions -> nothing to filter except manual banlist/keep
+            drop_mask = manual_ban_mask
+        else:
+            # Combine conditions conservatively
+            combined = conds[0]
+            for c in conds[1:]:
+                if cfg.drop_logic_all:
+                    combined = combined & c
+                else:
+                    combined = combined | c
+            # NaNs in any condition should not force a drop; treat as False
+            combined = combined.fillna(False)
+            drop_mask = combined | manual_ban_mask
+
+        # Keep-list overrides any drop
+        if keep:
+            drop_mask = drop_mask & (~df["Ticker"].isin(keep))
+
+        kept_df = df[~drop_mask].reset_index(drop=True)
+        return kept_df
 
 
 class PortfolioReporter:
@@ -529,7 +653,7 @@ class DataEngine:
         snapshot_builder = TechnicalSnapshotBuilder(self._config)
         snapshot = snapshot_builder.build(history_df, intraday_df, universe_df)
         self._write_market_snapshot(snapshot)
-        PresetWriter(self._config.presets, self._config.presets_dir).write(snapshot)
+        PresetWriter(self._config.presets, self._config.presets_dir, self._config.shortlist_filter).write(snapshot)
         PortfolioReporter(self._config, universe_df).refresh(snapshot)
         return {
             "tickers": len(tickers),

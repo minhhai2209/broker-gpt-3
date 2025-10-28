@@ -70,6 +70,18 @@ Mọi đường dẫn được chuẩn hoá thành `Path.resolve()`. Thiếu tr�
 - Mỗi file gồm `Ticker`, `Sector`, `LastPrice`, `LastClose`, `PriceSource`, các cột `Buy_i`, `Sell_i` (round 4 chữ số).
 - Mô tả preset được trình bày trong prompt mẫu (không lặp lại dưới dạng cột trong CSV để tránh dư thừa).
 
+#### Shortlist (lọc bảo thủ, chỉ loại mã rất yếu)
+
+- Nếu khai báo `filters.shortlist.enabled: true` trong `config/data_engine.yaml`, `PresetWriter` sẽ áp dụng một mask bảo thủ để loại các mã “xấu hẳn” khỏi mọi file preset.
+- Điều kiện mặc định (yêu cầu hội tụ tất cả):
+  - `RSI_14` ≤ 25,
+  - `PctToLo_252` ≤ 2 (% so với đáy 52w),
+  - `Return_20` ≤ -15% và `Return_60` ≤ -25%,
+  - `LastPrice` < `SMA_50` và `LastPrice` < `SMA_200`.
+- Có thể bật thêm ngưỡng thanh khoản `ADV_20` (mặc định tắt).
+- `keep`/`exclude` cho phép override thủ công (ví dụ: có thể thêm `FPT` nếu cần minh hoạ). Mặc định để trống để tránh dùng override một cách chủ quan.
+- Thiết kế hướng đến tính quyết định và ổn định: thiếu cột nào thì điều kiện tương ứng không kích hoạt (không fail), nhưng engine vẫn fail-fast với lỗi cấu hình YAML.
+
 ### PortfolioReporter
 
 - Đọc từng file danh mục `data/portfolios/<profile>.csv` (schema: `Ticker,Quantity,AvgPrice`).
