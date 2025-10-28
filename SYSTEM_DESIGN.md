@@ -7,7 +7,7 @@ Phiên bản này bỏ hoàn toàn order engine. Toàn bộ hệ thống chỉ c
 1. **Engine thu thập dữ liệu** (`scripts/engine/data_engine.py`): tải dữ liệu giá, tính chỉ số kỹ thuật, sinh preset và cập nhật báo cáo danh mục.
 2. **Kho dữ liệu danh mục** (`data/portfolios/`, `data/order_history/`): lưu trữ danh mục hiện tại và lịch sử khớp lệnh của từng tài khoản.
 3. **TCBS Scraper** (`scripts/scrapers/tcbs.py`): đăng nhập TCBS bằng Playwright, ghi `data/portfolios/<profile>.csv` và mặc định thu thập các lệnh đã khớp trong hôm nay vào `data/order_history/<profile>_fills.csv` (kèm bản đầy đủ `*_fills_all.csv`). Có thể tắt bằng `--no-fills`.
-4. **GitHub Action** (`.github/workflows/data-engine.yml`): chạy engine định kỳ và commit kết quả mới lên nhánh hiện hành.
+4. (Tạm thời vô hiệu) GitHub Action: trước đây workflow tại `.github/workflows/data-engine.yml` chạy engine định kỳ và commit kết quả. Hiện đã gỡ; chạy local thay thế.
 
 Mọi quyết định giao dịch sẽ do người vận hành xử lý dựa trên dữ liệu CSV đầu ra.
 
@@ -31,7 +31,7 @@ Mọi quyết định giao dịch sẽ do người vận hành xử lý dựa tr
 - Engine đọc universe từ `config/data_engine.yaml` (tối thiểu cột `Ticker` và `Sector`).
 - Engine thêm mọi mã đang có trong danh mục vào universe để chắc chắn có dữ liệu giá.
 - Dữ liệu lịch sử và intraday lấy từ API VNDIRECT (module `collect_intraday` và `fetch_ticker_data`). Cache được lưu ở `out/data/`.
-- Tất cả output CSV nằm dưới `out/` và được workflow commit/push khi có thay đổi.
+- Tất cả output CSV nằm dưới `out/`. Khi workflow bị gỡ, bạn cần tự commit/push khi có thay đổi.
 
 ## Thành phần chính
 
@@ -101,14 +101,14 @@ Mọi đường dẫn được chuẩn hoá thành `Path.resolve()`. Thiếu tr�
 
 ## Quy trình chạy GitHub Action
 
-Workflow `.github/workflows/data-engine.yml`:
+Workflow (đã gỡ tạm thời):
 
 1. Checkout mã nguồn (fetch đầy đủ lịch sử để có thể push).
 2. Cài đặt Python 3.11 và dependencies (`pip install -r requirements.txt`).
 3. Chạy `python -m scripts.engine.data_engine --config config/data_engine.yaml`.
-4. Nếu workflow chạy theo lịch hoặc được kích hoạt thủ công trên nhánh chính, commit và push những thay đổi trong `out/market`, `out/presets`, `out/portfolios`, `out/diagnostics`, `data/order_history`. Khi chạy trên Pull Request, bước commit được bỏ qua để workflow chỉ dùng cho việc xem log.
+4. (Trước đây) Nếu chạy theo lịch hoặc kích hoạt thủ công, workflow sẽ commit và push những thay đổi trong `out/market`, `out/presets`, `out/portfolios`, `out/diagnostics`, `data/order_history`. Khi chạy trên Pull Request, bước commit được bỏ qua để workflow chỉ dùng cho việc xem log.
 
-Không còn workflow tuning/policy. Nếu cần cập nhật config, commit trực tiếp file YAML.
+Không còn workflow chạy định kỳ trong repo hiện tại. Nếu cần bật lại, thêm file YAML workflow vào `.github/workflows/`.
 
 ## Danh mục & lịch sử khớp lệnh
 
