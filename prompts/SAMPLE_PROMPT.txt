@@ -12,6 +12,7 @@ Dựa trên dữ liệu và mô tả preset sau đây, chọn chiến lược ph
 - momentum: mua theo đà và chốt lời nhanh. Ưu tiên mã có động lượng; dừng lỗ sớm nếu đà gãy.
 
 Ràng buộc khi ra quyết định:
+- Phạm vi: chỉ xem xét các mã thuộc rổ VN100.
 - Chỉ dùng lệnh LO; LimitPrice tính theo nghìn đồng.
 - Tuân thủ quy tắc HOSE (bước giá, lô chẵn, biên độ) phía dưới.
 - Không vượt quá khối lượng hợp lệ theo lô chẵn; ưu tiên chia nhỏ lệnh.
