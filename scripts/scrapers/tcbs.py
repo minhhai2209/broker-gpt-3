@@ -272,7 +272,11 @@ def _ensure_playwright_installed(pybin: str) -> None:
 
 
 def fetch_tcbs_portfolio(
-    profile: str, headless: bool = True, timeout_ms: int = 300000, with_fills_today: bool = False
+    profile: str,
+    headless: bool = True,
+    timeout_ms: int = 300000,
+    with_fills_today: bool = False,
+    slow_mo_ms: Optional[int] = None,
 ) -> Tuple[Path, Optional[Path], Optional[Path]]:
     """Launch persistent Chromium, log in to TCBS, navigate to portfolio table, parse and write CSV.
 
@@ -305,11 +309,15 @@ def fetch_tcbs_portfolio(
     LOGGER.info("user_data_dir=%s headless=%s timeout_ms=%d with_fills_today=%s", user_data_dir, headless, timeout_ms, with_fills_today)
 
     with sync_playwright() as p:
+        # Determine pacing: default to slower actions in headful mode
+        sm = int(slow_mo_ms) if slow_mo_ms is not None else (250 if not headless else 0)
+        sm = max(0, sm)
         def _launch():
             return p.chromium.launch_persistent_context(
                 user_data_dir=str(user_data_dir),
                 headless=headless,
                 viewport={"width": 1400, "height": 900},
+                slow_mo=sm or 0,
                 args=["--disable-blink-features=AutomationControlled"],
             )
         try:
@@ -331,6 +339,11 @@ def fetch_tcbs_portfolio(
                 raise
         page = context.new_page()
         page.set_default_timeout(timeout_ms)
+        try:
+            page.set_default_navigation_timeout(timeout_ms)
+        except Exception:
+            pass
+        LOGGER.info("pacing slow_mo_ms=%d", sm)
 
         def _has_login_ui() -> bool:
             """Heuristic: detect presence of TCBS login inputs/buttons.
@@ -409,6 +422,11 @@ def fetch_tcbs_portfolio(
                 user_input.fill(username)
                 pass_input.click()
                 pass_input.fill(password)
+                # Small pause so any oninput validation can enable the button
+                try:
+                    page.wait_for_timeout(max(200, min(800, (sm or 0) * 2)))
+                except Exception:
+                    pass
 
             # Try multiple click strategies for the login button
             for attempt in range(4):
@@ -625,18 +643,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--headful", action="store_true", help="Run browser with UI for first-time device confirmation")
     parser.add_argument("--timeout-ms", type=int, default=300000, help="Global Playwright default timeout in milliseconds")
     parser.add_argument("--fills", action="store_true", help="Also fetch today's executed orders and write data/order_history/<profile>_fills.csv")
+    parser.add_argument("--slow-mo-ms", type=int, default=None, help="Delay each Playwright action by N ms (defaults to 250 in headful; 0 in headless)")
     args = parser.parse_args(argv)
     env_profile = os.environ.get("TCBS_PROFILE", "").strip()
     profile = (args.profile or env_profile or "tcbs").strip()
+    # Compute default pacing for logging visibility (actual decision is inside fetch)
+    computed_slow = args.slow_mo_ms if args.slow_mo_ms is not None else (250 if args.headful else 0)
     LOGGER.info(
-        "args: profile=%s headful=%s timeout_ms=%d fills=%s",
+        "args: profile=%s headful=%s timeout_ms=%d fills=%s slow_mo_ms=%s",
         profile,
         args.headful,
         int(args.timeout_ms),
         bool(args.fills),
+        computed_slow,
     )
     p_path, f_path, f_all_path = fetch_tcbs_portfolio(
-        profile, headless=not args.headful, timeout_ms=int(args.timeout_ms), with_fills_today=bool(args.fills)
+        profile,
+        headless=not args.headful,
+        timeout_ms=int(args.timeout_ms),
+        with_fills_today=bool(args.fills),
+        slow_mo_ms=args.slow_mo_ms,
     )
     LOGGER.info("portfolio_csv=%s", p_path)
     print(str(p_path))
