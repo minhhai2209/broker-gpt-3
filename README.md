@@ -79,7 +79,7 @@ Engine sẽ:
 - Tính SMA/RSI/ATR/MACD theo cấu hình.
 - Xuất các file CSV đã nêu ở trên.
 
-### Lấy danh mục (TCBS, Playwright)
+### Lấy danh mục + lệnh khớp hôm nay (TCBS, Playwright)
 
 Thay cho server HTTP, repo cung cấp scraper Playwright để đăng nhập TCBS và trích xuất danh mục.
 
@@ -104,7 +104,15 @@ Chạy các lần sau (headless, fingerprint được lưu trong `.playwright/tc
 ./broker.sh tcbs
 ```
 
-Kết quả sẽ ghi đè `data/portfolios/alpha.csv` với cột `Ticker,Quantity,AvgPrice`.
+Mặc định script sẽ:
+- Ghi đè `data/portfolios/<profile>.csv` với cột `Ticker,Quantity,AvgPrice`.
+- Lấy các lệnh đã khớp trong hôm nay và ghi `data/order_history/<profile>_fills.csv` (chỉ hôm nay) và `data/order_history/<profile>_fills_all.csv` (đã chuẩn hoá, đầy đủ lịch sử bảng Tra cứu).
+
+Tắt lấy “fills” nếu cần:
+
+```bash
+./broker.sh tcbs --no-fills
+```
 
 ### Kiểm thử
 
@@ -125,7 +133,8 @@ Test bao gồm:
 | `out/presets/<preset>.csv` | Mỗi preset một file; chứa giá mua/bán theo từng bậc |
 | `out/portfolios/<profile>_positions.csv` | Phân tích lãi/lỗ theo mã cho danh mục `profile` |
 | `out/portfolios/<profile>_sector.csv` | Tổng hợp lãi/lỗ theo ngành |
-| `data/order_history/<profile>_fills.csv` | Lịch sử khớp lệnh (tuỳ hệ thống khác, không thay đổi bởi scraper) |
+| `data/order_history/<profile>_fills.csv` | Lệnh khớp hôm nay (do scraper TCBS ghi) |
+| `data/order_history/<profile>_fills_all.csv` | Bảng lệnh khớp đã chuẩn hoá đầy đủ |
 
 ## GitHub Actions
 
@@ -135,7 +144,7 @@ Repo chỉ còn một workflow: `.github/workflows/data-engine.yml`. Workflow n�
 
 **Có cần sửa danh mục thủ công?** — Có. Mỗi tài khoản là một CSV trong `data/portfolios/`. Engine chỉ đọc và ghi báo cáo, không can thiệp vào file gốc.
 
-**Lịch sử khớp lệnh lưu ở đâu?** — `data/order_history/<profile>_fills.csv` là nơi lưu từ hệ thống khác nếu có. Scraper TCBS hiện chỉ lấy danh mục, không động tới lịch sử khớp lệnh.
+**Lịch sử khớp lệnh lưu ở đâu?** — `data/order_history/<profile>_fills.csv` (hôm nay) và `data/order_history/<profile>_fills_all.csv` (đầy đủ) do scraper TCBS ghi. Có thể tắt bằng `--no-fills`.
 
 **Muốn thêm chỉ báo mới?** — Bổ sung vào `scripts/indicators/` hoặc tính trực tiếp trong `scripts/engine/data_engine.py`, sau đó khai báo trong `config/data_engine.yaml` nếu cần tham số.
 

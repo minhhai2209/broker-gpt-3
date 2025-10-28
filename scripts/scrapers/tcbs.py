@@ -275,12 +275,15 @@ def fetch_tcbs_portfolio(
     profile: str,
     headless: bool = True,
     timeout_ms: int = 300000,
-    with_fills_today: bool = False,
+    with_fills_today: bool = True,
     slow_mo_ms: Optional[int] = None,
 ) -> Tuple[Path, Optional[Path], Optional[Path]]:
     """Launch persistent Chromium, log in to TCBS, navigate to portfolio table, parse and write CSV.
 
-    Returns path to `data/portfolios/<profile>.csv`.
+    Returns:
+      - portfolio CSV path
+      - today's fills CSV path (or None if disabled)
+      - full normalized fills CSV path (or None if disabled)
     """
     _ensure_logging_configured()
     with _log_step("setup"):
@@ -642,26 +645,29 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--profile", default=None, help="Profile name for output CSV in data/portfolios/")
     parser.add_argument("--headful", action="store_true", help="Run browser with UI for first-time device confirmation")
     parser.add_argument("--timeout-ms", type=int, default=300000, help="Global Playwright default timeout in milliseconds")
-    parser.add_argument("--fills", action="store_true", help="Also fetch today's executed orders and write data/order_history/<profile>_fills.csv")
+    # Fills collection: default ON; --no-fills can disable. Keep --fills for back-compat.
+    parser.add_argument("--fills", dest="fills", action="store_true", default=None, help="(Default ON) Also fetch today's executed orders and write data/order_history/<profile>_fills.csv")
+    parser.add_argument("--no-fills", dest="fills", action="store_false", help="Disable fetching today's executed orders")
     parser.add_argument("--slow-mo-ms", type=int, default=None, help="Delay each Playwright action by N ms (defaults to 250 in headful; 0 in headless)")
     args = parser.parse_args(argv)
     env_profile = os.environ.get("TCBS_PROFILE", "").strip()
     profile = (args.profile or env_profile or "tcbs").strip()
     # Compute default pacing for logging visibility (actual decision is inside fetch)
     computed_slow = args.slow_mo_ms if args.slow_mo_ms is not None else (250 if args.headful else 0)
+    fills_enabled = True if args.fills is None else bool(args.fills)
     LOGGER.info(
         "args: profile=%s headful=%s timeout_ms=%d fills=%s slow_mo_ms=%s",
         profile,
         args.headful,
         int(args.timeout_ms),
-        bool(args.fills),
+        fills_enabled,
         computed_slow,
     )
     p_path, f_path, f_all_path = fetch_tcbs_portfolio(
         profile,
         headless=not args.headful,
         timeout_ms=int(args.timeout_ms),
-        with_fills_today=bool(args.fills),
+        with_fills_today=fills_enabled,
         slow_mo_ms=args.slow_mo_ms,
     )
     LOGGER.info("portfolio_csv=%s", p_path)
