@@ -87,9 +87,9 @@ Chuẩn bị:
 - Tạo file `.env` ở repo root:
 
 ```
-TCBS_USERNAME=0366673634
+TCBS_USERNAME=you-username
 TCBS_PASSWORD=your-password-here
-TCBS_PROFILE=alpha
+TCBS_PROFILE=your-profile
 ```
 
 Chạy lần đầu (headful để xác nhận thiết bị nếu TCBS yêu cầu):
@@ -143,7 +143,7 @@ Repo chỉ còn một workflow: `.github/workflows/data-engine.yml`. Workflow n�
 
 ## Prompt gợi ý cho ChatGPT
 
-Bạn có thể copy đoạn prompt ngắn dưới đây khi đã kết nối ChatGPT với repo. Prompt chỉ yêu cầu tra cứu tin tức hiện tại và đọc các file dữ liệu để đề xuất bộ lệnh trong ngày, chỉ dùng lệnh LO.
+Bạn có thể copy đoạn prompt ngắn dưới đây khi đã kết nối ChatGPT với repo. Prompt chỉ yêu cầu tra cứu tin tức hiện tại và đọc các file dữ liệu để đề xuất bộ lệnh trong ngày, chỉ dùng lệnh LO. Prompt này áp dụng cho profile `alpha`.
 
 ```
 Hãy tra cứu tin tức hiện tại và đọc các file sau (đường dẫn tương đối) để đề xuất bộ lệnh cho phiên VNINDEX tới, chỉ dùng lệnh LO:
