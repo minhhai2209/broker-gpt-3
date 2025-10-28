@@ -8,8 +8,8 @@
 7) data/order_history/alpha_fills.csv — các lệnh đã khớp trong hôm nay
 
 Dựa trên dữ liệu và mô tả preset sau đây, chọn chiến lược phù hợp:
-- balanced: Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-- momentum: Mua theo đà, chốt lời nhanh.
+- balanced: thiết lập cân bằng giữa tích lũy và chốt lời. Mua từng phần khi giá điều chỉnh nhẹ; chốt lời theo các bậc tăng dần.
+- momentum: mua theo đà và chốt lời nhanh. Ưu tiên mã có động lượng; dừng lỗ sớm nếu đà gãy.
 
 Ràng buộc khi ra quyết định:
 - Chỉ dùng lệnh LO; LimitPrice tính theo nghìn đồng.

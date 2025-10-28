@@ -22,10 +22,10 @@
 
 ### Prompt Sample
 - Canonical prompt lives at `prompts/SAMPLE_PROMPT.txt` (plain text, no Markdown fences). README only links to it.
-- When presets/schema change, update the prompt text (keep plain text) and adjust example file list if needed.
+- Template has a single placeholder `{{PROFILE}}` only. Keep file list and preset descriptions hard-coded for stability.
 - Do not re-embed the long prompt into `README.md` to avoid drift.
 
 Prompt Generator
 - Use `./broker.sh prompts` to generate per-profile files at `prompts/prompt_<profile>.txt` from the template.
-- The template supports placeholders: `{{PROFILE}}`, `{{FILE_LIST}}` (auto-numbered list of file paths), and `{{PRESET_DESCRIPTIONS}}` (from `config/data_engine.yaml` `presets.*.description`).
-- Keep the generator self-contained (no network). If config or template is missing, fail fast with clear messages.
+- Generator only replaces `{{PROFILE}}`; it scans `data/portfolios/*.csv` for profile names or accepts `--profiles`.
+- Keep the generator self-contained (no network). If template is missing, fail fast with clear messages.

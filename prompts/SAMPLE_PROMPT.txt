@@ -1,8 +1,15 @@
 Đọc các file sau (đường dẫn tương đối) và đề xuất bộ lệnh cho phiên VNINDEX tới, chỉ dùng lệnh LO:
-{{FILE_LIST}}
+1) out/market/technical_snapshot.csv — ảnh chụp kỹ thuật theo mã (giá hiện tại, thay đổi %, SMA/EMA/RSI/ATR, MACD, Z‑score, returns, ADV, 52w range)
+2) out/presets/balanced.csv — mức bậc mua/bán theo preset balanced
+3) out/presets/momentum.csv — mức bậc mua/bán theo preset momentum
+4) data/portfolios/{{PROFILE}}.csv — danh mục hiện tại (Ticker, Quantity, AvgPrice)
+5) out/portfolios/{{PROFILE}}_positions.csv — PnL theo mã, MarketValue/CostBasis/Unrealized
+6) out/portfolios/{{PROFILE}}_sector.csv — tổng hợp PnL theo ngành
+7) data/order_history/{{PROFILE}}_fills.csv — các lệnh đã khớp trong hôm nay
 
 Dựa trên dữ liệu và mô tả preset sau đây, chọn chiến lược phù hợp:
-{{PRESET_DESCRIPTIONS}}
+- balanced: thiết lập cân bằng giữa tích lũy và chốt lời. Mua từng phần khi giá điều chỉnh nhẹ; chốt lời theo các bậc tăng dần.
+- momentum: mua theo đà và chốt lời nhanh. Ưu tiên mã có động lượng; dừng lỗ sớm nếu đà gãy.
 
 Ràng buộc khi ra quyết định:
 - Chỉ dùng lệnh LO; LimitPrice tính theo nghìn đồng.
