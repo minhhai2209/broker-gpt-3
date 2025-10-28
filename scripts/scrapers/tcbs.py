@@ -332,6 +332,33 @@ def fetch_tcbs_portfolio(
         page = context.new_page()
         page.set_default_timeout(timeout_ms)
 
+        def _has_login_ui() -> bool:
+            """Heuristic: detect presence of TCBS login inputs/buttons.
+
+            Prefer feature detection over relying on page.url to handle client-side redirects.
+            """
+            try:
+                loc = page.get_by_placeholder(re.compile(r"Email|Số\s*tài\s*khoản|Điện\s*thoại", re.I))
+                if loc.count() > 0 and loc.first.is_visible():
+                    return True
+            except Exception:
+                pass
+            selectors = [
+                'input[formcontrolname="username"]',
+                'input[formcontrolname="password"]',
+                'input[type="password"]',
+                "button.btn-login",
+                "button:has-text('Đăng nhập')",
+            ]
+            for sel in selectors:
+                try:
+                    loc = page.locator(sel)
+                    if loc.count() > 0 and loc.first.is_visible():
+                        return True
+                except Exception:
+                    continue
+            return False
+
         # Helper to record URL immediately and after a short settle period
         def _log_url_after_goto(tag: str) -> None:
             try:
@@ -401,31 +428,32 @@ def fetch_tcbs_portfolio(
 
         # Step 0: Open home; if redirected to login, perform login
         with _log_step("navigate", url="/home"):
-            resp = page.goto("https://tcinvest.tcbs.com.vn/home", wait_until="domcontentloaded")
+            # Use 'commit' to return as soon as headers arrive; SPA may redirect afterward
+            resp = page.goto("https://tcinvest.tcbs.com.vn/home", wait_until="commit")
             try:
                 LOGGER.info("goto_response_url=%s status=%s", getattr(resp, "url", None), getattr(resp, "status", None))
             except Exception:
                 pass
             _log_url_after_goto("/home")
-        if "guest/login" in page.url:
+        if _has_login_ui():
             attempt_login()
 
         # Always navigate explicitly to my-asset (site may not redirect)
         with _log_step("navigate", url="/my-asset"):
-            resp = page.goto("https://tcinvest.tcbs.com.vn/my-asset", wait_until="domcontentloaded")
+            resp = page.goto("https://tcinvest.tcbs.com.vn/my-asset", wait_until="commit")
             try:
                 LOGGER.info("goto_response_url=%s status=%s", getattr(resp, "url", None), getattr(resp, "status", None))
             except Exception:
                 pass
             _log_url_after_goto("/my-asset")
         # If redirected back to login, the user likely needs OTP/device confirm; allow manual action in headful mode
-        if "guest/login" in page.url:
+        if _has_login_ui():
             LOGGER.warning("login: still on login; complete OTP/device confirm if prompted")
             # Give user time (headful) then re-attempt navigate to my-asset
             page.wait_for_timeout(5000)
             attempt_login()
             with _log_step("navigate", url="/my-asset"):
-                resp = page.goto("https://tcinvest.tcbs.com.vn/my-asset", wait_until="domcontentloaded")
+                resp = page.goto("https://tcinvest.tcbs.com.vn/my-asset", wait_until="commit")
                 try:
                     LOGGER.info("goto_response_url=%s status=%s", getattr(resp, "url", None), getattr(resp, "status", None))
                 except Exception:
@@ -436,19 +464,19 @@ def fetch_tcbs_portfolio(
 
         # Always navigate explicitly to my-asset (site may not redirect)
         with _log_step("navigate", url="/my-asset"):
-            resp = page.goto("https://tcinvest.tcbs.com.vn/my-asset", wait_until="domcontentloaded")
+            resp = page.goto("https://tcinvest.tcbs.com.vn/my-asset", wait_until="commit")
             try:
                 LOGGER.info("goto_response_url=%s status=%s", getattr(resp, "url", None), getattr(resp, "status", None))
             except Exception:
                 pass
             _log_url_after_goto("/my-asset.2")
         # If redirected back to login, the user likely needs OTP/device confirm; allow manual action in headful mode
-        if "guest/login" in page.url:
+        if _has_login_ui():
             LOGGER.warning("login: still on login; complete OTP/device confirm if prompted")
             # Give user time (headful) then re-attempt navigate to my-asset
             page.wait_for_timeout(5000)
             with _log_step("navigate", url="/my-asset"):
-                resp = page.goto("https://tcinvest.tcbs.com.vn/my-asset", wait_until="domcontentloaded")
+                resp = page.goto("https://tcinvest.tcbs.com.vn/my-asset", wait_until="commit")
                 try:
                     LOGGER.info("goto_response_url=%s status=%s", getattr(resp, "url", None), getattr(resp, "status", None))
                 except Exception:
