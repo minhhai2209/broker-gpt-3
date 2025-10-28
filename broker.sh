@@ -44,9 +44,17 @@ run_server() {
 }
 
 main() {
-  local task="${1:-engine}"
+  local task="${1:-all}"
   shift || true
   case "$task" in
+    all)
+      # Run TCBS (headful by default) then the data engine.
+      # Reuse this script to leverage existing logic and flags.
+      echo "[all] Step 1/2: Running TCBS scraper (headful)"
+      "$0" tcbs --headful "$@"
+      echo "[all] Step 2/2: Running data engine"
+      "$0" engine
+      ;;
     engine)
       run_engine "$@"
       ;;
@@ -76,7 +84,7 @@ main() {
       "$PY_BIN" -m scripts.scrapers.tcbs --profile "$profile" "$@"
       ;;
     *)
-      echo "Usage: $0 [engine|tests|server]" >&2
+      echo "Usage: $0 [all|engine|tests|server|tcbs]" >&2
       exit 2
       ;;
   esac

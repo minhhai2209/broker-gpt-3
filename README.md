@@ -67,10 +67,20 @@ Bạn có thể chỉnh preset (tỷ lệ ± so với giá hiện tại), đư�
 
 ## Cách chạy
 
-### Engine
+### Engine + Scraper (mặc định)
 
 ```bash
-./broker.sh             # tương đương ./broker.sh engine
+./broker.sh             # chạy TCBS (headful) rồi chạy engine
+```
+
+Chuỗi mặc định sẽ chạy:
+- `tcbs --headful` để lấy danh mục (và lệnh khớp hôm nay, mặc định bật).
+- `engine` để cập nhật snapshot kỹ thuật, preset và báo cáo danh mục.
+
+### Engine (chạy riêng)
+
+```bash
+./broker.sh engine
 ```
 
 Engine sẽ:
