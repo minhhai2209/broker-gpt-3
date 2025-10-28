@@ -21,6 +21,6 @@
 - Keep instructions focused on the current lightweight workflow; remove stale references when cleaning up features.
 
 ### Prompt Sample
-- Canonical sample prompt lives at `prompts/SAMPLE_PROMPT.md` (README only links to it).
-- When presets/schema change, update this file to instruct reading the `PresetDescription` column from each `out/presets/<preset>.csv` and adjust example file list if needed.
+- Canonical prompt lives at `prompts/SAMPLE_PROMPT.txt` (plain text, no Markdown fences). README only links to it.
+- When presets/schema change, update the prompt text (keep plain text) and adjust example file list if needed.
 - Do not re-embed the long prompt into `README.md` to avoid drift.

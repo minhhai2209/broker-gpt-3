@@ -1,0 +1,31 @@
+Nhiệm vụ: tra cứu tin tức hiện tại và đọc các file sau (đường dẫn tương đối) để đề xuất bộ lệnh cho phiên VNINDEX tới, chỉ dùng lệnh LO.
+
+Danh sách file cần đọc:
+1) out/market/technical_snapshot.csv — ảnh chụp kỹ thuật theo mã (giá hiện tại, thay đổi %, SMA/EMA/RSI/ATR, MACD, Z‑score, returns, ADV, 52w range)
+2) out/presets/balanced.csv — mức bậc mua/bán theo preset balanced
+3) out/presets/momentum.csv — mức bậc mua/bán theo preset momentum
+4) data/portfolios/alpha.csv — danh mục hiện tại (Ticker, Quantity, AvgPrice)
+5) out/portfolios/alpha_positions.csv — PnL theo mã, MarketValue/CostBasis/Unrealized
+6) out/portfolios/alpha_sector.csv — tổng hợp PnL theo ngành
+7) data/order_history/alpha_fills.csv — các lệnh đã khớp trong hôm nay
+
+Mô tả preset để áp dụng khi ra quyết định:
+- balanced: thiết lập cân bằng giữa tích lũy và chốt lời. Mua từng phần khi giá điều chỉnh nhẹ; chốt lời theo các bậc tăng dần.
+- momentum: mua theo đà và chốt lời nhanh. Ưu tiên mã có động lượng; dừng lỗ sớm nếu đà gãy.
+- nếu có preset khác, sử dụng các mức Buy_i/Sell_i trong file và giải thích logic theo tên preset.
+
+Yêu cầu ra quyết định:
+- chỉ dùng lệnh LO; LimitPrice tính theo nghìn đồng.
+- tôn trọng quy tắc HOSE (bước giá, lô chẵn, biên độ) nêu bên dưới.
+- không vượt quá khối lượng hợp lệ theo lô chẵn; có thể chia nhỏ lệnh.
+
+Định dạng đầu ra duy nhất (một CSV, không tiêu đề khác):
+Ticker,Side,Quantity,LimitPrice
+
+Quy tắc HOSE để kiểm tra giá/khối lượng hợp lệ:
+- bước giá cổ phiếu/CCQ đóng: <10000 VND → 10; 10000–49950 → 50; ≥50000 → 100. ETF/CW: 10.
+- lô chẵn: bội số 100; tối đa 500000 cổ/lệnh. Biên độ HOSE: ±7% so với tham chiếu.
+- làm tròn trần/sàn theo quy chế: trần làm tròn xuống, sàn làm tròn lên theo đúng tick.
+- kiểm tra nhanh (giá báo theo nghìn đồng): p_vnd = round(LimitPrice*1000); chọn tick theo p_vnd; hợp lệ khi (p_vnd % tick == 0) và (Quantity % 100 == 0).
+
+Lưu ý: các đường dẫn ví dụ dùng profile alpha; thay bằng profile bạn đang dùng nếu khác.
