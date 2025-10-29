@@ -52,10 +52,10 @@ portfolio:
   order_history_directory: data/order_history
 output:
   base_dir: out
-  market_snapshot: market/technical_snapshot.csv
-  presets_dir: presets
-  portfolios_dir: portfolios
-  diagnostics_dir: diagnostics
+  market_snapshot: technical_snapshot.csv
+  presets_dir: .
+  portfolios_dir: .
+  diagnostics_dir: .
 data:
   history_cache: out/data
   history_min_days: 400

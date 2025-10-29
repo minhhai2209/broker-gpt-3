@@ -4,7 +4,7 @@
 
 Phiên bản này bỏ hoàn toàn order engine. Toàn bộ hệ thống chỉ còn các thành phần sau:
 
-1. **Engine thu thập dữ liệu** (`scripts/engine/data_engine.py`): tải dữ liệu giá, tính chỉ số kỹ thuật, sinh preset và cập nhật báo cáo danh mục. Khi khởi chạy, engine sẽ xoá sạch `out/` để đảm bảo kết quả mới; kết thúc sẽ tạo zip phẳng theo SAMPLE_PROMPT tại `out/prompts/bundle_<profile>.zip`.
+1. **Engine thu thập dữ liệu** (`scripts/engine/data_engine.py`): tải dữ liệu giá, tính chỉ số kỹ thuật, sinh preset và cập nhật báo cáo danh mục. Khi khởi chạy, engine sẽ xoá sạch `out/` để đảm bảo kết quả mới; kết thúc sẽ tạo bundle phẳng theo `prompts/PROMPT.txt` tại `out/bundle_<profile>.zip` (mỗi profile một file).
 2. **Kho dữ liệu danh mục** (`data/portfolios/`, `data/order_history/`): lưu trữ danh mục hiện tại và lịch sử khớp lệnh của từng tài khoản.
 3. **TCBS Scraper** (`scripts/scrapers/tcbs.py`): đăng nhập TCBS bằng Playwright, ghi `data/portfolios/<profile>/portfolio.csv` và mặc định thu thập các lệnh đã khớp trong hôm nay vào `data/order_history/<profile>/fills.csv` (kèm bản đầy đủ `fills_all.csv`). Có thể tắt bằng `--no-fills`.
 4. (Tạm thời vô hiệu) GitHub Action: trước đây workflow tại `.github/workflows/data-engine.yml` chạy engine định kỳ và commit kết quả. Hiện đã gỡ; chạy local thay thế.
@@ -15,7 +15,7 @@ Mọi quyết định giao dịch sẽ do người vận hành xử lý dựa tr
 
 ```
 ┌───────────────┐     ┌──────────────────────┐     ┌─────────────────────┐
-│ data_engine.py│──►──│ out/market/*.csv     │────►│ ChatGPT / analyst UI │
+│ data_engine.py│──►──│ out/*.csv & bundle   │────►│ ChatGPT / analyst UI │
 └─────▲─────────┘     └────────────▲────────┘     └──────────▲───────────┘
       │                              │                           │
       │                              │                           │
@@ -62,11 +62,11 @@ Mọi đường dẫn được chuẩn hoá thành `Path.resolve()`. Thiếu tr�
   - `ChangePct` = phần trăm so với phiên trước.
   - `SMA_<n>`/`RSI_<n>`/`ATR_<n>`/`MACD_Hist` theo config.
   - `Sector` lấy từ universe.
-- Output: `out/market/technical_snapshot.csv` (một dòng/mã, đầy đủ các cột kỹ thuật và thời gian cập nhật).
+- Output: `out/technical_snapshot.csv` (một dòng/mã, đầy đủ các cột kỹ thuật và thời gian cập nhật).
 
 ### PresetWriter
 
-- Đọc snapshot, tạo file cho từng preset dưới `out/presets/`.
+- Đọc snapshot, tạo file cho từng preset dưới dạng `out/preset_<preset>.csv`.
 - Mỗi file gồm `Ticker`, `Sector`, `LastPrice`, `LastClose`, `PriceSource`, các cột `Buy_i`, `Sell_i` (round 4 chữ số).
 - Mô tả preset được trình bày trong prompt mẫu (không lặp lại dưới dạng cột trong CSV để tránh dư thừa).
 
@@ -88,8 +88,7 @@ Mọi đường dẫn được chuẩn hoá thành `Path.resolve()`. Thiếu tr�
 - Hợp nhất với snapshot để xác định `LastPrice` và sector.
 - Tính toán:
   - `MarketValue`, `CostBasis`, `UnrealizedPnL`, `UnrealizedPct`.
-- Ghi `out/portfolios/<profile>_positions.csv`.
-- Tổng hợp theo ngành -> `out/portfolios/<profile>_sector.csv`.
+- Xuất `positions.csv` và `sector.csv` vào bundle `out/bundle_<profile>.zip`.
 - Không chạm vào file danh mục gốc; chỉ đọc.
 
 ### TCBS Scraper
@@ -106,7 +105,7 @@ Workflow (đã gỡ tạm thời):
 1. Checkout mã nguồn (fetch đầy đủ lịch sử để có thể push).
 2. Cài đặt Python 3.11 và dependencies (`pip install -r requirements.txt`).
 3. Chạy `python -m scripts.engine.data_engine --config config/data_engine.yaml`.
-4. (Trước đây) Nếu chạy theo lịch hoặc kích hoạt thủ công, workflow sẽ commit và push những thay đổi trong `out/market`, `out/presets`, `out/portfolios`, `out/diagnostics`, `data/order_history`. Khi chạy trên Pull Request, bước commit được bỏ qua để workflow chỉ dùng cho việc xem log.
+4. (Trước đây) Nếu chạy theo lịch hoặc kích hoạt thủ công, workflow sẽ commit và push những thay đổi trong `out/*.csv`, `out/bundle_*.zip`, `out/diagnostics`, `data/order_history`. Khi chạy trên Pull Request, bước commit được bỏ qua để workflow chỉ dùng cho việc xem log.
 
 Không còn workflow chạy định kỳ trong repo hiện tại. Nếu cần bật lại, thêm file YAML workflow vào `.github/workflows/`.
 
@@ -114,7 +113,7 @@ Không còn workflow chạy định kỳ trong repo hiện tại. Nếu cần b�
 
 - Mỗi tài khoản → một thư mục `data/portfolios/<profile>/portfolio.csv` với schema tối thiểu `Ticker,Quantity,AvgPrice`.
 - Lịch sử khớp lệnh ghi vào `data/order_history/<profile>/fills.csv`. Engine không xoá, server chỉ append.
-- Khi engine chạy, file danh mục không bị sửa; các báo cáo nằm ở `out/portfolios/` và có thể được ghi đè mỗi lần chạy.
+- Khi engine chạy, file danh mục không bị sửa; các báo cáo được đóng gói thành `out/bundle_<profile>.zip` và có thể được ghi đè mỗi lần chạy.
 
 ## Kiểm thử
 
