@@ -1,0 +1,46 @@
+name: Build Bundles on Push
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch: {}
+
+concurrency:
+  group: bundle-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Run data engine (build all profiles)
+        run: |
+          chmod +x ./broker.sh
+          ./broker.sh engine
+
+      - name: Upload bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundles
+          path: |
+            out/bundle_*.zip
+          if-no-files-found: error
+          retention-days: 7
