@@ -1,0 +1,7 @@
+buy_budget_vnd: 10000000
+sell_budget_vnd: 0
+max_order_pct_adv: 0.05
+aggressiveness: med
+slice_adv_ratio: 0.02
+min_lot: 100
+max_qty_per_order: 500000

@@ -9,7 +9,7 @@ Credentials:
     when python-dotenv is available (optional dependency).
 
 Output:
-  - Writes `data/portfolios/<profile>.csv` with columns: Ticker,Quantity,AvgPrice
+  - Writes `data/portfolios/<profile>/portfolio.csv` with columns: Ticker,Quantity,AvgPrice
 
 Fingerprint persistence:
   - Uses a persistent Chromium user data directory at `.playwright/tcbs-user-data`.
@@ -311,9 +311,10 @@ def fetch_tcbs_portfolio(
         password = _require_env("TCBS_PASSWORD")
 
     # Prepare output dirs
-    portfolios_dir = (root / "data" / "portfolios").resolve()
-    portfolios_dir.mkdir(parents=True, exist_ok=True)
-    out_path = portfolios_dir / f"{profile}.csv"
+    portfolios_root = (root / "data" / "portfolios").resolve()
+    profile_dir = (portfolios_root / profile).resolve()
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    out_path = profile_dir / "portfolio.csv"
     LOGGER.info("output_file=%s", out_path)
     fills_out: Optional[Path] = None
     fills_all_out: Optional[Path] = None
@@ -566,7 +567,7 @@ def fetch_tcbs_portfolio(
 def _fetch_statement_today(page, root: Path, profile: str) -> Tuple[Path, Path]:
     """Navigate to statementStock, click TRA CỨU, parse table, and write today's fills CSV.
 
-    Writes data/order_history/<profile>_fills.csv with columns:
+    Writes data/order_history/<profile>/fills.csv with columns:
       timestamp (ISO, VN timezone at 00:00), ticker, side, quantity, price (thousand VND)
     Only today's rows are kept (idempotent per day).
     """
@@ -619,10 +620,10 @@ def _fetch_statement_today(page, root: Path, profile: str) -> Tuple[Path, Path]:
                 "price": float(getattr(r, "ExecPrice")),
             }
         )
-    dest_dir = (root / "data" / "order_history").resolve()
+    dest_dir = (root / "data" / "order_history" / profile).resolve()
     dest_dir.mkdir(parents=True, exist_ok=True)
-    out_path_today = dest_dir / f"{profile}_fills.csv"
-    out_path_all = dest_dir / f"{profile}_fills_all.csv"
+    out_path_today = dest_dir / "fills.csv"
+    out_path_all = dest_dir / "fills_all.csv"
     # Idempotent per-day: keep only today's set
     with _log_step("write_fills_today_csv", rows=len(out_rows), path=str(out_path_today)):
         pd.DataFrame(out_rows, columns=["timestamp", "ticker", "side", "quantity", "price"]).to_csv(out_path_today, index=False)
@@ -647,11 +648,11 @@ def _fetch_statement_today(page, root: Path, profile: str) -> Tuple[Path, Path]:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     _ensure_logging_configured()
     parser = argparse.ArgumentParser(description="Fetch portfolio from TCInvest (TCBS) via Playwright")
-    parser.add_argument("--profile", default=None, help="Profile name for output CSV in data/portfolios/")
+    parser.add_argument("--profile", default=None, help="Profile name (folder under data/portfolios/)")
     parser.add_argument("--headful", action="store_true", help="Run browser with UI for first-time device confirmation")
     parser.add_argument("--timeout-ms", type=int, default=300000, help="Global Playwright default timeout in milliseconds")
     # Fills collection: default ON; --no-fills can disable. Keep --fills for back-compat.
-    parser.add_argument("--fills", dest="fills", action="store_true", default=None, help="(Default ON) Also fetch today's executed orders and write data/order_history/<profile>_fills.csv")
+    parser.add_argument("--fills", dest="fills", action="store_true", default=None, help="(Default ON) Also fetch today's executed orders and write data/order_history/<profile>/fills.csv")
     parser.add_argument("--no-fills", dest="fills", action="store_false", help="Disable fetching today's executed orders")
     parser.add_argument("--slow-mo-ms", type=int, default=None, help="Delay each Playwright action by N ms (defaults to 250 in headful; 0 in headless)")
     args = parser.parse_args(argv)

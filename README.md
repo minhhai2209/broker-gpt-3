@@ -54,7 +54,7 @@ presets:
     buy_tiers: [-0.03, -0.02, -0.01]
     sell_tiers: [0.02, 0.04, 0.06]
 portfolio:
-  directory: data/portfolios     # Mỗi tài khoản 1 CSV: Ticker,Quantity,AvgPrice
+  directory: data/portfolios     # Mỗi tài khoản là 1 thư mục: <profile>/portfolio.csv
   order_history_directory: data/order_history
 output:
   base_dir: out
@@ -104,6 +104,7 @@ Engine sẽ:
 - Gọi API VNDIRECT để cập nhật giá lịch sử + intraday.
 - Tính SMA/RSI/ATR/MACD theo cấu hình.
 - Xuất các file CSV đã nêu ở trên.
+- Xoá sạch thư mục `out/` trước khi chạy để tính toán lại toàn bộ (bao gồm preset/báo cáo danh mục). Sau khi chạy xong, engine đóng gói các file trong SAMPLE_PROMPT theo từng profile thành zip phẳng tại `out/prompts/bundle_<profile>.zip`.
 
 ### Lấy danh mục + lệnh khớp hôm nay (TCBS, Playwright)
 
@@ -131,8 +132,8 @@ Chạy các lần sau (headless, fingerprint được lưu trong `.playwright/tc
 ```
 
 Mặc định script sẽ:
-- Ghi đè `data/portfolios/<profile>.csv` với cột `Ticker,Quantity,AvgPrice`.
-- Lấy các lệnh đã khớp trong hôm nay và ghi `data/order_history/<profile>_fills.csv` (chỉ hôm nay) và `data/order_history/<profile>_fills_all.csv` (đã chuẩn hoá, đầy đủ lịch sử bảng Tra cứu).
+- Ghi đè `data/portfolios/<profile>/portfolio.csv` với cột `Ticker,Quantity,AvgPrice`.
+- Lấy các lệnh đã khớp trong hôm nay và ghi `data/order_history/<profile>/fills.csv` (chỉ hôm nay) và `data/order_history/<profile>/fills_all.csv` (đã chuẩn hoá, đầy đủ lịch sử bảng Tra cứu).
 
 Tắt lấy “fills” nếu cần:
 
@@ -159,8 +160,9 @@ Test bao gồm:
 | `out/presets/<preset>.csv` | Mỗi preset một file; chứa giá mua/bán theo từng bậc |
 | `out/portfolios/<profile>_positions.csv` | Phân tích lãi/lỗ theo mã cho danh mục `profile` |
 | `out/portfolios/<profile>_sector.csv` | Tổng hợp lãi/lỗ theo ngành |
-| `data/order_history/<profile>_fills.csv` | Lệnh khớp hôm nay (do scraper TCBS ghi) |
-| `data/order_history/<profile>_fills_all.csv` | Bảng lệnh khớp đã chuẩn hoá đầy đủ |
+| `data/order_history/<profile>/fills.csv` | Lệnh khớp hôm nay (do scraper TCBS ghi) |
+| `data/order_history/<profile>/fills_all.csv` | Bảng lệnh khớp đã chuẩn hoá đầy đủ |
+| `out/prompts/bundle_<profile>.zip` | Gói phẳng các file cần cho ChatGPT theo SAMPLE_PROMPT |
 
 ## GitHub Actions
 
@@ -168,9 +170,9 @@ Hiện tại GitHub Action đã được tạm thời gỡ khỏi repo. Hãy ch�
 
 ## Hỏi nhanh
 
-**Có cần sửa danh mục thủ công?** — Có. Mỗi tài khoản là một CSV trong `data/portfolios/`. Engine chỉ đọc và ghi báo cáo, không can thiệp vào file gốc.
+**Có cần sửa danh mục thủ công?** — Có. Mỗi tài khoản là một thư mục trong `data/portfolios/` chứa `portfolio.csv`. Engine chỉ đọc và ghi báo cáo, không can thiệp vào file gốc.
 
-**Lịch sử khớp lệnh lưu ở đâu?** — `data/order_history/<profile>_fills.csv` (hôm nay) và `data/order_history/<profile>_fills_all.csv` (đầy đủ) do scraper TCBS ghi. Có thể tắt bằng `--no-fills`.
+**Lịch sử khớp lệnh lưu ở đâu?** — `data/order_history/<profile>/fills.csv` (hôm nay) và `data/order_history/<profile>/fills_all.csv` (đầy đủ) do scraper TCBS ghi. Có thể tắt bằng `--no-fills`.
 
 **Muốn thêm chỉ báo mới?** — Bổ sung vào `scripts/indicators/` hoặc tính trực tiếp trong `scripts/engine/data_engine.py`, sau đó khai báo trong `config/data_engine.yaml` nếu cần tham số.
 
@@ -179,7 +181,7 @@ Hiện tại GitHub Action đã được tạm thời gỡ khỏi repo. Hãy ch�
 ## Prompt gợi ý cho ChatGPT
 
 - Template: `prompts/SAMPLE_PROMPT.txt` — plain text, chỉ có một placeholder `{{PROFILE}}`.
-- Sinh prompt theo từng profile: `./broker.sh prompts` (quét `data/portfolios/*.csv` và tạo `prompts/prompt_<profile>.txt`).
+- Sinh prompt theo từng profile: `./broker.sh prompts` (quét thư mục `data/portfolios/*/portfolio.csv` và tạo `prompts/prompt_<profile>.txt`).
 - Sinh cho profile cụ thể: `./broker.sh prompts --profiles alpha,beta`.
 
 Ghi chú: Mô tả preset (balanced, momentum) đã được hard-code ngay trong template.

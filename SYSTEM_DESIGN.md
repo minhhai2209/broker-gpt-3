@@ -4,9 +4,9 @@
 
 Phiên bản này bỏ hoàn toàn order engine. Toàn bộ hệ thống chỉ còn các thành phần sau:
 
-1. **Engine thu thập dữ liệu** (`scripts/engine/data_engine.py`): tải dữ liệu giá, tính chỉ số kỹ thuật, sinh preset và cập nhật báo cáo danh mục.
+1. **Engine thu thập dữ liệu** (`scripts/engine/data_engine.py`): tải dữ liệu giá, tính chỉ số kỹ thuật, sinh preset và cập nhật báo cáo danh mục. Khi khởi chạy, engine sẽ xoá sạch `out/` để đảm bảo kết quả mới; kết thúc sẽ tạo zip phẳng theo SAMPLE_PROMPT tại `out/prompts/bundle_<profile>.zip`.
 2. **Kho dữ liệu danh mục** (`data/portfolios/`, `data/order_history/`): lưu trữ danh mục hiện tại và lịch sử khớp lệnh của từng tài khoản.
-3. **TCBS Scraper** (`scripts/scrapers/tcbs.py`): đăng nhập TCBS bằng Playwright, ghi `data/portfolios/<profile>.csv` và mặc định thu thập các lệnh đã khớp trong hôm nay vào `data/order_history/<profile>_fills.csv` (kèm bản đầy đủ `*_fills_all.csv`). Có thể tắt bằng `--no-fills`.
+3. **TCBS Scraper** (`scripts/scrapers/tcbs.py`): đăng nhập TCBS bằng Playwright, ghi `data/portfolios/<profile>/portfolio.csv` và mặc định thu thập các lệnh đã khớp trong hôm nay vào `data/order_history/<profile>/fills.csv` (kèm bản đầy đủ `fills_all.csv`). Có thể tắt bằng `--no-fills`.
 4. (Tạm thời vô hiệu) GitHub Action: trước đây workflow tại `.github/workflows/data-engine.yml` chạy engine định kỳ và commit kết quả. Hiện đã gỡ; chạy local thay thế.
 
 Mọi quyết định giao dịch sẽ do người vận hành xử lý dựa trên dữ liệu CSV đầu ra.
@@ -20,8 +20,8 @@ Mọi quyết định giao dịch sẽ do người vận hành xử lý dựa tr
       │                              │                           │
       │                              │                           │
       │            ┌─────────────────┴─────────────┐             │
-      │            │ data/portfolios/*.csv         │◄─────┐      │
-      │            │ data/order_history/*_fills.csv│      │      │
+      │            │ data/portfolios/*/portfolio.csv│◄────┐      │
+      │            │ data/order_history/<profile>/fills.csv│      │      │
       │            └───────────────────────────────┘      │      │
       │                     ▲                            │      │
       │                     │                            │      │
@@ -84,7 +84,7 @@ Mọi đường dẫn được chuẩn hoá thành `Path.resolve()`. Thiếu tr�
 
 ### PortfolioReporter
 
-- Đọc từng file danh mục `data/portfolios/<profile>.csv` (schema: `Ticker,Quantity,AvgPrice`).
+- Đọc từng danh mục `data/portfolios/<profile>/portfolio.csv` (schema: `Ticker,Quantity,AvgPrice`).
 - Hợp nhất với snapshot để xác định `LastPrice` và sector.
 - Tính toán:
   - `MarketValue`, `CostBasis`, `UnrealizedPnL`, `UnrealizedPct`.
@@ -97,7 +97,7 @@ Mọi đường dẫn được chuẩn hoá thành `Path.resolve()`. Thiếu tr�
 - Đọc `TCBS_USERNAME` và `TCBS_PASSWORD` từ `.env` hoặc biến môi trường.
 - Dùng Chromium persistent profile tại `.playwright/tcbs-user-data` để giữ fingerprint/session giữa các lần chạy (bỏ qua bước xác nhận thiết bị sau lần đầu).
 - Điều hướng: login -> `my-asset` -> tab `Cổ phiếu` -> `Tài sản` -> bảng danh mục.
-- Parse bảng một cách resilient theo header (`Mã`, `SL Tổng`/`Được GD`, `Giá vốn`) và ghi `data/portfolios/<profile>.csv`.
+- Parse bảng một cách resilient theo header (`Mã`, `SL Tổng`/`Được GD`, `Giá vốn`) và ghi `data/portfolios/<profile>/portfolio.csv`.
 
 ## Quy trình chạy GitHub Action
 
@@ -112,8 +112,8 @@ Không còn workflow chạy định kỳ trong repo hiện tại. Nếu cần b�
 
 ## Danh mục & lịch sử khớp lệnh
 
-- Mỗi tài khoản → một file CSV `data/portfolios/<profile>.csv` với schema tối thiểu `Ticker,Quantity,AvgPrice`.
-- Lịch sử khớp lệnh ghi vào `data/order_history/<profile>_fills.csv`. Engine không xoá, server chỉ append.
+- Mỗi tài khoản → một thư mục `data/portfolios/<profile>/portfolio.csv` với schema tối thiểu `Ticker,Quantity,AvgPrice`.
+- Lịch sử khớp lệnh ghi vào `data/order_history/<profile>/fills.csv`. Engine không xoá, server chỉ append.
 - Khi engine chạy, file danh mục không bị sửa; các báo cáo nằm ở `out/portfolios/` và có thể được ghi đè mỗi lần chạy.
 
 ## Kiểm thử

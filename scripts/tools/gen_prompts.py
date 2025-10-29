@@ -16,11 +16,17 @@ def repo_root() -> Path:
 def scan_profiles(portfolios_dir: Path) -> List[str]:
     if not portfolios_dir.exists():
         return []
-    names = []
+    names: List[str] = []
+    # New layout: subdirectories, each containing portfolio.csv
+    for d in sorted(portfolios_dir.glob("*")):
+        if d.is_dir() and (d / "portfolio.csv").is_file():
+            names.append(d.name)
+    # Legacy layout fallback: direct CSVs
     for f in sorted(portfolios_dir.glob("*.csv")):
         if f.is_file():
             names.append(f.stem)
-    return names
+    # Deduplicate while preserving sorted order
+    return sorted(dict.fromkeys(names).keys())
 
 def render_template(template_text: str, profile: str) -> str:
     return template_text.replace("{{PROFILE}}", profile)
@@ -48,7 +54,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     else:
         profiles = scan_profiles(portfolios_dir)
     if not profiles:
-        print("[prompts] No profiles found; create data/portfolios/<profile>.csv first", file=sys.stderr)
+        print("[prompts] No profiles found; create data/portfolios/<profile>/portfolio.csv first", file=sys.stderr)
         return 2
 
     for profile in profiles:

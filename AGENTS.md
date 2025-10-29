@@ -27,5 +27,5 @@
 
 Prompt Generator
 - Use `./broker.sh prompts` to generate per-profile files at `prompts/prompt_<profile>.txt` from the template.
-- Generator only replaces `{{PROFILE}}`; it scans `data/portfolios/*.csv` for profile names or accepts `--profiles`.
+- Generator only replaces `{{PROFILE}}`; it scans `data/portfolios/*/portfolio.csv` for profile names or accepts `--profiles`.
 - Keep the generator self-contained (no network). If template is missing, fail fast with clear messages.

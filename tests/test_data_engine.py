@@ -39,8 +39,10 @@ class DataEngineTest(unittest.TestCase):
         industry_df.to_csv(industry_csv, index=False)
         portfolio_dir = self.base / "pf"
         order_dir = self.base / "orders"
-        portfolio_dir.mkdir()
-        (portfolio_dir / "alpha.csv").write_text("Ticker,Quantity,AvgPrice\nAAA,10,12\nBBB,5,20\n", encoding="utf-8")
+        (portfolio_dir / "alpha").mkdir(parents=True, exist_ok=True)
+        (portfolio_dir / "alpha" / "portfolio.csv").write_text(
+            "Ticker,Quantity,AvgPrice\nAAA,10,12\nBBB,5,20\n", encoding="utf-8"
+        )
         config_path.write_text(
             """
             universe:
