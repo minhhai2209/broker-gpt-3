@@ -4,18 +4,20 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP
 import shutil
 import zipfile
 from pathlib import Path
-from typing import Dict, List, Optional, Protocol, Sequence
+from typing import Dict, List, Optional, Protocol, Sequence, Tuple
 
 import pandas as pd
 import yaml
 
 from scripts.data_fetching.collect_intraday import ensure_intraday_latest_df
 from scripts.data_fetching.fetch_ticker_data import ensure_and_load_history_df
-from scripts.indicators import atr_wilder, macd_hist, ma, rsi_wilder, ema
+from scripts.indicators import atr_wilder, ma, rsi_wilder, ema
 
 LOGGER = logging.getLogger(__name__)
 
@@ -104,6 +106,11 @@ class EngineConfig:
     market_cache_dir: Path
     history_min_days: int
     intraday_window_minutes: int
+    aggressiveness: str
+    max_order_pct_adv: float
+    slice_adv_ratio: float
+    min_lot: int
+    max_qty_per_order: int
     shortlist_filter: Optional[ShortlistFilterConfig]
 
     @classmethod
@@ -147,9 +154,9 @@ class EngineConfig:
         macd_slow = int(macd_cfg.get("slow", 26))
         macd_signal = int(macd_cfg.get("signal", 9))
 
-        raw_presets = data.get("presets", {})
-        if not isinstance(raw_presets, dict) or not raw_presets:
-            raise ConfigurationError("At least one preset must be defined")
+        raw_presets = data.get("presets", {}) or {}
+        if not isinstance(raw_presets, dict):
+            raise ConfigurationError("presets section must be a mapping if provided")
         presets = {name: PresetConfig.from_dict(name, cfg) for name, cfg in raw_presets.items()}
 
         portfolio_cfg = data.get("portfolio", {}) or {}
@@ -181,6 +188,23 @@ class EngineConfig:
         market_cache_dir = _resolve_path(data_cfg.get("history_cache", "out/data"), config_dir, repo_root)
         history_min_days = int(data_cfg.get("history_min_days", 400))
         intraday_window_minutes = int(data_cfg.get("intraday_window_minutes", 12 * 60))
+
+        execution_cfg = data.get("execution", {}) or {}
+        if not isinstance(execution_cfg, dict):
+            raise ConfigurationError("execution section must be a mapping")
+        aggressiveness = str(execution_cfg.get("aggressiveness", "med"))
+        max_order_pct_adv = float(execution_cfg.get("max_order_pct_adv", 0.1))
+        slice_adv_ratio = float(execution_cfg.get("slice_adv_ratio", 0.25))
+        min_lot = int(execution_cfg.get("min_lot", 100))
+        max_qty_per_order = int(execution_cfg.get("max_qty_per_order", 500_000))
+        if min_lot <= 0:
+            raise ConfigurationError("execution.min_lot must be positive")
+        if max_qty_per_order <= 0 or max_qty_per_order > 500_000:
+            raise ConfigurationError("execution.max_qty_per_order must be in (0, 500000]")
+        if not 0 < max_order_pct_adv <= 1:
+            raise ConfigurationError("execution.max_order_pct_adv must be in (0, 1]")
+        if not 0 < slice_adv_ratio <= 1:
+            raise ConfigurationError("execution.slice_adv_ratio must be in (0, 1]")
 
         # Optional shortlist filter
         filters_cfg = data.get("filters", {}) or {}
@@ -234,6 +258,11 @@ class EngineConfig:
             market_cache_dir=market_cache_dir,
             history_min_days=history_min_days,
             intraday_window_minutes=intraday_window_minutes,
+            aggressiveness=aggressiveness,
+            max_order_pct_adv=max_order_pct_adv,
+            slice_adv_ratio=slice_adv_ratio,
+            min_lot=min_lot,
+            max_qty_per_order=max_qty_per_order,
             shortlist_filter=shortlist_filter,
         )
 
@@ -271,6 +300,60 @@ def _resolve_path(candidate: str, config_dir: Path, repo_root: Path) -> Path:
             f"Path '{candidate}' escapes repository root {repo_root}. Use absolute paths for external locations."
         )
     return root_candidate
+
+
+def _tick_size(price: float) -> float:
+    if price is None or pd.isna(price):
+        return float("nan")
+    value = float(price)
+    if value < 10.0:
+        return 0.01
+    if value < 50.0:
+        return 0.05
+    return 0.10
+
+
+def _as_decimal(value: float | int | str) -> Optional[Decimal]:
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _quantize_to_tick(value: float, rounding) -> float:
+    dec_value = _as_decimal(value)
+    if dec_value is None:
+        return float("nan")
+    tick = _as_decimal(_tick_size(float(dec_value)))
+    if tick is None or tick == 0:
+        return float("nan")
+    steps = (dec_value / tick).to_integral_value(rounding=rounding)
+    result = steps * tick
+    return float(result)
+
+
+def round_to_tick(value: float) -> float:
+    return _quantize_to_tick(value, ROUND_HALF_UP)
+
+
+def floor_to_tick(value: float) -> float:
+    return _quantize_to_tick(value, ROUND_FLOOR)
+
+
+def ceil_to_tick(value: float) -> float:
+    return _quantize_to_tick(value, ROUND_CEILING)
+
+
+def clamp_price(value: float, floor_value: float, ceil_value: float) -> float:
+    if value is None or pd.isna(value):
+        return float("nan")
+    if floor_value is not None and not pd.isna(floor_value):
+        value = max(value, float(floor_value))
+    if ceil_value is not None and not pd.isna(ceil_value):
+        value = min(value, float(ceil_value))
+    return value
 
 
 class MarketDataService(Protocol):
@@ -409,15 +492,19 @@ class TechnicalSnapshotBuilder:
                     data[col] = float("nan")
                     data[f"ATRPct_{period}"] = float("nan")
             if len(close_series) >= max(self._config.macd_fast, self._config.macd_slow):
-                data["MACD_Hist"] = float(
-                    macd_hist(
-                        close_series,
-                        fast=self._config.macd_fast,
-                        slow=self._config.macd_slow,
-                        signal=self._config.macd_signal,
-                    ).iloc[-1]
+                close_numeric = pd.to_numeric(close_series, errors="coerce")
+                macd_line = ema(close_numeric, self._config.macd_fast) - ema(
+                    close_numeric, self._config.macd_slow
                 )
+                macd_signal = macd_line.ewm(span=self._config.macd_signal, adjust=False).mean()
+                macd_value = float(macd_line.iloc[-1])
+                macd_signal_value = float(macd_signal.iloc[-1])
+                data["MACD"] = macd_value
+                data["MACDSignal"] = macd_signal_value
+                data["MACD_Hist"] = macd_value - macd_signal_value
             else:
+                data["MACD"] = float("nan")
+                data["MACDSignal"] = float("nan")
                 data["MACD_Hist"] = float("nan")
             # Bollinger and z-score
             for w in self._config.bollinger_windows:
@@ -482,101 +569,18 @@ class TechnicalSnapshotBuilder:
         return snapshot
 
 
-class PresetWriter:
-    def __init__(self, presets: Dict[str, PresetConfig], output_dir: Path, shortlist: Optional[ShortlistFilterConfig] = None) -> None:
-        self._presets = presets
-        self._output_dir = output_dir
-        self._shortlist = shortlist
-
-    def write(self, snapshot: pd.DataFrame) -> None:
-        self._output_dir.mkdir(parents=True, exist_ok=True)
-        base_cols = ["Ticker", "Sector", "LastPrice", "LastClose", "PriceSource"]
-        if self._shortlist and self._shortlist.enabled and not snapshot.empty:
-            before = len(snapshot)
-            snapshot = self._apply_shortlist(snapshot)
-            LOGGER.info("Shortlist filter: %d -> %d tickers", before, len(snapshot))
-        for name, preset in self._presets.items():
-            if snapshot.empty:
-                df = pd.DataFrame(columns=base_cols)
-            else:
-                df = snapshot[base_cols].copy()
-                for idx, adj in enumerate(preset.buy_tiers, start=1):
-                    col = f"Buy_{idx}"
-                    df[col] = (df["LastPrice"] * (1.0 + float(adj))).round(4)
-                for idx, adj in enumerate(preset.sell_tiers, start=1):
-                    col = f"Sell_{idx}"
-                    df[col] = (df["LastPrice"] * (1.0 + float(adj))).round(4)
-            out_path = self._output_dir / f"preset_{name}.csv"
-            df.to_csv(out_path, index=False)
-
-    def _apply_shortlist(self, snapshot: pd.DataFrame) -> pd.DataFrame:
-        cfg = self._shortlist
-        assert cfg is not None  # guarded by caller
-        df = snapshot.copy()
-        # Normalize tickers for overrides
-        keep = set(cfg.normalized_keep())
-        ban = set(cfg.normalized_exclude())
-        df["Ticker"] = df["Ticker"].astype(str).str.upper()
-
-        # Manual banlist first
-        manual_ban_mask = df["Ticker"].isin(ban) if ban else pd.Series([False] * len(df), index=df.index)
-
-        # Compose technical weakness conditions (safe with missing columns)
-        def col(name: str) -> pd.Series:
-            return pd.to_numeric(df.get(name, pd.Series([float("nan")] * len(df), index=df.index)), errors="coerce")
-
-        last_price = col("LastPrice")
-        rsi14 = col("RSI_14")
-        sma50 = col("SMA_50")
-        sma200 = col("SMA_200")
-        ret20 = col("Return_20")
-        ret60 = col("Return_60")
-        pct_to_lo = col("PctToLo_252")
-        adv20 = col("ADV_20")
-
-        conds: List[pd.Series] = []
-        # Avoid invalid comparisons by checking threshold presence
-        if cfg.rsi14_max is not None:
-            conds.append(rsi14 <= float(cfg.rsi14_max))
-        if cfg.max_pct_to_lo_252 is not None:
-            conds.append(pct_to_lo <= float(cfg.max_pct_to_lo_252))
-        if cfg.return20_max is not None:
-            conds.append(ret20 <= float(cfg.return20_max))
-        if cfg.return60_max is not None:
-            conds.append(ret60 <= float(cfg.return60_max))
-        if cfg.require_below_sma50_and_200:
-            below_ma = (last_price < sma50) & (last_price < sma200)
-            conds.append(below_ma)
-        if cfg.min_adv_20 is not None:
-            conds.append(adv20 <= float(cfg.min_adv_20))
-
-        if not conds:
-            # No active conditions -> nothing to filter except manual banlist/keep
-            drop_mask = manual_ban_mask
-        else:
-            # Combine conditions conservatively
-            combined = conds[0]
-            for c in conds[1:]:
-                if cfg.drop_logic_all:
-                    combined = combined & c
-                else:
-                    combined = combined | c
-            # NaNs in any condition should not force a drop; treat as False
-            combined = combined.fillna(False)
-            drop_mask = combined | manual_ban_mask
-
-        # Keep-list overrides any drop
-        if keep:
-            drop_mask = drop_mask & (~df["Ticker"].isin(keep))
-
-        kept_df = df[~drop_mask].reset_index(drop=True)
-        return kept_df
-
-
 @dataclass
 class PortfolioReport:
     positions: pd.DataFrame
     sector: pd.DataFrame
+
+
+@dataclass
+class PortfolioRefreshResult:
+    reports: Dict[str, PortfolioReport]
+    aggregate_positions: pd.DataFrame
+    aggregate_sector: pd.DataFrame
+    holdings: Dict[str, float]
 
 
 class PortfolioReporter:
@@ -584,11 +588,24 @@ class PortfolioReporter:
         self._config = config
         self._industry = industry_df
 
-    def refresh(self, snapshot: pd.DataFrame) -> Dict[str, PortfolioReport]:
+    def refresh(self, snapshot: pd.DataFrame) -> PortfolioRefreshResult:
         portfolios_dir = self._config.portfolio_dir
         if not portfolios_dir.exists():
             LOGGER.info("Portfolio directory %s does not exist; skipping reports", portfolios_dir)
-            return {}
+            empty_positions = pd.DataFrame(
+                columns=[
+                    "Ticker",
+                    "Quantity",
+                    "AvgPrice",
+                    "Last",
+                    "MarketValue_kVND",
+                    "CostBasis_kVND",
+                    "Unrealized_kVND",
+                    "PNLPct",
+                ]
+            )
+            empty_sector = pd.DataFrame(columns=["Sector", "MarketValue_kVND", "WeightPct", "PNLPct"])
+            return PortfolioRefreshResult({}, empty_positions, empty_sector, {})
         sector_lookup = {}
         if "Ticker" in self._industry.columns:
             for row in self._industry.itertuples(index=False):
@@ -596,6 +613,7 @@ class PortfolioReporter:
                 sector = getattr(row, "Sector", "") if hasattr(row, "Sector") else ""
                 sector_lookup[ticker] = sector
         reports: Dict[str, PortfolioReport] = {}
+        all_positions: List[pd.DataFrame] = []
         # New layout: each subfolder is a profile with portfolio.csv
         processed_profiles = set()
         for profile_dir in sorted(portfolios_dir.glob("*")):
@@ -613,36 +631,11 @@ class PortfolioReporter:
             if "Ticker" not in portfolio_df.columns or "Quantity" not in portfolio_df.columns or "AvgPrice" not in portfolio_df.columns:
                 LOGGER.warning("Portfolio %s missing required columns", file)
                 continue
-            portfolio_df["Ticker"] = portfolio_df["Ticker"].astype(str).str.upper()
-            portfolio_df["Quantity"] = pd.to_numeric(portfolio_df["Quantity"], errors="coerce").fillna(0.0)
-            portfolio_df["AvgPrice"] = pd.to_numeric(portfolio_df["AvgPrice"], errors="coerce").fillna(0.0)
-            portfolio_df = portfolio_df[portfolio_df["Quantity"] != 0]
-            if portfolio_df.empty:
+            report = self._build_report(portfolio_df, snapshot, sector_lookup)
+            if report is None:
                 continue
-            merged = portfolio_df.merge(snapshot, on="Ticker", how="left")
-            merged["Sector"] = merged["Sector"].fillna(merged["Ticker"].map(sector_lookup))
-            merged["LastPrice"] = pd.to_numeric(merged["LastPrice"], errors="coerce")
-            merged["LastClose"] = pd.to_numeric(merged["LastClose"], errors="coerce")
-            merged["LastPrice"] = merged["LastPrice"].fillna(merged["LastClose"])
-            merged["MarketValue"] = merged["Quantity"] * merged["LastPrice"].fillna(0.0)
-            merged["CostBasis"] = merged["Quantity"] * merged["AvgPrice"].fillna(0.0)
-            merged["UnrealizedPnL"] = merged["MarketValue"] - merged["CostBasis"]
-            merged["UnrealizedPct"] = merged.apply(
-                lambda row: ((row["LastPrice"] / row["AvgPrice"] - 1.0) * 100.0) if row["AvgPrice"] else float("nan"),
-                axis=1,
-            )
-            sector_summary = merged.groupby(merged["Sector"].fillna("Không rõ"), dropna=False).agg(
-                Quantity=("Quantity", "sum"),
-                MarketValue=("MarketValue", "sum"),
-                CostBasis=("CostBasis", "sum"),
-                UnrealizedPnL=("UnrealizedPnL", "sum"),
-            )
-            sector_summary["UnrealizedPct"] = sector_summary.apply(
-                lambda row: ((row["MarketValue"] / row["CostBasis"] - 1.0) * 100.0) if row["CostBasis"] else float("nan"),
-                axis=1,
-            )
-            sector_summary = sector_summary.reset_index().rename(columns={"index": "Sector"})
-            reports[profile] = PortfolioReport(positions=merged, sector=sector_summary)
+            reports[profile] = report
+            all_positions.append(report.positions.copy())
             processed_profiles.add(profile)
 
         # Legacy layout: also support direct CSVs under portfolio_dir
@@ -660,40 +653,538 @@ class PortfolioReporter:
             if "Ticker" not in portfolio_df.columns or "Quantity" not in portfolio_df.columns or "AvgPrice" not in portfolio_df.columns:
                 LOGGER.warning("Portfolio %s missing required columns", file)
                 continue
-            portfolio_df["Ticker"] = portfolio_df["Ticker"].astype(str).str.upper()
-            portfolio_df["Quantity"] = pd.to_numeric(portfolio_df["Quantity"], errors="coerce").fillna(0.0)
-            portfolio_df["AvgPrice"] = pd.to_numeric(portfolio_df["AvgPrice"], errors="coerce").fillna(0.0)
-            portfolio_df = portfolio_df[portfolio_df["Quantity"] != 0]
-            if portfolio_df.empty:
+            report = self._build_report(portfolio_df, snapshot, sector_lookup)
+            if report is None:
                 continue
-            merged = portfolio_df.merge(snapshot, on="Ticker", how="left")
-            merged["Sector"] = merged["Sector"].fillna(merged["Ticker"].map(sector_lookup))
-            merged["LastPrice"] = pd.to_numeric(merged["LastPrice"], errors="coerce")
-            merged["LastClose"] = pd.to_numeric(merged["LastClose"], errors="coerce")
-            merged["LastPrice"] = merged["LastPrice"].fillna(merged["LastClose"])
-            merged["MarketValue"] = merged["Quantity"] * merged["LastPrice"].fillna(0.0)
-            merged["CostBasis"] = merged["Quantity"] * merged["AvgPrice"].fillna(0.0)
-            merged["UnrealizedPnL"] = merged["MarketValue"] - merged["CostBasis"]
-            merged["UnrealizedPct"] = merged.apply(
-                lambda row: ((row["LastPrice"] / row["AvgPrice"] - 1.0) * 100.0) if row["AvgPrice"] else float("nan"),
-                axis=1,
-            )
-            sector_summary = merged.groupby(merged["Sector"].fillna("Không rõ"), dropna=False).agg(
-                Quantity=("Quantity", "sum"),
-                MarketValue=("MarketValue", "sum"),
-                CostBasis=("CostBasis", "sum"),
-                UnrealizedPnL=("UnrealizedPnL", "sum"),
-            )
-            sector_summary["UnrealizedPct"] = sector_summary.apply(
-                lambda row: ((row["MarketValue"] / row["CostBasis"] - 1.0) * 100.0) if row["CostBasis"] else float("nan"),
-                axis=1,
-            )
-            sector_summary = sector_summary.reset_index().rename(columns={"index": "Sector"})
-            reports[profile] = PortfolioReport(positions=merged, sector=sector_summary)
+            reports[profile] = report
+            all_positions.append(report.positions.copy())
 
-        return reports
+        if not all_positions:
+            empty_positions = pd.DataFrame(
+                columns=[
+                    "Ticker",
+                    "Quantity",
+                    "AvgPrice",
+                    "Last",
+                    "MarketValue_kVND",
+                    "CostBasis_kVND",
+                    "Unrealized_kVND",
+                    "PNLPct",
+                ]
+            )
+            empty_sector = pd.DataFrame(columns=["Sector", "MarketValue_kVND", "WeightPct", "PNLPct"])
+            return PortfolioRefreshResult(reports, empty_positions, empty_sector, {})
+
+        combined = pd.concat(all_positions, ignore_index=True)
+        combined["Sector"] = combined["Sector"].fillna("Không rõ")
+        agg_rows: List[Dict[str, object]] = []
+        holdings: Dict[str, float] = {}
+        for ticker, group in combined.groupby("Ticker", dropna=False):
+            qty = float(group["Quantity"].sum())
+            holdings[str(ticker)] = qty
+            if qty == 0:
+                avg_price = float("nan")
+            else:
+                avg_price = float((group["AvgPrice"] * group["Quantity"]).sum() / qty)
+            last_vals = group["Last"].dropna()
+            last_price = float(last_vals.iloc[0]) if not last_vals.empty else float("nan")
+            market_value = float(group["MarketValue_kVND"].sum())
+            cost_basis = float(group["CostBasis_kVND"].sum())
+            unrealized = float(group["Unrealized_kVND"].sum())
+            pnl_pct = float(unrealized / cost_basis) if cost_basis else float("nan")
+            agg_rows.append(
+                {
+                    "Ticker": str(ticker),
+                    "Quantity": qty,
+                    "AvgPrice": avg_price,
+                    "Last": last_price,
+                    "MarketValue_kVND": market_value,
+                    "CostBasis_kVND": cost_basis,
+                    "Unrealized_kVND": unrealized,
+                    "PNLPct": pnl_pct,
+                }
+            )
+        aggregate_positions = pd.DataFrame(agg_rows).sort_values("Ticker").reset_index(drop=True)
+
+        sector_summary = combined.groupby("Sector", dropna=False).agg(
+            MarketValue_kVND=("MarketValue_kVND", "sum"),
+            CostBasis_kVND=("CostBasis_kVND", "sum"),
+        )
+        total_market = float(sector_summary["MarketValue_kVND"].sum()) if not sector_summary.empty else 0.0
+        if total_market:
+            sector_summary["WeightPct"] = sector_summary["MarketValue_kVND"] / total_market
+        else:
+            sector_summary["WeightPct"] = 0.0
+        sector_summary["PNLPct"] = sector_summary.apply(
+            lambda row: ((row["MarketValue_kVND"] - row["CostBasis_kVND"]) / row["CostBasis_kVND"]) if row["CostBasis_kVND"] else float("nan"),
+            axis=1,
+        )
+        sector_summary = (
+            sector_summary.drop(columns=["CostBasis_kVND"]).reset_index().rename(columns={"index": "Sector"})
+        )
+        sector_summary = sector_summary.sort_values("Sector").reset_index(drop=True)
+
+        return PortfolioRefreshResult(reports, aggregate_positions, sector_summary, holdings)
+
+    def _build_report(
+        self,
+        portfolio_df: pd.DataFrame,
+        snapshot: pd.DataFrame,
+        sector_lookup: Dict[str, str],
+    ) -> Optional[PortfolioReport]:
+        df = portfolio_df.copy()
+        df["Ticker"] = df["Ticker"].astype(str).str.upper()
+        df["Quantity"] = pd.to_numeric(df["Quantity"], errors="coerce").fillna(0.0)
+        df["AvgPrice"] = pd.to_numeric(df["AvgPrice"], errors="coerce").fillna(0.0)
+        df = df[df["Quantity"] != 0]
+        if df.empty:
+            return None
+        merged = df.merge(snapshot, on="Ticker", how="left")
+        if "Sector" not in merged.columns:
+            merged["Sector"] = pd.Series([float("nan")] * len(merged), index=merged.index)
+        merged["Sector"] = merged["Sector"].fillna(merged["Ticker"].map(sector_lookup))
+        merged["LastPrice"] = pd.to_numeric(merged.get("LastPrice"), errors="coerce")
+        merged["LastClose"] = pd.to_numeric(merged.get("LastClose"), errors="coerce")
+        merged["Last"] = merged["LastPrice"].fillna(merged["LastClose"])
+        merged["Last"] = pd.to_numeric(merged["Last"], errors="coerce")
+        merged["MarketValue_kVND"] = merged["Quantity"] * merged["Last"].fillna(0.0)
+        merged["CostBasis_kVND"] = merged["Quantity"] * merged["AvgPrice"].fillna(0.0)
+        merged["Unrealized_kVND"] = merged["MarketValue_kVND"] - merged["CostBasis_kVND"]
+        merged["PNLPct"] = merged.apply(
+            lambda row: (row["Unrealized_kVND"] / row["CostBasis_kVND"]) if row["CostBasis_kVND"] else float("nan"),
+            axis=1,
+        )
+        sectorized = merged[[
+            "Ticker",
+            "Sector",
+            "Quantity",
+            "AvgPrice",
+            "Last",
+            "MarketValue_kVND",
+            "CostBasis_kVND",
+            "Unrealized_kVND",
+            "PNLPct",
+        ]].copy()
+        sectorized["Sector"] = sectorized["Sector"].fillna("Không rõ")
+
+        positions_output = sectorized.sort_values("Ticker").reset_index(drop=True)
+
+        total_market = float(sectorized["MarketValue_kVND"].sum())
+        sector_summary = sectorized.groupby("Sector", dropna=False).agg(
+            MarketValue_kVND=("MarketValue_kVND", "sum"),
+            CostBasis_kVND=("CostBasis_kVND", "sum"),
+        )
+        if total_market:
+            sector_summary["WeightPct"] = sector_summary["MarketValue_kVND"] / total_market
+        else:
+            sector_summary["WeightPct"] = 0.0
+        sector_summary["PNLPct"] = sector_summary.apply(
+            lambda row: ((row["MarketValue_kVND"] - row["CostBasis_kVND"]) / row["CostBasis_kVND"]) if row["CostBasis_kVND"] else float("nan"),
+            axis=1,
+        )
+        sector_summary = (
+            sector_summary.drop(columns=["CostBasis_kVND"]).reset_index().rename(columns={"index": "Sector"})
+        )
+        sector_summary = sector_summary.sort_values("Sector").reset_index(drop=True)
+
+        return PortfolioReport(positions=positions_output, sector=sector_summary)
 
 
+def _build_technical_output(snapshot: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "Ticker",
+        "Last",
+        "Ref",
+        "ChangePct",
+        "SMA20",
+        "SMA50",
+        "SMA200",
+        "EMA20",
+        "RSI14",
+        "ATR14",
+        "MACD",
+        "MACDSignal",
+        "Z20",
+        "Ret5d",
+        "Ret20d",
+        "ADV20",
+        "High52w",
+        "Low52w",
+    ]
+    if snapshot.empty:
+        return pd.DataFrame(columns=columns)
+
+    tickers = snapshot.get("Ticker", pd.Series([], dtype=object)).astype(str).str.upper()
+
+    def numeric(name: str) -> pd.Series:
+        if name in snapshot.columns:
+            return pd.to_numeric(snapshot[name], errors="coerce")
+        return pd.Series([float("nan")] * len(snapshot), index=snapshot.index)
+
+    last = numeric("LastPrice")
+    ref = numeric("LastClose")
+    last = last.fillna(ref)
+    ref = ref.fillna(last)
+    change = pd.Series([float("nan")] * len(snapshot), index=snapshot.index)
+    valid_mask = (~last.isna()) & (~ref.isna()) & (ref != 0)
+    change.loc[valid_mask] = (last.loc[valid_mask] / ref.loc[valid_mask]) - 1.0
+
+    sma20 = numeric("SMA_20")
+    sma50 = numeric("SMA_50")
+    sma200 = numeric("SMA_200")
+    ema20 = numeric("EMA_20")
+    rsi14 = numeric("RSI_14")
+    atr14 = numeric("ATR_14")
+    macd = numeric("MACD")
+    macd_signal = numeric("MACDSignal")
+
+    ret5 = numeric("Return_5") / 100.0
+    ret20 = numeric("Return_20") / 100.0
+    adv20 = numeric("ADV_20")
+    hi52 = numeric("Hi_252")
+    lo52 = numeric("Lo_252")
+
+    z20 = pd.Series([float("nan")] * len(snapshot), index=snapshot.index)
+    with_atr = (~atr14.isna()) & (atr14 != 0)
+    z20.loc[with_atr] = ((last - sma20) / atr14).loc[with_atr]
+    z20.loc[atr14 == 0] = 0.0
+
+    technical = pd.DataFrame(
+        {
+            "Ticker": tickers,
+            "Last": last,
+            "Ref": ref,
+            "ChangePct": change,
+            "SMA20": sma20,
+            "SMA50": sma50,
+            "SMA200": sma200,
+            "EMA20": ema20,
+            "RSI14": rsi14,
+            "ATR14": atr14,
+            "MACD": macd,
+            "MACDSignal": macd_signal,
+            "Z20": z20,
+            "Ret5d": ret5,
+            "Ret20d": ret20,
+            "ADV20": adv20,
+            "High52w": hi52,
+            "Low52w": lo52,
+        }
+    )
+    technical = technical.sort_values("Ticker").reset_index(drop=True)
+    return technical
+
+
+def _build_bands(technical: pd.DataFrame) -> pd.DataFrame:
+    columns = ["Ticker", "Ref", "Ceil", "Floor", "TickSize"]
+    if technical.empty:
+        return pd.DataFrame(columns=columns)
+    rows: List[Dict[str, object]] = []
+    for row in technical.itertuples(index=False):
+        ref = float(getattr(row, "Ref", float("nan")))
+        if math.isnan(ref):
+            ceil_val = float("nan")
+            floor_val = float("nan")
+            tick_size = float("nan")
+        else:
+            tick_size = _tick_size(ref)
+            ceil_val = floor_to_tick(ref * 1.07)
+            floor_val = ceil_to_tick(ref * 0.93)
+            if not math.isnan(ceil_val) and not math.isnan(floor_val) and ceil_val < floor_val:
+                ceil_val, floor_val = floor_val, ceil_val
+        rows.append(
+            {
+                "Ticker": getattr(row, "Ticker"),
+                "Ref": ref,
+                "Ceil": ceil_val,
+                "Floor": floor_val,
+                "TickSize": tick_size,
+            }
+        )
+    df = pd.DataFrame(rows).sort_values("Ticker").reset_index(drop=True)
+    return df
+
+
+def _round_and_clamp(value: float, floor_value: float, ceil_value: float) -> float:
+    if value is None or pd.isna(value):
+        return float("nan")
+    rounded = round_to_tick(value)
+    if pd.isna(rounded):
+        return float("nan")
+    return clamp_price(rounded, floor_value, ceil_value)
+
+
+def _build_levels(technical: pd.DataFrame, bands: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "Ticker",
+        "Preset",
+        "SideDeclared",
+        "NearTouchBuy",
+        "NearTouchSell",
+        "Opp1Buy",
+        "Opp1Sell",
+        "Opp2Buy",
+        "Opp2Sell",
+    ]
+    if technical.empty:
+        return pd.DataFrame(columns=columns)
+    merged = technical.merge(bands, on="Ticker", how="left", suffixes=("", "_band"))
+    rows: List[Dict[str, object]] = []
+    presets = [
+        ("momentum", "BUY"),
+        ("mean_reversion", "BOTH"),
+        ("balanced", "BOTH"),
+        ("risk_off", "SELL"),
+    ]
+    for row in merged.itertuples(index=False):
+        ticker = getattr(row, "Ticker")
+        last = float(getattr(row, "Last", float("nan")))
+        sma20 = float(getattr(row, "SMA20", float("nan")))
+        atr14 = float(getattr(row, "ATR14", float("nan")))
+        floor_value = float(getattr(row, "Floor", float("nan")))
+        ceil_value = float(getattr(row, "Ceil", float("nan")))
+        base_tick = _tick_size(last if not math.isnan(last) else getattr(row, "Ref", float("nan")))
+
+        def near_values(preset: str) -> Tuple[float, float]:
+            if preset == "momentum":
+                if math.isnan(base_tick):
+                    return float("nan"), float("nan")
+                return last + base_tick, last + 2 * base_tick
+            if preset == "mean_reversion":
+                if not math.isnan(sma20) and not math.isnan(atr14):
+                    return sma20 - 0.5 * atr14, sma20 + 0.5 * atr14
+                if math.isnan(base_tick):
+                    return float("nan"), float("nan")
+                return last - base_tick, last + base_tick
+            if preset == "balanced":
+                anchor = last
+                if not math.isnan(sma20):
+                    if math.isnan(anchor):
+                        anchor = sma20
+                    else:
+                        anchor = (anchor + sma20) / 2.0
+                if math.isnan(base_tick):
+                    return anchor, anchor
+                return anchor - base_tick, anchor + base_tick
+            if preset == "risk_off":
+                if math.isnan(base_tick):
+                    return float("nan"), float("nan")
+                return float("nan"), last - base_tick
+            return float("nan"), float("nan")
+
+        for preset, side in presets:
+            near_buy_raw, near_sell_raw = near_values(preset)
+            near_buy = _round_and_clamp(near_buy_raw, floor_value, ceil_value)
+            near_sell = _round_and_clamp(near_sell_raw, floor_value, ceil_value)
+            opp1_buy = float("nan")
+            opp2_buy = float("nan")
+            opp1_sell = float("nan")
+            opp2_sell = float("nan")
+            if not math.isnan(near_buy) and not math.isnan(sma20) and not math.isnan(atr14):
+                opp1_buy = _round_and_clamp(min(near_buy, sma20 - 0.5 * atr14), floor_value, ceil_value)
+                opp2_buy = _round_and_clamp(min(near_buy, sma20 - 1.0 * atr14), floor_value, ceil_value)
+            if not math.isnan(near_sell) and not math.isnan(sma20) and not math.isnan(atr14):
+                opp1_sell = _round_and_clamp(max(near_sell, sma20 + 0.5 * atr14), floor_value, ceil_value)
+                opp2_sell = _round_and_clamp(max(near_sell, sma20 + 1.0 * atr14), floor_value, ceil_value)
+            rows.append(
+                {
+                    "Ticker": ticker,
+                    "Preset": preset,
+                    "SideDeclared": side,
+                    "NearTouchBuy": near_buy,
+                    "NearTouchSell": near_sell,
+                    "Opp1Buy": opp1_buy,
+                    "Opp1Sell": opp1_sell,
+                    "Opp2Buy": opp2_buy,
+                    "Opp2Sell": opp2_sell,
+                }
+            )
+    levels = pd.DataFrame(rows)
+    levels = levels.sort_values(["Ticker", "Preset"]).reset_index(drop=True)
+    return levels
+
+
+def _round_to_lot(value: float, lot: int, mode: str = "round") -> int:
+    if value is None or pd.isna(value) or lot <= 0:
+        return 0
+    units = float(value) / lot
+    if mode == "floor":
+        qty = math.floor(units)
+    elif mode == "ceil":
+        qty = math.ceil(units)
+    else:
+        qty = round(units)
+    return int(qty * lot)
+
+
+def _build_sizing(
+    technical: pd.DataFrame,
+    holdings: Dict[str, float],
+    config: EngineConfig,
+) -> pd.DataFrame:
+    columns = [
+        "Ticker",
+        "TargetQty",
+        "CurrentQty",
+        "DeltaQty",
+        "MaxOrderQty",
+        "SliceCount",
+        "SliceQty",
+        "LiquidityScore_kVND",
+        "VolatilityScore",
+        "TodayFilledQty",
+        "TodayWAP",
+    ]
+    if technical.empty:
+        return pd.DataFrame(columns=columns)
+    rows: List[Dict[str, object]] = []
+    for row in technical.itertuples(index=False):
+        ticker = getattr(row, "Ticker")
+        last = float(getattr(row, "Last", float("nan")))
+        atr = float(getattr(row, "ATR14", float("nan")))
+        adv20 = float(getattr(row, "ADV20", float("nan")))
+        current_qty = float(holdings.get(ticker, 0.0))
+        target_qty = current_qty
+        delta_qty = target_qty - current_qty
+        max_by_adv = config.max_order_pct_adv * adv20 if not math.isnan(adv20) else 0.0
+        raw_max_order = min(max_by_adv, float(config.max_qty_per_order)) if adv20 and adv20 > 0 else 0.0
+        max_order_qty = _round_to_lot(raw_max_order, config.min_lot, mode="floor")
+        abs_delta = abs(delta_qty)
+        if abs_delta == 0:
+            slice_count = 0
+        else:
+            adv_slice = config.slice_adv_ratio * adv20 if not math.isnan(adv20) else 0.0
+            if adv_slice <= 0:
+                slice_count = 1
+            else:
+                slice_count = max(1, math.ceil(abs_delta / adv_slice))
+        if slice_count > 0:
+            slice_qty = _round_to_lot(abs_delta / slice_count, config.min_lot)
+        else:
+            slice_qty = 0
+        liquidity = float(adv20 * last) if not math.isnan(adv20) and not math.isnan(last) else float("nan")
+        if not math.isnan(last) and last > 0 and not math.isnan(atr):
+            volatility = atr / last
+        else:
+            volatility = 0.0
+        rows.append(
+            {
+                "Ticker": ticker,
+                "TargetQty": int(round(target_qty)),
+                "CurrentQty": int(round(current_qty)),
+                "DeltaQty": int(round(delta_qty)),
+                "MaxOrderQty": int(max_order_qty),
+                "SliceCount": int(slice_count),
+                "SliceQty": int(slice_qty),
+                "LiquidityScore_kVND": liquidity,
+                "VolatilityScore": volatility,
+                "TodayFilledQty": 0,
+                "TodayWAP": float("nan"),
+            }
+        )
+    sizing = pd.DataFrame(rows).sort_values("Ticker").reset_index(drop=True)
+    return sizing
+
+
+def _build_signals(technical: pd.DataFrame, bands: pd.DataFrame, snapshot: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "Ticker",
+        "PresetFitMomentum",
+        "PresetFitMeanRev",
+        "PresetFitBalanced",
+        "BandDistance",
+        "SectorBias",
+        "RiskGuards",
+    ]
+    if technical.empty:
+        return pd.DataFrame(columns=columns)
+    snapshot_meta = snapshot[["Ticker", "PriceSource"]] if "PriceSource" in snapshot.columns else pd.DataFrame(columns=["Ticker", "PriceSource"])
+    merged = technical.merge(bands, on="Ticker", how="left").merge(snapshot_meta, on="Ticker", how="left")
+    rows: List[Dict[str, object]] = []
+    for row in merged.itertuples(index=False):
+        ticker = getattr(row, "Ticker")
+        rsi = float(getattr(row, "RSI14", float("nan")))
+        ret20 = float(getattr(row, "Ret20d", float("nan")))
+        macd = float(getattr(row, "MACD", float("nan")))
+        macd_signal = float(getattr(row, "MACDSignal", float("nan")))
+        z20 = float(getattr(row, "Z20", float("nan")))
+        atr = float(getattr(row, "ATR14", float("nan")))
+        last = float(getattr(row, "Last", float("nan")))
+        floor_value = float(getattr(row, "Floor", float("nan")))
+        ceil_value = float(getattr(row, "Ceil", float("nan")))
+        adv20 = float(getattr(row, "ADV20", float("nan")))
+        price_source = getattr(row, "PriceSource", "")
+
+        momentum_score = 0.0
+        if not math.isnan(rsi) and rsi >= 55:
+            momentum_score += 0.4
+        if not math.isnan(ret20) and ret20 >= 0:
+            momentum_score += 0.3
+        if not math.isnan(macd) and not math.isnan(macd_signal) and macd > macd_signal:
+            momentum_score += 0.3
+        momentum_score = min(momentum_score, 1.0)
+
+        mean_rev_score = 0.0
+        if not math.isnan(z20) and z20 <= -0.5:
+            mean_rev_score += 0.5
+        if not math.isnan(atr) and atr > 0 and not math.isnan(last) and not math.isnan(floor_value):
+            if (last - floor_value) <= atr:
+                mean_rev_score += 0.5
+        mean_rev_score = min(mean_rev_score, 1.0)
+
+        balanced = (momentum_score + mean_rev_score) / 2.0
+
+        if math.isnan(atr):
+            band_distance = float("nan")
+        elif atr == 0:
+            band_distance = 0.0
+        else:
+            candidates = []
+            if not math.isnan(ceil_value) and not math.isnan(last):
+                candidates.append((ceil_value - last) / atr)
+            if not math.isnan(last) and not math.isnan(floor_value):
+                candidates.append((last - floor_value) / atr)
+            band_distance = min(candidates) if candidates else float("nan")
+
+        risk_flags: List[str] = []
+        if math.isnan(atr) or atr == 0:
+            risk_flags.append("ZERO_ATR")
+        if math.isnan(adv20) or adv20 < 10_000:
+            risk_flags.append("LOW_LIQ")
+        tick = _tick_size(last)
+        if not math.isnan(tick) and not math.isnan(last):
+            if (not math.isnan(ceil_value) and (ceil_value - last) <= tick) or (not math.isnan(floor_value) and (last - floor_value) <= tick):
+                risk_flags.append("NEAR_LIMIT")
+        if str(price_source).lower() != "intraday":
+            risk_flags.append("STALE_SNAPSHOT")
+
+        rows.append(
+            {
+                "Ticker": ticker,
+                "PresetFitMomentum": momentum_score,
+                "PresetFitMeanRev": mean_rev_score,
+                "PresetFitBalanced": balanced,
+                "BandDistance": band_distance,
+                "SectorBias": 0,
+                "RiskGuards": "|".join(sorted(set(risk_flags))),
+            }
+        )
+    signals = pd.DataFrame(rows).sort_values("Ticker").reset_index(drop=True)
+    return signals
+
+
+def _build_limits(config: EngineConfig) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "Aggressiveness": config.aggressiveness,
+                "MaxOrderPctADV": config.max_order_pct_adv,
+                "SliceADVRatio": config.slice_adv_ratio,
+                "MinLot": config.min_lot,
+                "MaxQtyPerOrder": config.max_qty_per_order,
+            }
+        ]
+    )
 class DataEngine:
     """Coordinates data collection, indicator computation, and report generation."""
 
@@ -711,14 +1202,49 @@ class DataEngine:
         intraday_df = self._data_service.load_intraday(tickers)
         snapshot_builder = TechnicalSnapshotBuilder(self._config)
         snapshot = snapshot_builder.build(history_df, intraday_df, universe_df)
-        self._write_market_snapshot(snapshot)
-        PresetWriter(self._config.presets, self._config.presets_dir, self._config.shortlist_filter).write(snapshot)
-        portfolio_reports = PortfolioReporter(self._config, universe_df).refresh(snapshot)
-        self._zip_prompt_files(portfolio_reports)
+        technical_df = _build_technical_output(snapshot)
+        bands_df = _build_bands(technical_df)
+        levels_df = _build_levels(technical_df, bands_df)
+        portfolio_result = PortfolioReporter(self._config, universe_df).refresh(snapshot)
+        sizing_df = _build_sizing(technical_df, portfolio_result.holdings, self._config)
+        signals_df = _build_signals(technical_df, bands_df, snapshot)
+        limits_df = _build_limits(self._config)
+        positions_df = portfolio_result.aggregate_positions
+        sector_df = portfolio_result.aggregate_sector
+
+        out_dir = self._config.output_base_dir
+        out_dir.mkdir(parents=True, exist_ok=True)
+        technical_path = out_dir / "technical.csv"
+        bands_path = out_dir / "bands.csv"
+        levels_path = out_dir / "levels.csv"
+        sizing_path = out_dir / "sizing.csv"
+        signals_path = out_dir / "signals.csv"
+        limits_path = out_dir / "limits.csv"
+        positions_path = out_dir / "positions.csv"
+        sector_path = out_dir / "sector.csv"
+
+        outputs = [
+            (technical_path, technical_df),
+            (bands_path, bands_df),
+            (levels_path, levels_df),
+            (sizing_path, sizing_df),
+            (signals_path, signals_df),
+            (limits_path, limits_df),
+            (positions_path, positions_df),
+            (sector_path, sector_df),
+        ]
+        for path, df in outputs:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            df.to_csv(path, index=False)
+
+        self._zip_prompt_files(
+            portfolio_result,
+            [technical_path, bands_path, levels_path, sizing_path, signals_path, limits_path],
+        )
         return {
             "tickers": len(tickers),
             "snapshot_rows": len(snapshot),
-            "output": str(self._config.market_snapshot_path),
+            "output": str(technical_path),
         }
 
     def _prepare_directories(self) -> None:
@@ -765,10 +1291,6 @@ class DataEngine:
         clean = sorted({t.strip().upper() for t in tickers if t and isinstance(t, str)})
         return clean
 
-    def _write_market_snapshot(self, snapshot: pd.DataFrame) -> None:
-        self._config.market_snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-        snapshot.to_csv(self._config.market_snapshot_path, index=False)
-
     def _wipe_output_dir(self) -> None:
         out_dir = self._config.output_base_dir
         # Defensive: only remove when the leaf is named 'out'
@@ -796,25 +1318,27 @@ class DataEngine:
                 out.append(p)
         return out
 
-    def _zip_prompt_files(self, reports: Dict[str, PortfolioReport]) -> None:
-        profiles = self._discover_profiles()
+    def _zip_prompt_files(self, result: PortfolioRefreshResult, common_files: List[Path]) -> None:
+        profiles = sorted(set(result.reports.keys()) | set(self._discover_profiles()))
         if not profiles:
             LOGGER.info("No profiles discovered; skip zipping prompt bundles")
             return
         bundle_dir = self._config.output_base_dir.resolve()
         bundle_dir.mkdir(parents=True, exist_ok=True)
-        # Common files independent of profile
-        common_files = [self._config.market_snapshot_path]
-        for preset_name in sorted(self._config.presets.keys()):
-            common_files.append(self._config.presets_dir / f"preset_{preset_name}.csv")
+        empty_positions = pd.DataFrame(
+            columns=[
+                "Ticker",
+                "Quantity",
+                "AvgPrice",
+                "Last",
+                "MarketValue_kVND",
+                "CostBasis_kVND",
+                "Unrealized_kVND",
+                "PNLPct",
+            ]
+        )
+        empty_sector = pd.DataFrame(columns=["Sector", "MarketValue_kVND", "WeightPct", "PNLPct"])
         for profile in profiles:
-            # Portfolio file (new layout, then legacy fallback)
-            new_pf = (self._config.portfolio_dir / profile / "portfolio.csv").resolve()
-            legacy_pf = (self._config.portfolio_dir / f"{profile}.csv").resolve()
-            # Fills today (new layout, then legacy fallback)
-            new_fills = (self._config.order_history_dir / profile / "fills.csv").resolve()
-            legacy_fills = (self._config.order_history_dir / f"{profile}_fills.csv").resolve()
-
             zip_path = bundle_dir / f"bundle_{profile}.zip"
             with zipfile.ZipFile(zip_path, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
                 added = 0
@@ -822,19 +1346,22 @@ class DataEngine:
                     if src and src.exists() and src.is_file():
                         zf.write(src, arcname=src.name)
                         added += 1
-                portfolio_src = new_pf if new_pf.exists() else legacy_pf
-                if portfolio_src.exists() and portfolio_src.is_file():
-                    zf.write(portfolio_src, arcname="portfolio.csv")
-                    added += 1
-                fills_src = new_fills if new_fills.exists() else legacy_fills
-                if fills_src.exists() and fills_src.is_file():
-                    zf.write(fills_src, arcname="fills.csv")
-                    added += 1
-                report = reports.get(profile)
-                if report:
-                    zf.writestr("positions.csv", report.positions.to_csv(index=False))
-                    zf.writestr("sector.csv", report.sector.to_csv(index=False))
-                    added += 2
+                report = result.reports.get(profile)
+                positions_df = report.positions if report else empty_positions
+                sector_df = report.sector if report else empty_sector
+                pos_out = positions_df[[
+                    "Ticker",
+                    "Quantity",
+                    "AvgPrice",
+                    "Last",
+                    "MarketValue_kVND",
+                    "CostBasis_kVND",
+                    "Unrealized_kVND",
+                    "PNLPct",
+                ]]
+                zf.writestr("positions.csv", pos_out.to_csv(index=False))
+                zf.writestr("sector.csv", sector_df.to_csv(index=False))
+                added += 2
                 LOGGER.info("Wrote %s with %d files", zip_path, added)
 
 

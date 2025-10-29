@@ -6,7 +6,7 @@ technical_indicators:
   ema_periods: [20, 50]
   rsi_periods: [14]
   atr_periods: [14]
-  returns_periods: [20, 60]
+  returns_periods: [5, 20, 60]
   bollinger:
     windows: [20]
     k: 2
@@ -17,23 +17,6 @@ technical_indicators:
     fast: 12
     slow: 26
     signal: 9
-presets:
-  balanced:
-    description: Thiết lập mặc định cân bằng giữa tích lũy và chốt lời.
-    buy_tiers: [-0.03, -0.02, -0.01]
-    sell_tiers: [0.02, 0.04, 0.06]
-  momentum:
-    description: Mua theo đà, chốt lời nhanh.
-    buy_tiers: [-0.01, 0.0]
-    sell_tiers: [0.03, 0.05, 0.08]
-  mean_reversion:
-    description: Bắt nhịp hồi ở vùng quá bán/điều chỉnh nông.
-    buy_tiers: [-0.015, -0.03, -0.05]
-    sell_tiers: [0.02, 0.035, 0.05]
-  risk_off:
-    description: De-leverage/trim khi tín hiệu xấu (tin tức/sector/đà yếu). Ưu tiên cắt/giảm.
-    buy_tiers: []
-    sell_tiers: [-0.02, -0.04, -0.07, 0.03]
 filters:
   shortlist:
     enabled: true
@@ -52,10 +35,16 @@ portfolio:
   order_history_directory: data/order_history
 output:
   base_dir: out
-  market_snapshot: technical_snapshot.csv
+  market_snapshot: technical.csv
   presets_dir: .
   portfolios_dir: .
   diagnostics_dir: .
+execution:
+  aggressiveness: med
+  max_order_pct_adv: 0.1
+  slice_adv_ratio: 0.25
+  min_lot: 100
+  max_qty_per_order: 500000
 data:
   history_cache: out/data
   history_min_days: 400
