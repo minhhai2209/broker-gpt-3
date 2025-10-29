@@ -14,7 +14,7 @@ Danh sách các file:
 - Thiếu bất kỳ file nào: trả về thông báo lỗi ngắn gọn và dừng.
 
 Phạm vi & dữ liệu:
-- Chỉ xét mã thuộc VN100 và đồng thời xuất hiện trong ÍT NHẤT một preset ở (2)–(5). Không tự khám phá preset khác.
+- Chỉ xét mã xuất hiện trong các file presets. Không tự khám phá preset khác.
 - Chỉ dùng lệnh LO; LimitPrice tính theo NGHÌN đồng (2 chữ số thập phân).
 - Kết hợp tin vĩ mô/doanh nghiệp 24–72h gần nhất; bạn tự lượng giá ảnh hưởng.
 
