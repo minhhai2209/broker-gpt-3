@@ -21,11 +21,10 @@
 - Keep instructions focused on the current lightweight workflow; remove stale references when cleaning up features.
 
 ### Prompt Sample
-- Canonical prompt lives at `prompts/SAMPLE_PROMPT.txt` (plain text, no Markdown fences). README only links to it.
-- Template has a single placeholder `{{PROFILE}}` only. Keep file list and preset descriptions hard-coded for stability.
+- Canonical prompt lives at `prompts/PROMPT.txt` (plain text, no Markdown fences). README only links to it.
+- File list inside the prompt must stay aligned with the flat bundle naming. Keep preset descriptions hard-coded for stability.
 - Do not re-embed the long prompt into `README.md` to avoid drift.
 
 Prompt Generator
-- Use `./broker.sh prompts` to generate per-profile files at `prompts/prompt_<profile>.txt` from the template.
-- Generator only replaces `{{PROFILE}}`; it scans `data/portfolios/*/portfolio.csv` for profile names or accepts `--profiles`.
-- Keep the generator self-contained (no network). If template is missing, fail fast with clear messages.
+- `./broker.sh prompts` exposes the canonical prompt path or copies it to a requested destination; no templating remains.
+- Keep the generator self-contained (no network). If the prompt file is missing, fail fast with clear messages.

@@ -166,10 +166,10 @@ class EngineConfig:
         if not isinstance(output_cfg, dict):
             raise ConfigurationError("output section must be a mapping")
         output_base_dir = _resolve_path(output_cfg.get("base_dir", "out"), config_dir, repo_root)
-        market_snapshot_rel = output_cfg.get("market_snapshot", "market/technical_snapshot.csv")
-        presets_rel = output_cfg.get("presets_dir", "presets")
-        portfolios_rel = output_cfg.get("portfolios_dir", "portfolios")
-        diagnostics_rel = output_cfg.get("diagnostics_dir", "diagnostics")
+        market_snapshot_rel = output_cfg.get("market_snapshot", "technical_snapshot.csv")
+        presets_rel = output_cfg.get("presets_dir", ".")
+        portfolios_rel = output_cfg.get("portfolios_dir", ".")
+        diagnostics_rel = output_cfg.get("diagnostics_dir", ".")
         market_snapshot_path = (output_base_dir / market_snapshot_rel).resolve()
         presets_dir = (output_base_dir / presets_rel).resolve()
         portfolios_dir = (output_base_dir / portfolios_rel).resolve()
@@ -506,7 +506,7 @@ class PresetWriter:
                 for idx, adj in enumerate(preset.sell_tiers, start=1):
                     col = f"Sell_{idx}"
                     df[col] = (df["LastPrice"] * (1.0 + float(adj))).round(4)
-            out_path = self._output_dir / f"{name}.csv"
+            out_path = self._output_dir / f"preset_{name}.csv"
             df.to_csv(out_path, index=False)
 
     def _apply_shortlist(self, snapshot: pd.DataFrame) -> pd.DataFrame:
@@ -573,24 +573,29 @@ class PresetWriter:
         return kept_df
 
 
+@dataclass
+class PortfolioReport:
+    positions: pd.DataFrame
+    sector: pd.DataFrame
+
+
 class PortfolioReporter:
     def __init__(self, config: EngineConfig, industry_df: pd.DataFrame) -> None:
         self._config = config
         self._industry = industry_df
 
-    def refresh(self, snapshot: pd.DataFrame) -> None:
+    def refresh(self, snapshot: pd.DataFrame) -> Dict[str, PortfolioReport]:
         portfolios_dir = self._config.portfolio_dir
         if not portfolios_dir.exists():
             LOGGER.info("Portfolio directory %s does not exist; skipping reports", portfolios_dir)
-            return
-        snapshot_lookup = snapshot.set_index("Ticker") if not snapshot.empty else pd.DataFrame().set_index([])
+            return {}
         sector_lookup = {}
         if "Ticker" in self._industry.columns:
             for row in self._industry.itertuples(index=False):
                 ticker = str(getattr(row, "Ticker")).upper()
                 sector = getattr(row, "Sector", "") if hasattr(row, "Sector") else ""
                 sector_lookup[ticker] = sector
-        self._config.portfolios_dir.mkdir(parents=True, exist_ok=True)
+        reports: Dict[str, PortfolioReport] = {}
         # New layout: each subfolder is a profile with portfolio.csv
         processed_profiles = set()
         for profile_dir in sorted(portfolios_dir.glob("*")):
@@ -626,8 +631,6 @@ class PortfolioReporter:
                 lambda row: ((row["LastPrice"] / row["AvgPrice"] - 1.0) * 100.0) if row["AvgPrice"] else float("nan"),
                 axis=1,
             )
-            positions_path = self._config.portfolios_dir / f"{profile}_positions.csv"
-            merged.to_csv(positions_path, index=False)
             sector_summary = merged.groupby(merged["Sector"].fillna("Không rõ"), dropna=False).agg(
                 Quantity=("Quantity", "sum"),
                 MarketValue=("MarketValue", "sum"),
@@ -639,8 +642,7 @@ class PortfolioReporter:
                 axis=1,
             )
             sector_summary = sector_summary.reset_index().rename(columns={"index": "Sector"})
-            sector_path = self._config.portfolios_dir / f"{profile}_sector.csv"
-            sector_summary.to_csv(sector_path, index=False)
+            reports[profile] = PortfolioReport(positions=merged, sector=sector_summary)
             processed_profiles.add(profile)
 
         # Legacy layout: also support direct CSVs under portfolio_dir
@@ -676,8 +678,6 @@ class PortfolioReporter:
                 lambda row: ((row["LastPrice"] / row["AvgPrice"] - 1.0) * 100.0) if row["AvgPrice"] else float("nan"),
                 axis=1,
             )
-            positions_path = self._config.portfolios_dir / f"{profile}_positions.csv"
-            merged.to_csv(positions_path, index=False)
             sector_summary = merged.groupby(merged["Sector"].fillna("Không rõ"), dropna=False).agg(
                 Quantity=("Quantity", "sum"),
                 MarketValue=("MarketValue", "sum"),
@@ -689,8 +689,9 @@ class PortfolioReporter:
                 axis=1,
             )
             sector_summary = sector_summary.reset_index().rename(columns={"index": "Sector"})
-            sector_path = self._config.portfolios_dir / f"{profile}_sector.csv"
-            sector_summary.to_csv(sector_path, index=False)
+            reports[profile] = PortfolioReport(positions=merged, sector=sector_summary)
+
+        return reports
 
 
 class DataEngine:
@@ -712,8 +713,8 @@ class DataEngine:
         snapshot = snapshot_builder.build(history_df, intraday_df, universe_df)
         self._write_market_snapshot(snapshot)
         PresetWriter(self._config.presets, self._config.presets_dir, self._config.shortlist_filter).write(snapshot)
-        PortfolioReporter(self._config, universe_df).refresh(snapshot)
-        self._zip_prompt_files()
+        portfolio_reports = PortfolioReporter(self._config, universe_df).refresh(snapshot)
+        self._zip_prompt_files(portfolio_reports)
         return {
             "tickers": len(tickers),
             "snapshot_rows": len(snapshot),
@@ -795,45 +796,45 @@ class DataEngine:
                 out.append(p)
         return out
 
-    def _zip_prompt_files(self) -> None:
+    def _zip_prompt_files(self, reports: Dict[str, PortfolioReport]) -> None:
         profiles = self._discover_profiles()
         if not profiles:
             LOGGER.info("No profiles discovered; skip zipping prompt bundles")
             return
-        bundle_dir = (self._config.output_base_dir / "prompts").resolve()
+        bundle_dir = self._config.output_base_dir.resolve()
         bundle_dir.mkdir(parents=True, exist_ok=True)
         # Common files independent of profile
-        common_files = [
-            self._config.market_snapshot_path,
-            (self._config.presets_dir / "balanced.csv"),
-            (self._config.presets_dir / "momentum.csv"),
-            (self._config.presets_dir / "mean_reversion.csv"),
-            (self._config.presets_dir / "risk_off.csv"),
-        ]
+        common_files = [self._config.market_snapshot_path]
+        for preset_name in sorted(self._config.presets.keys()):
+            common_files.append(self._config.presets_dir / f"preset_{preset_name}.csv")
         for profile in profiles:
-            items: List[Path] = []
-            # Add common files
-            for p in common_files:
-                items.append(p)
             # Portfolio file (new layout, then legacy fallback)
             new_pf = (self._config.portfolio_dir / profile / "portfolio.csv").resolve()
             legacy_pf = (self._config.portfolio_dir / f"{profile}.csv").resolve()
-            items.append(new_pf if new_pf.exists() else legacy_pf)
-            # Out portfolio reports
-            items.append(self._config.portfolios_dir / f"{profile}_positions.csv")
-            items.append(self._config.portfolios_dir / f"{profile}_sector.csv")
             # Fills today (new layout, then legacy fallback)
             new_fills = (self._config.order_history_dir / profile / "fills.csv").resolve()
             legacy_fills = (self._config.order_history_dir / f"{profile}_fills.csv").resolve()
-            items.append(new_fills if new_fills.exists() else legacy_fills)
 
             zip_path = bundle_dir / f"bundle_{profile}.zip"
             with zipfile.ZipFile(zip_path, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
                 added = 0
-                for src in items:
+                for src in common_files:
                     if src and src.exists() and src.is_file():
                         zf.write(src, arcname=src.name)
                         added += 1
+                portfolio_src = new_pf if new_pf.exists() else legacy_pf
+                if portfolio_src.exists() and portfolio_src.is_file():
+                    zf.write(portfolio_src, arcname="portfolio.csv")
+                    added += 1
+                fills_src = new_fills if new_fills.exists() else legacy_fills
+                if fills_src.exists() and fills_src.is_file():
+                    zf.write(fills_src, arcname="fills.csv")
+                    added += 1
+                report = reports.get(profile)
+                if report:
+                    zf.writestr("positions.csv", report.positions.to_csv(index=False))
+                    zf.writestr("sector.csv", report.sector.to_csv(index=False))
+                    added += 2
                 LOGGER.info("Wrote %s with %d files", zip_path, added)
 
 
