@@ -7,9 +7,9 @@
 Data engine được thiết kế lại để làm đúng một việc: chuẩn bị dữ liệu sạch cho ChatGPT (hoặc bất kỳ công cụ phân tích nào khác) sử dụng. Mỗi lần chạy engine sẽ:
 
 1. Thu thập dữ liệu lịch sử và intraday cho toàn bộ vũ trụ mã.
-2. Tính toán sẵn các chỉ báo kỹ thuật cơ bản và ghi vào một file CSV duy nhất (`out/market/technical_snapshot.csv`).
-3. Tính toán các mức giá mua/bán theo từng preset và xuất thành từng file CSV riêng (`out/presets/<preset>.csv`).
-4. Đọc danh mục hiện có của từng tài khoản, cập nhật lãi/lỗ theo mã và theo ngành vào `out/portfolios/*.csv`.
+2. Tính toán sẵn các chỉ báo kỹ thuật cơ bản và ghi vào một file CSV duy nhất (`out/technical_snapshot.csv`).
+3. Tính toán các mức giá mua/bán theo từng preset và xuất thành từng file CSV riêng (`out/preset_<preset>.csv`).
+4. Đọc danh mục hiện có của từng tài khoản, tổng hợp lãi/lỗ rồi đóng gói cùng snapshot/preset thành bundle phẳng `out/bundle_<profile>.zip`.
 5. Giữ nguyên lịch sử khớp lệnh dạng CSV trong `data/order_history/` (không xoá).
 
 Không còn bước tạo lệnh tự động, không còn phụ thuộc Vietstock, không còn overlay policy. Bạn chủ động đọc các file CSV và đưa ra quyết định.
@@ -58,9 +58,9 @@ portfolio:
   order_history_directory: data/order_history
 output:
   base_dir: out
-  market_snapshot: market/technical_snapshot.csv
-  presets_dir: presets
-  portfolios_dir: portfolios
+  market_snapshot: technical_snapshot.csv
+  presets_dir: .
+  portfolios_dir: .
 ```
 
 Bạn có thể chỉnh preset (tỷ lệ ± so với giá hiện tại), đường dẫn output hoặc bổ sung chỉ báo tuỳ nhu cầu.
@@ -104,7 +104,7 @@ Engine sẽ:
 - Gọi API VNDIRECT để cập nhật giá lịch sử + intraday.
 - Tính SMA/RSI/ATR/MACD theo cấu hình.
 - Xuất các file CSV đã nêu ở trên.
-- Xoá sạch thư mục `out/` trước khi chạy để tính toán lại toàn bộ (bao gồm preset/báo cáo danh mục). Sau khi chạy xong, engine đóng gói các file trong SAMPLE_PROMPT theo từng profile thành zip phẳng tại `out/prompts/bundle_<profile>.zip`.
+- Xoá sạch thư mục `out/` trước khi chạy để tính toán lại toàn bộ (bao gồm preset/báo cáo danh mục). Sau khi chạy xong, engine đóng gói các file phẳng theo `prompts/PROMPT.txt` thành `out/bundle_<profile>.zip` (mỗi profile một file).
 
 ### Lấy danh mục + lệnh khớp hôm nay (TCBS, Playwright)
 
@@ -155,14 +155,12 @@ Test bao gồm:
 
 | File | Ý nghĩa |
 | ---- | ------- |
-| `out/market/technical_snapshot.csv` | Bảng tổng hợp theo mã: giá hiện tại, thay đổi %, SMA/RSI/ATR/MACD, sector |
+| `out/technical_snapshot.csv` | Bảng tổng hợp theo mã: giá hiện tại, thay đổi %, SMA/RSI/ATR/MACD, sector |
 | (mở rộng) | EMA_*, ATRPct_*, Return_*, Z_*, Hi_252, Lo_252, PctFromHi_252, PctToLo_252, ADV_* |
-| `out/presets/<preset>.csv` | Mỗi preset một file; chứa giá mua/bán theo từng bậc |
-| `out/portfolios/<profile>_positions.csv` | Phân tích lãi/lỗ theo mã cho danh mục `profile` |
-| `out/portfolios/<profile>_sector.csv` | Tổng hợp lãi/lỗ theo ngành |
+| `out/preset_<preset>.csv` | Mỗi preset một file; chứa giá mua/bán theo từng bậc |
+| `out/bundle_<profile>.zip` | Gói phẳng: `technical_snapshot.csv`, `preset_*.csv`, `portfolio.csv`, `positions.csv`, `sector.csv`, `fills.csv` |
 | `data/order_history/<profile>/fills.csv` | Lệnh khớp hôm nay (do scraper TCBS ghi) |
 | `data/order_history/<profile>/fills_all.csv` | Bảng lệnh khớp đã chuẩn hoá đầy đủ |
-| `out/prompts/bundle_<profile>.zip` | Gói phẳng các file cần cho ChatGPT theo SAMPLE_PROMPT |
 
 ## GitHub Actions
 
@@ -180,11 +178,10 @@ Hiện tại GitHub Action đã được tạm thời gỡ khỏi repo. Hãy ch�
 
 ## Prompt gợi ý cho ChatGPT
 
-- Template: `prompts/SAMPLE_PROMPT.txt` — plain text, chỉ có một placeholder `{{PROFILE}}`.
-- Sinh prompt theo từng profile: `./broker.sh prompts` (quét thư mục `data/portfolios/*/portfolio.csv` và tạo `prompts/prompt_<profile>.txt`).
-- Sinh cho profile cụ thể: `./broker.sh prompts --profiles alpha,beta`.
+- Prompt chuẩn: `prompts/PROMPT.txt` — plain text, liệt kê đúng các file phẳng trong bundle.
+- Xem nhanh/copy prompt: `./broker.sh prompts` (in đường dẫn), `./broker.sh prompts --outdir tmp` (copy thành `tmp/prompt.txt`) hoặc `./broker.sh prompts --dest my_prompt.txt`.
 
-Ghi chú: Mô tả preset (balanced, momentum) đã được hard-code ngay trong template.
+Ghi chú: Mô tả preset (balanced, momentum) đã được hard-code ngay trong prompt.
 
 ### Quy tắc HOSE để tính giá/khối lượng hợp lệ
 

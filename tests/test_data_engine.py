@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 import pandas as pd
@@ -66,9 +67,9 @@ class DataEngineTest(unittest.TestCase):
             output:
               base_dir: {out_dir}
               market_snapshot: technical.csv
-              presets_dir: presets
-              portfolios_dir: portfolios
-              diagnostics_dir: diagnostics
+              presets_dir: .
+              portfolios_dir: .
+              diagnostics_dir: .
             data:
               history_cache: {cache_dir}
               history_min_days: 1
@@ -115,16 +116,21 @@ class DataEngineTest(unittest.TestCase):
         snapshot = pd.read_csv(snapshot_path)
         self.assertIn("SMA_2", snapshot.columns)
         self.assertEqual(len(snapshot), 2)
-        presets_path = config.presets_dir / "sample.csv"
+        presets_path = config.presets_dir / "preset_sample.csv"
         self.assertTrue(presets_path.exists())
         presets_df = pd.read_csv(presets_path)
         self.assertIn("Buy_1", presets_df.columns)
         self.assertAlmostEqual(presets_df.loc[0, "Buy_1"], round(presets_df.loc[0, "LastPrice"] * 0.9, 4))
-        portfolio_positions = config.portfolios_dir / "alpha_positions.csv"
-        self.assertTrue(portfolio_positions.exists())
-        positions_df = pd.read_csv(portfolio_positions)
-        self.assertIn("UnrealizedPnL", positions_df.columns)
-        self.assertAlmostEqual(positions_df.loc[0, "LastPrice"], 12.5)
+        bundle_path = config.output_base_dir / "bundle_alpha.zip"
+        self.assertTrue(bundle_path.exists())
+        with zipfile.ZipFile(bundle_path) as zf:
+            names = set(zf.namelist())
+            self.assertIn("technical.csv", names)
+            self.assertIn("preset_sample.csv", names)
+            self.assertIn("positions.csv", names)
+            positions_df = pd.read_csv(zf.open("positions.csv"))
+            self.assertIn("UnrealizedPnL", positions_df.columns)
+            self.assertAlmostEqual(positions_df.loc[0, "LastPrice"], 12.5)
         self.assertGreater(summary["tickers"], 0)
 
 
