@@ -1,203 +1,101 @@
 # Broker GPT Data Engine
 
-> Công cụ này không đưa ra lời khuyên đầu tư. Nó chỉ thu thập dữ liệu giá, tính toán chỉ số kỹ thuật và ghi lại kết quả để bạn ra quyết định thủ công.
+> Công cụ này không đưa ra lời khuyên đầu tư. Nó đọc các snapshot CSV đã có, áp dụng hợp đồng dữ liệu BROKER-GPT-3 và xuất ra những file đầu ra chuẩn hoá để bạn xem xét thủ công.
 
-## Tổng quan
+## Engine làm gì?
 
-Data engine được thiết kế lại để làm đúng một việc: chuẩn bị dữ liệu sạch cho ChatGPT (hoặc bất kỳ công cụ phân tích nào khác) sử dụng. Mỗi lần chạy engine sẽ:
+Mỗi lần chạy, engine sẽ:
 
-1. Thu thập dữ liệu lịch sử và intraday cho toàn bộ vũ trụ mã.
-2. Tính toán sẵn các chỉ báo kỹ thuật cơ bản và ghi vào một file CSV duy nhất (`out/market/technical_snapshot.csv`).
-3. Tính toán các mức giá mua/bán theo từng preset và xuất thành từng file CSV riêng (`out/presets/<preset>.csv`).
-4. Đọc danh mục hiện có của từng tài khoản, cập nhật lãi/lỗ theo mã và theo ngành vào `out/portfolios/*.csv`.
-5. Giữ nguyên lịch sử khớp lệnh dạng CSV trong `data/order_history/` (không xoá).
+1. Đọc `out/market/technical_snapshot.csv` (giá/indicator), toàn bộ preset trong `out/presets/*.csv`, danh mục hiện tại (`data/portfolios/alpha.csv`), thông tin PnL/sector (`out/portfolios/*.csv`), lịch sử fills (`data/order_history/alpha_fills.csv`), budget trong `config/params.yaml`, blocklist và universe `data/universe/vn100.csv`.
+2. Tính toán các bảng theo đúng đặc tả v1.1:
+   - `out/market/trading_bands.csv`
+   - `out/signals/levels.csv`
+   - `out/signals/sizing.csv`
+   - `out/signals/signals.csv`
+   - `out/orders/alpha_LO_latest.csv` + bản snapshot ngày (`out/orders/alpha_LO_YYYYMMDD.csv` khi có lệnh)
+   - `out/run/manifest.json` (liệt kê input, hash params)
+3. Gom toàn bộ output chính vào `.artifacts/engine/attachments_latest.zip`, đồng thời trả về danh sách file thu thập được và file thiếu trong tóm tắt.
 
-Không còn bước tạo lệnh tự động, không còn phụ thuộc Vietstock, không còn overlay policy. Bạn chủ động đọc các file CSV và đưa ra quyết định.
+Trước khi nén, engine chạy quick check đảm bảo mỗi file theo hợp đồng đều tồn tại, đúng cấu trúc cột và (với các bảng bắt buộc như trading_bands/levels/sizing/signals) có ít nhất một dòng dữ liệu. Nếu thiếu, engine dừng với lỗi rõ ràng.
 
-## Chuẩn bị môi trường
+Mọi tính toán tuân thủ tick-size HOSE, giới hạn lot, kiểm tra ngân sách và bộ guard theo hợp đồng.
 
-- Python 3.10 trở lên.
-- macOS, Linux hoặc WSL đều chạy được.
-- Khuyến nghị tạo virtualenv trước khi chạy.
+## Chuẩn bị
 
-```bash
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
+- Python 3.10+
+- `pip install -r requirements.txt`
+- Cập nhật các CSV đầu vào trước khi chạy engine (snapshot thị trường, presets, danh mục, fills, v.v.)
 
-## Cấu hình engine
+## Cấu hình
 
-File chính: `config/data_engine.yaml`
+`config/data_engine.yaml` định nghĩa đường dẫn gốc (tương đối repo):
 
 ```yaml
-universe:
-  csv: data/industry_map.csv    # Danh sách mã + sector
-technical_indicators:
-  moving_averages: [20, 50, 200]
-  ema_periods: [20, 50]
-  rsi_periods: [14]
-  atr_periods: [14]
-  returns_periods: [20, 60]
-  bollinger:
-    windows: [20]
-    k: 2
-    include_bands: false
-  range_lookback_days: 252
-  adv_periods: [20]
-  macd:
-    fast: 12
-    slow: 26
-    signal: 9
-presets:
-  balanced:
-    buy_tiers: [-0.03, -0.02, -0.01]
-    sell_tiers: [0.02, 0.04, 0.06]
-portfolio:
-  directory: data/portfolios     # Mỗi tài khoản 1 CSV: Ticker,Quantity,AvgPrice
-  order_history_directory: data/order_history
-output:
-  base_dir: out
-  market_snapshot: market/technical_snapshot.csv
-  presets_dir: presets
-  portfolios_dir: portfolios
+paths:
+  out: out
+  data: data
+  config: config
+  bundle: .artifacts/engine
 ```
 
-Bạn có thể chỉnh preset (tỷ lệ ± so với giá hiện tại), đường dẫn output hoặc bổ sung chỉ báo tuỳ nhu cầu.
+`config/params.yaml` phải có các khóa:
 
-### Shortlist cho presets (tuỳ chọn nhưng bật sẵn)
-
-Để chỉ loại các mã “xấu hẳn” khỏi danh sách cân nhắc, engine hỗ trợ bộ lọc bảo thủ cho presets. Cấu hình tại `filters.shortlist` trong `config/data_engine.yaml`:
-
-- `enabled`: bật/tắt shortlist.
-- Điều kiện “rất yếu” (mặc định yêu cầu hội tụ tất cả):
-  - `RSI_14` ≤ `rsi14_max` (mặc định 25)
-  - `PctToLo_252` ≤ `max_pct_to_lo_252` (mặc định 2%) — giá sát đáy 52w
-  - `Return_20` ≤ `return20_max` (mặc định -15%) và `Return_60` ≤ `return60_max` (mặc định -25%)
-  - Giá dưới cả `SMA_50` và `SMA_200`
-  - (tuỳ chọn) `ADV_20` ≤ `min_adv_20` để loại mã quá kém thanh khoản
-- `drop_logic_all`: nếu `true` (mặc định), chỉ loại khi tất cả điều kiện cùng thoả.
-- `keep`/`exclude`: danh sách mã luôn giữ lại/luôn loại bỏ (mặc định để trống). Ví dụ: có thể thêm `FPT` vào `keep` nếu muốn minh hoạ, nhưng không bật sẵn để tránh lọc quá “aggressive”.
-
-Mục tiêu là giảm nhiễu, không làm nghèo vũ trụ cơ hội; vì vậy mặc định bộ lọc rất bảo thủ.
-
-## Cách chạy
-
-### Engine + Scraper (mặc định)
-
-```bash
-./broker.sh             # chạy TCBS (headful) rồi chạy engine
+```yaml
+buy_budget_vnd: 0
+sell_budget_vnd: 0
+max_order_pct_adv: 0.05
+aggressiveness: low   # low | med | high
+slice_adv_ratio: 0.02
+min_lot: 100
+max_qty_per_order: 500000
 ```
 
-Chuỗi mặc định sẽ chạy:
-- `tcbs --headful` để lấy danh mục (và lệnh khớp hôm nay, mặc định bật).
-- `engine` để cập nhật snapshot kỹ thuật, preset và báo cáo danh mục.
+`config/blocklist.csv` (Ticker,Reason) và `data/universe/vn100.csv` (Ticker) là bắt buộc.
 
-### Engine (chạy riêng)
+## Chạy engine
 
 ```bash
 ./broker.sh engine
 ```
 
-Engine sẽ:
-
-- Gọi API VNDIRECT để cập nhật giá lịch sử + intraday.
-- Tính SMA/RSI/ATR/MACD theo cấu hình.
-- Xuất các file CSV đã nêu ở trên.
-
-### Lấy danh mục + lệnh khớp hôm nay (TCBS, Playwright)
-
-Thay cho server HTTP, repo cung cấp scraper Playwright để đăng nhập TCBS và trích xuất danh mục.
-
-Chuẩn bị:
-- Tạo file `.env` ở repo root:
-
-```
-TCBS_USERNAME=you-username
-TCBS_PASSWORD=your-password-here
-TCBS_PROFILE=your-profile
-```
-
-Chạy lần đầu (headful để xác nhận thiết bị nếu TCBS yêu cầu):
+Hoặc trực tiếp:
 
 ```bash
-./broker.sh tcbs --headful
+python -m scripts.engine.data_engine --config config/data_engine.yaml
 ```
 
-Chạy các lần sau (headless, fingerprint được lưu trong `.playwright/tcbs-user-data`):
+Output tóm tắt (STDOUT) là JSON chứa số lượng mã, số lệnh, đường dẫn bundle và các file đính kèm.
 
-```bash
-./broker.sh tcbs
-```
+## Các file đầu ra chính
 
-Mặc định script sẽ:
-- Ghi đè `data/portfolios/<profile>.csv` với cột `Ticker,Quantity,AvgPrice`.
-- Lấy các lệnh đã khớp trong hôm nay và ghi `data/order_history/<profile>_fills.csv` (chỉ hôm nay) và `data/order_history/<profile>_fills_all.csv` (đã chuẩn hoá, đầy đủ lịch sử bảng Tra cứu).
+| File | Nội dung | Inputs | Ghi chú |
+| ---- | -------- | ------ | ------- |
+| `out/market/trading_bands.csv` | TickSize, trần/sàn HOSE cho từng mã | `technical_snapshot.csv` | Tự động đổi chỗ khi sàn > trần và gắn `BAND_ERROR` vào guard |
+| `out/signals/levels.csv` | Giá near-touch/opportunistic theo preset | Snapshot + bands + presets | Tôn trọng tick & biên, Limit_kVND bo tròn gần nhất |
+| `out/signals/sizing.csv` | Target/Delta/MaxOrder, slice | Snapshot + danh mục + fills + params | Nếu chưa có chiến lược, Target = Current |
+| `out/signals/signals.csv` | Momentum/MeanRev fit, BandDistance, News, SectorBias, RiskGuards | Snapshot + bands + sector + news + blocklist | RiskGuards gồm BLOCKLIST/ZERO_ATR/ZERO_LAST/LOW_LIQ/... |
+| `out/orders/alpha_LO_latest.csv` | Lệnh giới hạn (kVND) | Levels + sizing + signals + params | Tự động skip BLOCKLIST/LOW_LIQ, clamp biên và thêm guard |
+| `out/run/manifest.json` | `generated_at`, `source_files`, `params_hash` | -- | Liệt kê tất cả file input thực tế |
 
-Tắt lấy “fills” nếu cần:
+Nếu không có DeltaQty khác 0, file lệnh vẫn tồn tại nhưng rỗng.
 
-```bash
-./broker.sh tcbs --no-fills
-```
-
-### Kiểm thử
+## Kiểm thử
 
 ```bash
 ./broker.sh tests
 ```
 
-Test bao gồm:
-- Bảo đảm engine sinh đầy đủ output khi dùng nguồn dữ liệu giả lập.
-- Xác thực bộ phân tích bảng TCBS tạo đúng schema `Ticker,Quantity,AvgPrice` từ dữ liệu giả lập.
-
-## Output chính
-
-| File | Ý nghĩa |
-| ---- | ------- |
-| `out/market/technical_snapshot.csv` | Bảng tổng hợp theo mã: giá hiện tại, thay đổi %, SMA/RSI/ATR/MACD, sector |
-| (mở rộng) | EMA_*, ATRPct_*, Return_*, Z_*, Hi_252, Lo_252, PctFromHi_252, PctToLo_252, ADV_* |
-| `out/presets/<preset>.csv` | Mỗi preset một file; chứa giá mua/bán theo từng bậc |
-| `out/portfolios/<profile>_positions.csv` | Phân tích lãi/lỗ theo mã cho danh mục `profile` |
-| `out/portfolios/<profile>_sector.csv` | Tổng hợp lãi/lỗ theo ngành |
-| `data/order_history/<profile>_fills.csv` | Lệnh khớp hôm nay (do scraper TCBS ghi) |
-| `data/order_history/<profile>_fills_all.csv` | Bảng lệnh khớp đã chuẩn hoá đầy đủ |
+Test chính `tests/test_data_engine.py` dựng dữ liệu giả theo hợp đồng rồi kiểm tra toàn bộ file output, manifest và bundle.
 
 ## GitHub Actions
 
-Hiện tại GitHub Action đã được tạm thời gỡ khỏi repo. Hãy chạy engine thủ công trên máy local bằng `./broker.sh engine`. Khi cần bật lại, thêm lại workflow vào `.github/workflows/` (xem lịch sử commit trước đó để tham khảo cấu hình).
+- Workflow `portfolio-engine-attachments` tự động chạy khi có commit chạm `data/portfolios/**` hoặc khi kích hoạt thủ công (`workflow_dispatch`).
+- Pipeline setup Python 3.11, in ra toàn bộ CSV dưới `data/portfolios/` để bạn đối chiếu danh mục gốc, chạy `./broker.sh engine`, sau đó upload artifact `.artifacts/engine/attachments_latest.zip` với thời hạn lưu 3 ngày để bạn tải trực tiếp từ trang run.
 
-## Hỏi nhanh
+## Lưu ý
 
-**Có cần sửa danh mục thủ công?** — Có. Mỗi tài khoản là một CSV trong `data/portfolios/`. Engine chỉ đọc và ghi báo cáo, không can thiệp vào file gốc.
-
-**Lịch sử khớp lệnh lưu ở đâu?** — `data/order_history/<profile>_fills.csv` (hôm nay) và `data/order_history/<profile>_fills_all.csv` (đầy đủ) do scraper TCBS ghi. Có thể tắt bằng `--no-fills`.
-
-**Muốn thêm chỉ báo mới?** — Bổ sung vào `scripts/indicators/` hoặc tính trực tiếp trong `scripts/engine/data_engine.py`, sau đó khai báo trong `config/data_engine.yaml` nếu cần tham số.
-
-**Có còn chính sách/overlay?** — Không. Engine không sinh lệnh nên mọi cấu hình policy trước đây đã bị loại bỏ.
-
-## Prompt gợi ý cho ChatGPT
-
-- Template: `prompts/SAMPLE_PROMPT.txt` — plain text, chỉ có một placeholder `{{PROFILE}}`.
-- Sinh prompt theo từng profile: `./broker.sh prompts` (quét `data/portfolios/*.csv` và tạo `prompts/prompt_<profile>.txt`).
-- Sinh cho profile cụ thể: `./broker.sh prompts --profiles alpha,beta`.
-
-Ghi chú: Mô tả preset (balanced, momentum) đã được hard-code ngay trong template.
-
-### Quy tắc HOSE để tính giá/khối lượng hợp lệ
-
-Áp dụng đúng quy chế HOSE (QĐ 352/QĐ-SGDHCM, hiệu lực 05/07/2021) để tránh bước giá không hợp lệ:
-
-- Đơn vị yết giá (tick) cổ phiếu/CCQ đóng:
-  - < 10.000 VND: bước 10 VND
-  - 10.000 – 49.950 VND: bước 50 VND
-  - ≥ 50.000 VND: bước 100 VND
-- ETF và chứng quyền: bước 10 VND cho mọi mức giá.
-- Lô chẵn: bội số 100 cổ phiếu; khối lượng tối đa mỗi lệnh: 500.000 cổ.
-- Biên độ giá trong ngày HOSE: ±7% so với giá tham chiếu.
-- Làm tròn giá trần/sàn theo quy chế: trần làm tròn xuống, sàn làm tròn lên theo đúng đơn vị yết giá.
-
-Gợi ý kiểm tra nhanh (giá báo theo nghìn đồng):
-- `p_vnd = round(LimitPrice * 1000)`, chọn `tick` theo bảng trên tại mức `p_vnd`.
-- Hợp lệ khi `(p_vnd % tick == 0)` và `floor_to_tick(ref*1.07) ≥ p_vnd ≥ ceil_to_tick(ref*0.93)`; `ref` là giá tham chiếu VND.
-- `Quantity` là bội số 100 và ≤ 500.000.
+- Thiếu `data/universe/vn100.csv` → engine dừng ngay.
+- Thiếu cột bắt buộc trong CSV → raise lỗi rõ ràng.
+- Nếu ATR14 hoặc ADV20 bằng 0 → gắn guard `ZERO_ATR`/`LOW_LIQ` nhưng vẫn xuất bảng.
+- Khi giá điều chỉnh vượt biên → clamp và thêm guard `CLAMPED`, `NEAR_LIMIT` khi sát trần/sàn.
+- Toàn bộ đường dẫn được ghi tương đối theo repo trong manifest/bundle để tiện attach vào ChatGPT.

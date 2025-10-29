@@ -1,128 +1,102 @@
 # Kiến trúc Data Engine (2025)
 
-## Mục tiêu
+## Phạm vi
 
-Phiên bản này bỏ hoàn toàn order engine. Toàn bộ hệ thống chỉ còn các thành phần sau:
+Phiên bản này hiện thực hợp đồng BROKER-GPT-3 (v1.1, elaborated). Engine không tải dữ liệu thị trường từ API mà chỉ đọc các CSV đã có, áp dụng quy tắc hợp đồng và sinh bộ output chuẩn hoá + bundle cho ChatGPT.
 
-1. **Engine thu thập dữ liệu** (`scripts/engine/data_engine.py`): tải dữ liệu giá, tính chỉ số kỹ thuật, sinh preset và cập nhật báo cáo danh mục.
-2. **Kho dữ liệu danh mục** (`data/portfolios/`, `data/order_history/`): lưu trữ danh mục hiện tại và lịch sử khớp lệnh của từng tài khoản.
-3. **TCBS Scraper** (`scripts/scrapers/tcbs.py`): đăng nhập TCBS bằng Playwright, ghi `data/portfolios/<profile>.csv` và mặc định thu thập các lệnh đã khớp trong hôm nay vào `data/order_history/<profile>_fills.csv` (kèm bản đầy đủ `*_fills_all.csv`). Có thể tắt bằng `--no-fills`.
-4. (Tạm thời vô hiệu) GitHub Action: trước đây workflow tại `.github/workflows/data-engine.yml` chạy engine định kỳ và commit kết quả. Hiện đã gỡ; chạy local thay thế.
-
-Mọi quyết định giao dịch sẽ do người vận hành xử lý dựa trên dữ liệu CSV đầu ra.
-
-## Dòng dữ liệu
+## Luồng tổng quát
 
 ```
-┌───────────────┐     ┌──────────────────────┐     ┌─────────────────────┐
-│ data_engine.py│──►──│ out/market/*.csv     │────►│ ChatGPT / analyst UI │
-└─────▲─────────┘     └────────────▲────────┘     └──────────▲───────────┘
-      │                              │                           │
-      │                              │                           │
-      │            ┌─────────────────┴─────────────┐             │
-      │            │ data/portfolios/*.csv         │◄─────┐      │
-      │            │ data/order_history/*_fills.csv│      │      │
-      │            └───────────────────────────────┘      │      │
-      │                     ▲                            │      │
-      │                     │                            │      │
-      └────── tcbs.py ◄────┴────────── Fetch via browser ◄──────┘      │
+inputs (out/market/technical_snapshot.csv,
+        out/presets/*.csv,
+        data/portfolios/alpha.csv,
+        out/portfolios/{alpha_positions,alpha_sector}.csv,
+        data/order_history/alpha_fills.csv,
+        data/universe/vn100.csv,
+        config/{params.yaml,blocklist.csv},
+        out/news/news_score.csv?)
+          │
+          ▼
+scripts/engine/data_engine.py
+          │  (tuân thủ tick-size, lot, ngân sách, risk guard)
+          ▼
+outputs (out/market/trading_bands.csv,
+         out/signals/{levels,sizing,signals}.csv,
+         out/orders/alpha_LO_latest.csv,
+         out/orders/alpha_LO_YYYYMMDD.csv*,
+         out/run/manifest.json,
+         .artifacts/engine/attachments_latest.zip)
 ```
 
-- Engine đọc universe từ `config/data_engine.yaml` (tối thiểu cột `Ticker` và `Sector`).
-- Engine thêm mọi mã đang có trong danh mục vào universe để chắc chắn có dữ liệu giá.
-- Dữ liệu lịch sử và intraday lấy từ API VNDIRECT (module `collect_intraday` và `fetch_ticker_data`). Cache được lưu ở `out/data/`.
-- Tất cả output CSV nằm dưới `out/`. Khi workflow bị gỡ, bạn cần tự commit/push khi có thay đổi.
+(*chỉ tạo khi có lệnh)
 
 ## Thành phần chính
 
 ### EngineConfig
 
-`EngineConfig.from_yaml(path)` đọc file YAML và chuẩn hoá:
+- `EngineConfig.from_yaml(path)` đọc `config/data_engine.yaml` với cấu trúc tối giản:
+  ```yaml
+  paths:
+    out: out
+    data: data
+    config: config
+    bundle: .artifacts/engine
+  ```
+- Mọi đường dẫn được chuẩn hoá, bảo đảm không “thoát” repo. `bundle_dir` mặc định `.artifacts/engine/` (được git-ignore) và được tạo sẵn.
+- Các property của config cung cấp đường dẫn cố định cho input/output theo hợp đồng.
 
-- `universe.csv` – nguồn danh sách mã + sector.
-- `technical_indicators` – cấu hình SMA/RSI/ATR/MACD.
-- `presets` – mỗi preset gồm `buy_tiers` và `sell_tiers` (tỷ lệ so với giá hiện tại).
-- `portfolio.directory` – thư mục chứa danh mục từng tài khoản.
-- `order_history_directory` – thư mục append lịch sử khớp lệnh.
-- `output` – vị trí ghi market snapshot, preset và báo cáo danh mục.
-- `data.history_cache` – nơi cache dữ liệu lịch sử.
+### DataEngine.run()
 
-Mọi đường dẫn được chuẩn hoá thành `Path.resolve()`. Thiếu trường bắt buộc sẽ raise `ConfigurationError` (fail-fast).
+1. **Load & validate**
+   - Fail-fast nếu thiếu `vn100.csv`, `technical_snapshot.csv`, `params.yaml` hoặc cột bắt buộc.
+   - Tất cả ticker được chuẩn hoá về uppercase.
+2. **Trading bands (`out/market/trading_bands.csv`)**
+   - Tick HOSE: `<10 → 0.01`, `10–49.95 → 0.05`, `>=50 → 0.10`.
+   - Trần = `floor_to_tick(Ref*1.07)`, sàn = `ceil_to_tick(Ref*0.93)`; nếu đảo ngược → swap và gắn guard `BAND_ERROR`.
+3. **Levels (`out/signals/levels.csv`)**
+   - Đọc từng preset CSV, hỗ trợ rule R1–R6 đúng như contract.
+   - Giá near-touch/opportunistic được round-to-tick rồi clamp vào [Floor,Ceil].
+   - `Limit_kVND` bo tròn 1000 VND gần nhất nhưng giữ nguyên tick hợp lệ.
+4. **Sizing (`out/signals/sizing.csv`)**
+   - `TargetQty = CurrentQty` (placeholder khi chưa có model) nên `DeltaQty` mặc định 0.
+   - `MaxOrderQty = min(max_pct_adv*ADV20, budget_side/Last, max_qty_per_order)`.
+   - `SliceCount` và `SliceQty` dựa trên `slice_adv_ratio` và chuẩn hoá về lot 100.
+   - Tính thêm `LiquidityScore`, `VolatilityScore`, `TodayFilledQty/WAP` (từ fills nếu có).
+5. **Signals (`out/signals/signals.csv`)**
+   - Momentum/MeanRev heuristics đơn giản (RSI, Ret20d, MACD, Z-score, vị trí so với Floor).
+   - `BandDistance = min((Ceil-Last)/ATR14, (Last-Floor)/ATR14)` (0 nếu ATR14=0).
+   - Ghép `news_score.csv` (nếu có) và sector exposure để suy ra `SectorBias`.
+   - `RiskGuards` gồm: `BLOCKLIST`, `ZERO_ATR`, `ZERO_LAST`, `LOW_LIQ`, `BAND_ERROR`, `UNKNOWN_RULE`, cộng thêm các guard phát sinh ở bước order.
+6. **Orders (`out/orders/alpha_LO_latest.csv`)**
+   - Side = sign của `DeltaQty`. Nếu 0 → không có lệnh.
+   - Chọn preset theo độ fit (momentum/mean-reversion/balanced) để lấy near-touch price.
+   - Điều chỉnh aggressiveness (`low` giữ nguyên, `med` bớt 1 tick khi volatility cao hoặc news xấu, `high` tiến 1 tick nếu news tốt & band_distance >1).
+   - Clamp về biên; thêm guard `CLAMPED` hoặc `NEAR_LIMIT` (khi chạm biên).
+   - Kiểm soát ngân sách và lot size (>=100, <=500000, không vượt `MaxOrderQty`).
+   - Nếu `LOW_LIQ` và khối lượng >100 → bỏ qua.
+   - Ghi thêm snapshot ngày (`out/orders/alpha_LO_YYYYMMDD.csv`) khi có lệnh.
+7. **Manifest, quick check & bundle**
+   - `out/run/manifest.json` chứa `generated_at` (UTC), `source_files` (đường dẫn tương đối repo), `params_hash` (SHA-256 của `params.yaml`).
+   - Trước khi nén, engine kiểm chứng từng output bắt buộc: đúng bộ cột, file tồn tại và trading_bands/levels/sizing/signals có ít nhất một dòng dữ liệu.
+   - `attachments_latest.zip` trong `.artifacts/engine/` đóng gói trading_bands, levels, sizing, signals, orders và manifest. Summary trả về `attachment_files` (tên trong zip) và `missing_attachments` (nếu file chưa tồn tại tại thời điểm zip).
 
-### VndirectMarketDataService
+### Risk guard propagation
 
-- `load_history(tickers)` gọi `ensure_and_load_history_df` để đảm bảo cache đầy đủ rồi trả về DataFrame hợp nhất (cột `Date,Ticker,Open,High,Low,Close,Volume,t`).
-- `load_intraday(tickers)` gọi `ensure_intraday_latest_df` để lấy giá phút gần nhất. Nếu API fail, engine vẫn fallback về giá đóng cửa gần nhất.
-
-### TechnicalSnapshotBuilder
-
-- Ghép dữ liệu lịch sử và intraday, tính các chỉ số kỹ thuật.
-- Với mỗi ticker:
-  - `LastPrice` = intraday nếu có, ngược lại lấy `Close` cuối cùng.
-  - `ChangePct` = phần trăm so với phiên trước.
-  - `SMA_<n>`/`RSI_<n>`/`ATR_<n>`/`MACD_Hist` theo config.
-  - `Sector` lấy từ universe.
-- Output: `out/market/technical_snapshot.csv` (một dòng/mã, đầy đủ các cột kỹ thuật và thời gian cập nhật).
-
-### PresetWriter
-
-- Đọc snapshot, tạo file cho từng preset dưới `out/presets/`.
-- Mỗi file gồm `Ticker`, `Sector`, `LastPrice`, `LastClose`, `PriceSource`, các cột `Buy_i`, `Sell_i` (round 4 chữ số).
-- Mô tả preset được trình bày trong prompt mẫu (không lặp lại dưới dạng cột trong CSV để tránh dư thừa).
-
-#### Shortlist (lọc bảo thủ, chỉ loại mã rất yếu)
-
-- Nếu khai báo `filters.shortlist.enabled: true` trong `config/data_engine.yaml`, `PresetWriter` sẽ áp dụng một mask bảo thủ để loại các mã “xấu hẳn” khỏi mọi file preset.
-- Điều kiện mặc định (yêu cầu hội tụ tất cả):
-  - `RSI_14` ≤ 25,
-  - `PctToLo_252` ≤ 2 (% so với đáy 52w),
-  - `Return_20` ≤ -15% và `Return_60` ≤ -25%,
-  - `LastPrice` < `SMA_50` và `LastPrice` < `SMA_200`.
-- Có thể bật thêm ngưỡng thanh khoản `ADV_20` (mặc định tắt).
-- `keep`/`exclude` cho phép override thủ công (ví dụ: có thể thêm `FPT` nếu cần minh hoạ). Mặc định để trống để tránh dùng override một cách chủ quan.
-- Thiết kế hướng đến tính quyết định và ổn định: thiếu cột nào thì điều kiện tương ứng không kích hoạt (không fail), nhưng engine vẫn fail-fast với lỗi cấu hình YAML.
-
-### PortfolioReporter
-
-- Đọc từng file danh mục `data/portfolios/<profile>.csv` (schema: `Ticker,Quantity,AvgPrice`).
-- Hợp nhất với snapshot để xác định `LastPrice` và sector.
-- Tính toán:
-  - `MarketValue`, `CostBasis`, `UnrealizedPnL`, `UnrealizedPct`.
-- Ghi `out/portfolios/<profile>_positions.csv`.
-- Tổng hợp theo ngành -> `out/portfolios/<profile>_sector.csv`.
-- Không chạm vào file danh mục gốc; chỉ đọc.
-
-### TCBS Scraper
-
-- Đọc `TCBS_USERNAME` và `TCBS_PASSWORD` từ `.env` hoặc biến môi trường.
-- Dùng Chromium persistent profile tại `.playwright/tcbs-user-data` để giữ fingerprint/session giữa các lần chạy (bỏ qua bước xác nhận thiết bị sau lần đầu).
-- Điều hướng: login -> `my-asset` -> tab `Cổ phiếu` -> `Tài sản` -> bảng danh mục.
-- Parse bảng một cách resilient theo header (`Mã`, `SL Tổng`/`Được GD`, `Giá vốn`) và ghi `data/portfolios/<profile>.csv`.
-
-## Quy trình chạy GitHub Action
-
-Workflow (đã gỡ tạm thời):
-
-1. Checkout mã nguồn (fetch đầy đủ lịch sử để có thể push).
-2. Cài đặt Python 3.11 và dependencies (`pip install -r requirements.txt`).
-3. Chạy `python -m scripts.engine.data_engine --config config/data_engine.yaml`.
-4. (Trước đây) Nếu chạy theo lịch hoặc kích hoạt thủ công, workflow sẽ commit và push những thay đổi trong `out/market`, `out/presets`, `out/portfolios`, `out/diagnostics`, `data/order_history`. Khi chạy trên Pull Request, bước commit được bỏ qua để workflow chỉ dùng cho việc xem log.
-
-Không còn workflow chạy định kỳ trong repo hiện tại. Nếu cần bật lại, thêm file YAML workflow vào `.github/workflows/`.
-
-## Danh mục & lịch sử khớp lệnh
-
-- Mỗi tài khoản → một file CSV `data/portfolios/<profile>.csv` với schema tối thiểu `Ticker,Quantity,AvgPrice`.
-- Lịch sử khớp lệnh ghi vào `data/order_history/<profile>_fills.csv`. Engine không xoá, server chỉ append.
-- Khi engine chạy, file danh mục không bị sửa; các báo cáo nằm ở `out/portfolios/` và có thể được ghi đè mỗi lần chạy.
+- `base_flags` được dựng từ snapshot (ATR/ADV/Last = 0, blocklist, lỗi bands hoặc rule).
+- Khi tạo lệnh, guard bổ sung (`CLAMPED`, `NEAR_LIMIT`) được hợp nhất và signals được cập nhật lại trước khi ghi file.
 
 ## Kiểm thử
 
-- `tests/test_data_engine.py` tạo dữ liệu giả, chạy engine và xác minh tất cả output tồn tại.
-- `tests/test_tcbs_parser.py` xác minh bộ phân tích bảng TCBS với dữ liệu giả lập (không gọi mạng/trình duyệt).
+`tests/test_data_engine.py` dựng sandbox repo tạm, tạo đầy đủ input giả (snapshot, presets, danh mục, fills, news, params, blocklist, universe) rồi chạy engine:
+- Xác thực từng file output tồn tại, đúng cấu trúc và bundle chứa đầy đủ CSV.
+- Kiểm tra manifest & bundle ghi đường dẫn tương đối chính xác.
+- Đảm bảo file orders rỗng khi không có `DeltaQty` khác 0.
+- Có test riêng xác nhận engine raise lỗi khi thiếu dữ liệu bắt buộc (ví dụ trading_bands rỗng).
 
-## Mở rộng
+## Lưu ý vận hành
 
-- Có thể bổ sung chỉ báo mới bằng cách thêm vào `scripts/indicators/` và cập nhật `TechnicalSnapshotBuilder`.
-- Nếu cần nguồn dữ liệu khác, triển khai class mới implement `MarketDataService` rồi truyền vào `DataEngine` (ví dụ trong test).
-- Để đồng bộ với hệ thống khác, bạn chỉ cần đọc các CSV trong `out/` (được commit sẵn) hoặc pull nhánh mới nhất từ repo.
+- Engine không chỉnh sửa file input; mọi output nằm trong `out/`.
+- Nếu cần tạo lệnh thật, bổ sung chiến lược đặt `TargetQty` trước khi chạy engine (ví dụ tạo file trung gian và thay đổi phần `_build_sizing`).
+- Để attach cho ChatGPT, chỉ cần lấy `.artifacts/engine/attachments_latest.zip` (đã gồm các CSV quan trọng).
+- Không có network call trong engine → chạy deterministically, dễ kiểm soát kết quả.
+- Workflow CI `portfolio-engine-attachments` chạy khi repo nhận commit mới vào `data/portfolios/**` (hoặc thủ công), in ra toàn bộ CSV danh mục đầu vào rồi gọi `./broker.sh engine` và upload bundle `.artifacts/engine/attachments_latest.zip` lên GitHub Actions với retention 3 ngày.

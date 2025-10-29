@@ -20,3 +20,9 @@ scratch/
 
 # Python virtual environment
 venv/
+
+# Engine artifacts
+.artifacts/
+out/market/trading_bands.csv
+out/signals/*.csv
+out/run/

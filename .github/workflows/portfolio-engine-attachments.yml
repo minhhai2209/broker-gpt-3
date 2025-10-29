@@ -1,0 +1,46 @@
+name: Portfolio Engine Attachments
+
+on:
+  push:
+    paths:
+      - 'data/portfolios/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Print source portfolios
+        run: |
+          shopt -s nullglob
+          found=false
+          for file in data/portfolios/*.csv; do
+            found=true
+            echo "===== $file ====="
+            cat "$file"
+            echo ""
+          done
+          if [ "$found" = false ]; then
+            echo "No portfolio CSV files found under data/portfolios" >&2
+            exit 1
+          fi
+
+      - name: Run data engine
+        run: |
+          ./broker.sh engine
+
+      - name: Upload attachment bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-attachments
+          path: .artifacts/engine/attachments_latest.zip
+          if-no-files-found: error
+          retention-days: 3
