@@ -28,8 +28,22 @@ ensure_venv() {
 
 run_engine() {
   ensure_venv
+  local has_config=0
+  for arg in "$@"; do
+    case "$arg" in
+      --config|--config=*)
+        has_config=1
+        break
+        ;;
+    esac
+  done
+  if [[ $has_config -eq 0 ]]; then
+    set -- --config config/data_engine.yaml "$@"
+  fi
+  echo "[engine] Ensuring universe CSV"
+  "$PY_BIN" -m scripts.tools.build_universe --industry-map "$ROOT_DIR/data/industry_map.csv" --output "$ROOT_DIR/data/universe/vn100.csv"
   echo "[engine] Using: $PY_BIN"
-  "$PY_BIN" -m scripts.engine.data_engine --config "${1:-config/data_engine.yaml}"
+  "$PY_BIN" -m scripts.engine.data_engine "$@"
 }
 
 run_tests() {

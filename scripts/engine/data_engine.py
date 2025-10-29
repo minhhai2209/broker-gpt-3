@@ -50,9 +50,19 @@ class EngineConfig:
     data_dir: Path
     config_dir: Path
     bundle_dir: Path
+    profile: str = "alpha"
+
+    def __post_init__(self) -> None:
+        profile = str(self.profile).strip()
+        if not profile:
+            raise EngineError("Profile name must not be empty")
+        allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
+        if any(ch not in allowed for ch in profile):
+            raise EngineError(f"Profile name contains invalid characters: {profile}")
+        self.profile = profile
 
     @classmethod
-    def from_yaml(cls, path: Path) -> "EngineConfig":
+    def from_yaml(cls, path: Path, profile: str = "alpha") -> "EngineConfig":
         if not path.exists():
             raise EngineError(f"Config file not found: {path}")
         config_dir = path.parent.resolve()
@@ -69,7 +79,14 @@ class EngineConfig:
         cfg_dir = _resolve_path(paths_cfg.get("config", "config"), config_dir, repo_root)
         bundle_dir = _resolve_path(paths_cfg.get("bundle", ".artifacts/engine"), config_dir, repo_root)
         bundle_dir.mkdir(parents=True, exist_ok=True)
-        return cls(repo_root=repo_root, out_dir=out_dir, data_dir=data_dir, config_dir=cfg_dir, bundle_dir=bundle_dir)
+        return cls(
+            repo_root=repo_root,
+            out_dir=out_dir,
+            data_dir=data_dir,
+            config_dir=cfg_dir,
+            bundle_dir=bundle_dir,
+            profile=profile,
+        )
 
     # Input paths -----------------------------------------------------
     @property
@@ -82,19 +99,19 @@ class EngineConfig:
 
     @property
     def portfolio_holdings_path(self) -> Path:
-        return self.data_dir / "portfolios" / "alpha.csv"
+        return self.data_dir / "portfolios" / f"{self.profile}.csv"
 
     @property
     def portfolio_positions_path(self) -> Path:
-        return self.out_dir / "portfolios" / "alpha_positions.csv"
+        return self.out_dir / "portfolios" / f"{self.profile}_positions.csv"
 
     @property
     def portfolio_sector_path(self) -> Path:
-        return self.out_dir / "portfolios" / "alpha_sector.csv"
+        return self.out_dir / "portfolios" / f"{self.profile}_sector.csv"
 
     @property
     def fills_path(self) -> Path:
-        return self.data_dir / "order_history" / "alpha_fills.csv"
+        return self.data_dir / "order_history" / f"{self.profile}_fills.csv"
 
     @property
     def params_path(self) -> Path:
@@ -135,11 +152,15 @@ class EngineConfig:
 
     @property
     def orders_latest_path(self) -> Path:
-        return self.orders_dir / "alpha_LO_latest.csv"
+        return self.orders_dir / f"{self.profile}_LO_latest.csv"
 
     @property
     def run_manifest_path(self) -> Path:
-        return self.out_dir / "run" / "manifest.json"
+        return self.out_dir / "run" / f"{self.profile}_manifest.json"
+
+    @property
+    def attachment_bundle_path(self) -> Path:
+        return self.bundle_dir / f"{self.profile}_attachments_latest.zip"
 
     def ensure_output_dirs(self) -> None:
         for path in [
@@ -205,7 +226,7 @@ class DataEngine:
 
         orders.to_csv(cfg.orders_latest_path, index=False)
         if not orders.empty:
-            dated_path = cfg.orders_dir / f"alpha_LO_{datetime.now().strftime('%Y%m%d')}.csv"
+            dated_path = cfg.orders_dir / f"{cfg.profile}_LO_{datetime.now().strftime('%Y%m%d')}.csv"
             orders.to_csv(dated_path, index=False)
 
         self._write_manifest(cfg, snapshot, presets, params)
@@ -298,6 +319,7 @@ class DataEngine:
         return {
             "tickers": int(len(snapshot)),
             "orders": int(len(orders)),
+            "profile": cfg.profile,
             "attachment_bundle": str(bundle.path),
             "attachment_files": [str(p) for p in bundle.files],
             "missing_attachments": [str(p) for p in bundle.missing],
@@ -1028,7 +1050,7 @@ class DataEngine:
             raise EngineError("Manifest source_files must be a list")
 
     def _bundle_outputs(self, cfg: EngineConfig, files: Sequence[Path]) -> AttachmentBundleResult:
-        bundle_path = cfg.bundle_dir / "attachments_latest.zip"
+        bundle_path = cfg.attachment_bundle_path
         found: List[Path] = []
         missing: List[Path] = []
         with zipfile.ZipFile(bundle_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -1164,8 +1186,9 @@ def _as_repo_relative(path: Path, default: str, repo_root: Path) -> str:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Run the broker data engine")
     parser.add_argument("--config", type=Path, default=Path("config/data_engine.yaml"))
+    parser.add_argument("--profile", default="alpha", help="Portfolio profile name (default: alpha)")
     args = parser.parse_args(argv)
-    config = EngineConfig.from_yaml(args.config)
+    config = EngineConfig.from_yaml(args.config, profile=args.profile)
     engine = DataEngine(config)
     summary = engine.run()
     print(json.dumps(summary, indent=2))

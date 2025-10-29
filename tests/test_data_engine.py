@@ -163,6 +163,7 @@ max_qty_per_order: 500000
         summary = engine.run()
 
         self.assertEqual(summary["tickers"], 2)
+        self.assertEqual(summary["profile"], "alpha")
         bundle_path = Path(summary["attachment_bundle"])
         self.assertIn(".artifacts/engine", summary["attachment_bundle"])
         self.assertTrue(bundle_path.exists())
@@ -195,7 +196,7 @@ max_qty_per_order: 500000
         orders = pd.read_csv(self.repo / "out" / "orders" / "alpha_LO_latest.csv")
         self.assertTrue(orders.empty)
 
-        manifest_path = self.repo / "out" / "run" / "manifest.json"
+        manifest_path = self.repo / "out" / "run" / "alpha_manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         self.assertIn("out/market/technical_snapshot.csv", manifest["source_files"])
         preset_rel = _as_repo_relative(self.repo / "out" / "presets" / "balanced.csv", "balanced.csv", self.repo)

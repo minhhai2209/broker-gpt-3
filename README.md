@@ -6,15 +6,15 @@
 
 Mỗi lần chạy, engine sẽ:
 
-1. Đọc `out/market/technical_snapshot.csv` (giá/indicator), toàn bộ preset trong `out/presets/*.csv`, danh mục hiện tại (`data/portfolios/alpha.csv`), thông tin PnL/sector (`out/portfolios/*.csv`), lịch sử fills (`data/order_history/alpha_fills.csv`), budget trong `config/params.yaml`, blocklist và universe `data/universe/vn100.csv`.
+1. Đọc `out/market/technical_snapshot.csv` (giá/indicator), toàn bộ preset trong `out/presets/*.csv`, danh mục hiện tại (`data/portfolios/<profile>.csv`), thông tin PnL/sector (`out/portfolios/<profile>_*.csv`), lịch sử fills (`data/order_history/<profile>_fills.csv`), budget trong `config/params.yaml`, blocklist và universe `data/universe/vn100.csv`.
 2. Tính toán các bảng theo đúng đặc tả v1.1:
    - `out/market/trading_bands.csv`
    - `out/signals/levels.csv`
    - `out/signals/sizing.csv`
    - `out/signals/signals.csv`
-   - `out/orders/alpha_LO_latest.csv` + bản snapshot ngày (`out/orders/alpha_LO_YYYYMMDD.csv` khi có lệnh)
-   - `out/run/manifest.json` (liệt kê input, hash params)
-3. Gom toàn bộ output chính vào `.artifacts/engine/attachments_latest.zip`, đồng thời trả về danh sách file thu thập được và file thiếu trong tóm tắt.
+    - `out/orders/<profile>_LO_latest.csv` + bản snapshot ngày (`out/orders/<profile>_LO_YYYYMMDD.csv` khi có lệnh)
+    - `out/run/<profile>_manifest.json` (liệt kê input, hash params)
+3. Gom toàn bộ output chính vào `.artifacts/engine/<profile>_attachments_latest.zip`, đồng thời trả về danh sách file thu thập được và file thiếu trong tóm tắt.
 
 Trước khi nén, engine chạy quick check đảm bảo mỗi file theo hợp đồng đều tồn tại, đúng cấu trúc cột và (với các bảng bắt buộc như trading_bands/levels/sizing/signals) có ít nhất một dòng dữ liệu. Nếu thiếu, engine dừng với lỗi rõ ràng.
 
@@ -50,19 +50,21 @@ min_lot: 100
 max_qty_per_order: 500000
 ```
 
-`config/blocklist.csv` (Ticker,Reason) và `data/universe/vn100.csv` (Ticker) là bắt buộc.
+`config/blocklist.csv` (Ticker,Reason) là bắt buộc. Universe `data/universe/vn100.csv` được sinh tự động từ `data/industry_map.csv` mỗi khi chạy engine.
 
 ## Chạy engine
 
 ```bash
-./broker.sh engine
+./broker.sh engine --profile alpha
 ```
 
 Hoặc trực tiếp:
 
 ```bash
-python -m scripts.engine.data_engine --config config/data_engine.yaml
+python -m scripts.engine.data_engine --config config/data_engine.yaml --profile alpha
 ```
+
+Thay `alpha` bằng tên profile bạn muốn xử lý. Nếu không truyền `--profile`, mặc định là `alpha`.
 
 Output tóm tắt (STDOUT) là JSON chứa số lượng mã, số lệnh, đường dẫn bundle và các file đính kèm.
 
@@ -74,8 +76,8 @@ Output tóm tắt (STDOUT) là JSON chứa số lượng mã, số lệnh, đư�
 | `out/signals/levels.csv` | Giá near-touch/opportunistic theo preset | Snapshot + bands + presets | Tôn trọng tick & biên, Limit_kVND bo tròn gần nhất |
 | `out/signals/sizing.csv` | Target/Delta/MaxOrder, slice | Snapshot + danh mục + fills + params | Nếu chưa có chiến lược, Target = Current |
 | `out/signals/signals.csv` | Momentum/MeanRev fit, BandDistance, News, SectorBias, RiskGuards | Snapshot + bands + sector + news + blocklist | RiskGuards gồm BLOCKLIST/ZERO_ATR/ZERO_LAST/LOW_LIQ/... |
-| `out/orders/alpha_LO_latest.csv` | Lệnh giới hạn (kVND) | Levels + sizing + signals + params | Tự động skip BLOCKLIST/LOW_LIQ, clamp biên và thêm guard |
-| `out/run/manifest.json` | `generated_at`, `source_files`, `params_hash` | -- | Liệt kê tất cả file input thực tế |
+| `out/orders/<profile>_LO_latest.csv` | Lệnh giới hạn (kVND) | Levels + sizing + signals + params | Tự động skip BLOCKLIST/LOW_LIQ, clamp biên và thêm guard |
+| `out/run/<profile>_manifest.json` | `generated_at`, `source_files`, `params_hash` | -- | Liệt kê tất cả file input thực tế |
 
 Nếu không có DeltaQty khác 0, file lệnh vẫn tồn tại nhưng rỗng.
 
@@ -89,12 +91,13 @@ Test chính `tests/test_data_engine.py` dựng dữ liệu giả theo hợp đ�
 
 ## GitHub Actions
 
-- Workflow `portfolio-engine-attachments` tự động chạy khi có commit chạm `data/portfolios/**` hoặc khi kích hoạt thủ công (`workflow_dispatch`).
-- Pipeline setup Python 3.11, in ra toàn bộ CSV dưới `data/portfolios/` để bạn đối chiếu danh mục gốc, chạy `./broker.sh engine`, sau đó upload artifact `.artifacts/engine/attachments_latest.zip` với thời hạn lưu 3 ngày để bạn tải trực tiếp từ trang run.
+- Workflow `portfolio-engine-attachments` chạy trên mọi push hoặc khi kích hoạt thủ công (`workflow_dispatch`).
+- Nếu commit chỉ thay đổi `data/portfolios/*.csv` hoặc `data/order_history/*_fills*.csv`, workflow chỉ gọi engine cho đúng profile bị ảnh hưởng. Với các thay đổi khác, workflow chạy engine lần lượt cho tất cả profile tìm thấy dưới `data/portfolios/`.
+- Pipeline setup Python 3.11, in ra toàn bộ CSV dưới `data/portfolios/` để bạn đối chiếu danh mục gốc, chạy `./broker.sh engine --profile <profile>` theo logic trên, sau đó upload artifact `.artifacts/engine/<profile>_attachments_latest.zip` với thời hạn lưu 3 ngày để bạn tải trực tiếp từ trang run.
 
 ## Lưu ý
 
-- Thiếu `data/universe/vn100.csv` → engine dừng ngay.
+- `data/universe/vn100.csv` được tái tạo mỗi lần chạy từ `data/industry_map.csv`; nếu industry map thiếu cột `Ticker` engine sẽ fail fast.
 - Thiếu cột bắt buộc trong CSV → raise lỗi rõ ràng.
 - Nếu ATR14 hoặc ADV20 bằng 0 → gắn guard `ZERO_ATR`/`LOW_LIQ` nhưng vẫn xuất bảng.
 - Khi giá điều chỉnh vượt biên → clamp và thêm guard `CLAMPED`, `NEAR_LIMIT` khi sát trần/sàn.

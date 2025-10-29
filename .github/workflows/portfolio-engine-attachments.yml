@@ -2,8 +2,6 @@ name: Portfolio Engine Attachments
 
 on:
   push:
-    paths:
-      - 'data/portfolios/**'
   workflow_dispatch:
 
 jobs:
@@ -17,6 +15,46 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - name: Determine affected profiles
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          BEFORE="${{ github.event.before }}"
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            BEFORE="$(git rev-list --max-parents=0 HEAD)"
+          fi
+          git diff --name-only "$BEFORE" HEAD > changed_files.txt
+          mapfile -t files < changed_files.txt
+          profiles=()
+          other=0
+          for file in "${files[@]}"; do
+            if [[ "$file" =~ ^data/portfolios/([^/]+)\.csv$ ]]; then
+              profiles+=("${BASH_REMATCH[1]}")
+              continue
+            fi
+            if [[ "$file" =~ ^data/order_history/([^/_]+)_fills ]]; then
+              profiles+=("${BASH_REMATCH[1]}")
+              continue
+            fi
+            if [[ -n "$file" ]]; then
+              other=1
+            fi
+          done
+          if [ ${#profiles[@]} -gt 0 ]; then
+            mapfile -t unique < <(printf '%s\n' "${profiles[@]}" | sort -u)
+            profiles_csv=$(printf '%s,' "${unique[@]}")
+            profiles_csv="${profiles_csv%,}"
+          else
+            profiles_csv=""
+          fi
+          if [ "$other" -eq 1 ] || [ -z "$profiles_csv" ]; then
+            echo "mode=all" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=profiles" >> "$GITHUB_OUTPUT"
+            echo "profiles=$profiles_csv" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Print source portfolios
         run: |
@@ -33,14 +71,32 @@ jobs:
             exit 1
           fi
 
-      - name: Run data engine
+      - name: Run data engine (all profiles)
+        if: steps.changes.outputs.mode == 'all'
         run: |
-          ./broker.sh engine
+          shopt -s nullglob
+          for file in data/portfolios/*.csv; do
+            profile="$(basename "$file" .csv)"
+            echo "[ci] Running engine for $profile"
+            ./broker.sh engine --profile "$profile"
+          done
+
+      - name: Run data engine (changed profiles)
+        if: steps.changes.outputs.mode == 'profiles'
+        run: |
+          IFS=',' read -ra profiles <<< "${{ steps.changes.outputs.profiles }}"
+          for profile in "${profiles[@]}"; do
+            if [ -z "$profile" ]; then
+              continue
+            fi
+            echo "[ci] Running engine for $profile"
+            ./broker.sh engine --profile "$profile"
+          done
 
       - name: Upload attachment bundle
         uses: actions/upload-artifact@v4
         with:
           name: engine-attachments
-          path: .artifacts/engine/attachments_latest.zip
+          path: .artifacts/engine/*_attachments_latest.zip
           if-no-files-found: error
           retention-days: 3
