@@ -1,239 +1,1120 @@
-"""Standalone data engine that collects market data and pre-computes metrics."""
+"""Data engine that materialises broker contract outputs."""
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
+import math
+import zipfile
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP, ROUND_UP, getcontext
 from pathlib import Path
-from typing import Dict, List, Optional, Protocol, Sequence
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import pandas as pd
 import yaml
 
-from scripts.data_fetching.collect_intraday import ensure_intraday_latest_df
-from scripts.data_fetching.fetch_ticker_data import ensure_and_load_history_df
-from scripts.indicators import atr_wilder, macd_hist, ma, rsi_wilder, ema
-
 LOGGER = logging.getLogger(__name__)
 
+getcontext().prec = 28
 
-class ConfigurationError(RuntimeError):
-    """Raised when the engine configuration file is invalid."""
+
+class EngineError(RuntimeError):
+    """Raised when the engine cannot complete a required step."""
 
 
 @dataclass
-class PresetConfig:
+class AttachmentBundleResult:
+    path: Path
+    files: List[Path]
+    missing: List[Path]
+
+
+@dataclass
+class OutputSpec:
     name: str
-    buy_tiers: List[float]
-    sell_tiers: List[float]
-    description: str | None = None
+    path: Path
+    dataframe: pd.DataFrame
+    expected_columns: Sequence[str]
+    require_rows: bool = False
 
-    @classmethod
-    def from_dict(cls, name: str, raw: Dict[str, object]) -> "PresetConfig":
-        if not isinstance(raw, dict):
-            raise ConfigurationError(f"Preset '{name}' must be a mapping, got {type(raw).__name__}")
-        buy = raw.get("buy_tiers", [])
-        sell = raw.get("sell_tiers", [])
-        if not isinstance(buy, list) or not all(isinstance(x, (int, float)) for x in buy):
-            raise ConfigurationError(f"Preset '{name}' requires buy_tiers as a list of numbers")
-        if not isinstance(sell, list) or not all(isinstance(x, (int, float)) for x in sell):
-            raise ConfigurationError(f"Preset '{name}' requires sell_tiers as a list of numbers")
-        desc = raw.get("description")
-        if desc is not None and not isinstance(desc, str):
-            raise ConfigurationError(f"Preset '{name}' description must be a string")
-        return cls(name=name, buy_tiers=[float(x) for x in buy], sell_tiers=[float(x) for x in sell], description=desc)
-
-
-@dataclass
-class ShortlistFilterConfig:
-    """Configuration for conservative preset shortlisting.
-
-    The intention is to remove only the *very weak* tickers from preset outputs,
-    while keeping everything else for consideration. Users can also force-keep or
-    force-exclude specific tickers.
-    """
-
-    enabled: bool = False
-    # Technical weakness thresholds (all must be met to exclude unless logic says otherwise)
-    rsi14_max: Optional[float] = 25.0  # RSI_14 <= rsi14_max
-    max_pct_to_lo_252: Optional[float] = 2.0  # PctToLo_252 <= X (near 52w low)
-    return20_max: Optional[float] = -15.0  # Return_20 <= X
-    return60_max: Optional[float] = -25.0  # Return_60 <= X
-    require_below_sma50_and_200: bool = True  # LastPrice < SMA_50 and < SMA_200
-    min_adv_20: Optional[float] = None  # ADV_20 <= X means illiquid (optional)
-    # Compose: if True, require all active conditions to be true to drop; if False, any.
-    drop_logic_all: bool = True
-    # Manual overrides
-    keep: List[str] | None = None
-    exclude: List[str] | None = None
-
-    def normalized_keep(self) -> List[str]:
-        return sorted({t.strip().upper() for t in (self.keep or []) if isinstance(t, str) and t.strip()})
-
-    def normalized_exclude(self) -> List[str]:
-        return sorted({t.strip().upper() for t in (self.exclude or []) if isinstance(t, str) and t.strip()})
 
 @dataclass
 class EngineConfig:
-    universe_csv: Path
-    include_indices: bool
-    moving_averages: List[int]
-    rsi_periods: List[int]
-    atr_periods: List[int]
-    ema_periods: List[int]
-    returns_periods: List[int]
-    bollinger_windows: List[int]
-    bollinger_k: float
-    bollinger_include_bands: bool
-    range_lookback_days: int
-    adv_periods: List[int]
-    macd_fast: int
-    macd_slow: int
-    macd_signal: int
-    presets: Dict[str, PresetConfig]
-    portfolio_dir: Path
-    order_history_dir: Path
-    output_base_dir: Path
-    market_snapshot_path: Path
-    presets_dir: Path
-    portfolios_dir: Path
-    diagnostics_dir: Path
-    market_cache_dir: Path
-    history_min_days: int
-    intraday_window_minutes: int
-    shortlist_filter: Optional[ShortlistFilterConfig]
+    """Resolved paths for the contract engine."""
+
+    repo_root: Path
+    out_dir: Path
+    data_dir: Path
+    config_dir: Path
+    bundle_dir: Path
 
     @classmethod
     def from_yaml(cls, path: Path) -> "EngineConfig":
         if not path.exists():
-            raise ConfigurationError(f"Config file not found: {path}")
+            raise EngineError(f"Config file not found: {path}")
         config_dir = path.parent.resolve()
         repo_root = _find_repo_root(config_dir)
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        if not isinstance(raw, dict):
+            raise EngineError("Engine config must be a mapping")
+        paths_cfg = raw.get("paths", {}) or {}
+        if not isinstance(paths_cfg, dict):
+            raise EngineError("paths section must be a mapping")
+
+        out_dir = _resolve_path(paths_cfg.get("out", "out"), config_dir, repo_root)
+        data_dir = _resolve_path(paths_cfg.get("data", "data"), config_dir, repo_root)
+        cfg_dir = _resolve_path(paths_cfg.get("config", "config"), config_dir, repo_root)
+        bundle_dir = _resolve_path(paths_cfg.get("bundle", ".artifacts/engine"), config_dir, repo_root)
+        bundle_dir.mkdir(parents=True, exist_ok=True)
+        return cls(repo_root=repo_root, out_dir=out_dir, data_dir=data_dir, config_dir=cfg_dir, bundle_dir=bundle_dir)
+
+    # Input paths -----------------------------------------------------
+    @property
+    def technical_snapshot_path(self) -> Path:
+        return self.out_dir / "market" / "technical_snapshot.csv"
+
+    @property
+    def presets_dir(self) -> Path:
+        return self.out_dir / "presets"
+
+    @property
+    def portfolio_holdings_path(self) -> Path:
+        return self.data_dir / "portfolios" / "alpha.csv"
+
+    @property
+    def portfolio_positions_path(self) -> Path:
+        return self.out_dir / "portfolios" / "alpha_positions.csv"
+
+    @property
+    def portfolio_sector_path(self) -> Path:
+        return self.out_dir / "portfolios" / "alpha_sector.csv"
+
+    @property
+    def fills_path(self) -> Path:
+        return self.data_dir / "order_history" / "alpha_fills.csv"
+
+    @property
+    def params_path(self) -> Path:
+        return self.config_dir / "params.yaml"
+
+    @property
+    def blocklist_path(self) -> Path:
+        return self.config_dir / "blocklist.csv"
+
+    @property
+    def universe_path(self) -> Path:
+        return self.data_dir / "universe" / "vn100.csv"
+
+    @property
+    def news_score_path(self) -> Path:
+        return self.out_dir / "news" / "news_score.csv"
+
+    # Output paths ----------------------------------------------------
+    @property
+    def trading_bands_path(self) -> Path:
+        return self.out_dir / "market" / "trading_bands.csv"
+
+    @property
+    def levels_path(self) -> Path:
+        return self.out_dir / "signals" / "levels.csv"
+
+    @property
+    def sizing_path(self) -> Path:
+        return self.out_dir / "signals" / "sizing.csv"
+
+    @property
+    def signals_path(self) -> Path:
+        return self.out_dir / "signals" / "signals.csv"
+
+    @property
+    def orders_dir(self) -> Path:
+        return self.out_dir / "orders"
+
+    @property
+    def orders_latest_path(self) -> Path:
+        return self.orders_dir / "alpha_LO_latest.csv"
+
+    @property
+    def run_manifest_path(self) -> Path:
+        return self.out_dir / "run" / "manifest.json"
+
+    def ensure_output_dirs(self) -> None:
+        for path in [
+            self.trading_bands_path.parent,
+            self.levels_path.parent,
+            self.sizing_path.parent,
+            self.signals_path.parent,
+            self.orders_dir,
+            self.run_manifest_path.parent,
+        ]:
+            path.mkdir(parents=True, exist_ok=True)
+
+
+class DataEngine:
+    """Contract-compliant data engine."""
+
+    def __init__(self, config: EngineConfig) -> None:
+        self._config = config
+
+    # ------------------------------------------------------------------
+    # Public API
+    def run(self) -> Dict[str, object]:
+        cfg = self._config
+        cfg.ensure_output_dirs()
+
+        universe = self._load_universe(cfg.universe_path)
+        snapshot = self._load_snapshot(cfg.technical_snapshot_path)
+        presets = self._load_presets(cfg.presets_dir)
+        blocklisted = self._load_blocklist(cfg.blocklist_path)
+        params = self._load_params(cfg.params_path)
+        holdings = self._load_holdings(cfg.portfolio_holdings_path)
+        sectors = self._load_optional_csv(cfg.portfolio_sector_path)
+        fills = self._load_optional_csv(cfg.fills_path)
+        news = self._load_optional_csv(cfg.news_score_path)
+
+        candidate_indices = self._filter_candidate_tickers(snapshot, presets, universe)
+        if not candidate_indices:
+            LOGGER.warning("No eligible tickers after universe/preset filtering")
+
+        trading_bands, band_flags = self._build_trading_bands(snapshot.iloc[candidate_indices])
+        trading_bands.to_csv(cfg.trading_bands_path, index=False)
+
+        levels, rule_flags = self._build_levels(snapshot, trading_bands, presets)
+        levels.to_csv(cfg.levels_path, index=False)
+
+        sizing = self._build_sizing(snapshot, holdings, fills, params)
+        sizing.to_csv(cfg.sizing_path, index=False)
+
+        base_flags = self._initial_risk_flags(snapshot, blocklisted, band_flags, rule_flags)
+        signals = self._build_signals(snapshot, trading_bands, sectors, news, base_flags)
+
+        orders, additional_flags = self._build_orders(
+            snapshot,
+            trading_bands,
+            levels,
+            sizing,
+            signals,
+            params,
+            base_flags,
+        )
+        signals = self._update_signals_with_flags(signals, additional_flags)
+        signals.to_csv(cfg.signals_path, index=False)
+
+        orders.to_csv(cfg.orders_latest_path, index=False)
+        if not orders.empty:
+            dated_path = cfg.orders_dir / f"alpha_LO_{datetime.now().strftime('%Y%m%d')}.csv"
+            orders.to_csv(dated_path, index=False)
+
+        self._write_manifest(cfg, snapshot, presets, params)
+
+        self._validate_outputs(
+            [
+                OutputSpec(
+                    name="trading_bands",
+                    path=cfg.trading_bands_path,
+                    dataframe=trading_bands,
+                    expected_columns=["Ticker", "Ref", "Ceil", "Floor", "TickSize"],
+                    require_rows=True,
+                ),
+                OutputSpec(
+                    name="levels",
+                    path=cfg.levels_path,
+                    dataframe=levels,
+                    expected_columns=[
+                        "Ticker",
+                        "Preset",
+                        "NearTouchBuy",
+                        "NearTouchSell",
+                        "Opp1Buy",
+                        "Opp1Sell",
+                        "Opp2Buy",
+                        "Opp2Sell",
+                        "Limit_kVND",
+                    ],
+                    require_rows=True,
+                ),
+                OutputSpec(
+                    name="sizing",
+                    path=cfg.sizing_path,
+                    dataframe=sizing,
+                    expected_columns=[
+                        "Ticker",
+                        "TargetQty",
+                        "CurrentQty",
+                        "DeltaQty",
+                        "MaxOrderQty",
+                        "SliceCount",
+                        "SliceQty",
+                        "LiquidityScore",
+                        "VolatilityScore",
+                        "TodayFilledQty",
+                        "TodayWAP",
+                    ],
+                    require_rows=True,
+                ),
+                OutputSpec(
+                    name="signals",
+                    path=cfg.signals_path,
+                    dataframe=signals,
+                    expected_columns=[
+                        "Ticker",
+                        "PresetFitMomentum",
+                        "PresetFitMeanRev",
+                        "PresetFitBalanced",
+                        "BandDistance",
+                        "NewsScore",
+                        "EventFlags",
+                        "SectorBias",
+                        "RiskGuards",
+                    ],
+                    require_rows=True,
+                ),
+                OutputSpec(
+                    name="orders",
+                    path=cfg.orders_latest_path,
+                    dataframe=orders,
+                    expected_columns=["Ticker", "Side", "Quantity", "LimitPrice"],
+                    require_rows=False,
+                ),
+            ]
+        )
+        self._validate_manifest(cfg.run_manifest_path)
+
+        bundle = self._bundle_outputs(
+            cfg,
+            [
+                cfg.trading_bands_path,
+                cfg.levels_path,
+                cfg.sizing_path,
+                cfg.signals_path,
+                cfg.orders_latest_path,
+                cfg.run_manifest_path,
+            ],
+        )
+
+        return {
+            "tickers": int(len(snapshot)),
+            "orders": int(len(orders)),
+            "attachment_bundle": str(bundle.path),
+            "attachment_files": [str(p) for p in bundle.files],
+            "missing_attachments": [str(p) for p in bundle.missing],
+        }
+
+    # ------------------------------------------------------------------
+    # Loading helpers
+    def _load_universe(self, path: Path) -> List[str]:
+        if not path.exists():
+            raise EngineError("Universe file missing (vn100.csv)")
+        df = pd.read_csv(path)
+        if "Ticker" not in df.columns:
+            raise EngineError("Universe file missing 'Ticker' column")
+        return sorted({str(t).upper() for t in df["Ticker"].dropna()})
+
+    def _load_snapshot(self, path: Path) -> pd.DataFrame:
+        required = {
+            "Ticker",
+            "Last",
+            "Ref",
+            "SMA20",
+            "ATR14",
+            "RSI14",
+            "MACD",
+            "MACDSignal",
+            "Z20",
+            "Ret5d",
+            "Ret20d",
+            "ADV20",
+            "High52w",
+            "Low52w",
+        }
+        df = self._load_csv_with_required(path, required)
+        df["Ticker"] = df["Ticker"].astype(str).str.upper()
+        return df
+
+    def _load_presets(self, presets_dir: Path) -> Dict[str, pd.DataFrame]:
+        if not presets_dir.exists():
+            raise EngineError(f"Presets directory missing: {presets_dir}")
+        preset_files = sorted(presets_dir.glob("*.csv"))
+        if not preset_files:
+            raise EngineError("No preset CSV files found")
+        presets: Dict[str, pd.DataFrame] = {}
+        for file in preset_files:
+            df = pd.read_csv(file)
+            if "Ticker" not in df.columns or "RuleType" not in df.columns:
+                LOGGER.warning("Skipping preset %s missing required columns", file)
+                continue
+            df["Ticker"] = df["Ticker"].astype(str).str.upper()
+            df["PresetName"] = file.stem
+            presets[file.stem] = df
+        if not presets:
+            raise EngineError("No valid preset definitions found")
+        return presets
+
+    def _load_blocklist(self, path: Path) -> Dict[str, str]:
+        if not path.exists():
+            return {}
+        df = pd.read_csv(path)
+        if "Ticker" not in df.columns:
+            raise EngineError("Blocklist missing 'Ticker' column")
+        result: Dict[str, str] = {}
+        for row in df.itertuples(index=False):
+            ticker = str(getattr(row, "Ticker", "")).upper()
+            if not ticker:
+                continue
+            reason = str(getattr(row, "Reason", "")).strip()
+            result[ticker] = reason
+        return result
+
+    def _load_params(self, path: Path) -> Dict[str, object]:
+        if not path.exists():
+            raise EngineError("params.yaml missing")
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         if not isinstance(data, dict):
-            raise ConfigurationError("Engine config must be a mapping")
-        uni = data.get("universe", {})
-        if not isinstance(uni, dict):
-            raise ConfigurationError("universe section must be a mapping")
-        csv_path = uni.get("csv")
-        if not isinstance(csv_path, str):
-            raise ConfigurationError("universe.csv must be a string path")
-        universe_csv = _resolve_path(csv_path, config_dir, repo_root)
-        include_indices = bool(uni.get("include_indices", False))
+            raise EngineError("params.yaml must be a mapping")
+        return data
 
-        technical = data.get("technical_indicators", {}) or {}
-        if not isinstance(technical, dict):
-            raise ConfigurationError("technical_indicators must be a mapping")
-        moving_averages = [int(x) for x in technical.get("moving_averages", [])]
-        rsi_periods = [int(x) for x in technical.get("rsi_periods", [])]
-        atr_periods = [int(x) for x in technical.get("atr_periods", [])]
-        ema_periods = [int(x) for x in technical.get("ema_periods", [])]
-        returns_periods = [int(x) for x in technical.get("returns_periods", [])]
-        bb_cfg = technical.get("bollinger", {}) or {}
-        if not isinstance(bb_cfg, dict):
-            raise ConfigurationError("technical_indicators.bollinger must be a mapping if provided")
-        bollinger_windows = [int(x) for x in bb_cfg.get("windows", [])]
-        bollinger_k = float(bb_cfg.get("k", 2.0))
-        bollinger_include_bands = bool(bb_cfg.get("include_bands", False))
-        range_lookback_days = int(technical.get("range_lookback_days", 252))
-        adv_periods = [int(x) for x in technical.get("adv_periods", [])]
-        macd_cfg = technical.get("macd", {}) or {}
-        if not isinstance(macd_cfg, dict):
-            raise ConfigurationError("technical_indicators.macd must be a mapping")
-        macd_fast = int(macd_cfg.get("fast", 12))
-        macd_slow = int(macd_cfg.get("slow", 26))
-        macd_signal = int(macd_cfg.get("signal", 9))
+    def _load_holdings(self, path: Path) -> pd.DataFrame:
+        df = self._load_csv_with_required(path, {"Ticker", "Quantity", "AvgPrice"})
+        df["Ticker"] = df["Ticker"].astype(str).str.upper()
+        aggregated = df.groupby("Ticker", as_index=False).agg({"Quantity": "sum", "AvgPrice": "mean"})
+        return aggregated
 
-        raw_presets = data.get("presets", {})
-        if not isinstance(raw_presets, dict) or not raw_presets:
-            raise ConfigurationError("At least one preset must be defined")
-        presets = {name: PresetConfig.from_dict(name, cfg) for name, cfg in raw_presets.items()}
+    def _load_optional_csv(self, path: Path) -> pd.DataFrame:
+        if not path.exists():
+            return pd.DataFrame()
+        return pd.read_csv(path)
 
-        portfolio_cfg = data.get("portfolio", {}) or {}
-        if not isinstance(portfolio_cfg, dict):
-            raise ConfigurationError("portfolio section must be a mapping")
-        portfolio_dir = _resolve_path(
-            portfolio_cfg.get("directory", "data/portfolios"), config_dir, repo_root
-        )
-        order_history_dir = _resolve_path(
-            portfolio_cfg.get("order_history_directory", "data/order_history"), config_dir, repo_root
-        )
+    def _load_csv_with_required(self, path: Path, required: Iterable[str]) -> pd.DataFrame:
+        if not path.exists():
+            raise EngineError(f"Required file missing: {path}")
+        df = pd.read_csv(path)
+        missing = [col for col in required if col not in df.columns]
+        if missing:
+            raise EngineError(f"{path} missing columns: {', '.join(missing)}")
+        return df
 
-        output_cfg = data.get("output", {}) or {}
-        if not isinstance(output_cfg, dict):
-            raise ConfigurationError("output section must be a mapping")
-        output_base_dir = _resolve_path(output_cfg.get("base_dir", "out"), config_dir, repo_root)
-        market_snapshot_rel = output_cfg.get("market_snapshot", "market/technical_snapshot.csv")
-        presets_rel = output_cfg.get("presets_dir", "presets")
-        portfolios_rel = output_cfg.get("portfolios_dir", "portfolios")
-        diagnostics_rel = output_cfg.get("diagnostics_dir", "diagnostics")
-        market_snapshot_path = (output_base_dir / market_snapshot_rel).resolve()
-        presets_dir = (output_base_dir / presets_rel).resolve()
-        portfolios_dir = (output_base_dir / portfolios_rel).resolve()
-        diagnostics_dir = (output_base_dir / diagnostics_rel).resolve()
+    def _filter_candidate_tickers(
+        self, snapshot: pd.DataFrame, presets: Dict[str, pd.DataFrame], universe: Sequence[str]
+    ) -> List[int]:
+        preset_tickers = set()
+        for df in presets.values():
+            preset_tickers.update(df["Ticker"].astype(str).str.upper())
+        allowed = set(universe)
+        indices = [
+            idx
+            for idx, row in snapshot.iterrows()
+            if str(row.Ticker).upper() in allowed and str(row.Ticker).upper() in preset_tickers
+        ]
+        return indices
 
-        data_cfg = data.get("data", {}) or {}
-        if not isinstance(data_cfg, dict):
-            raise ConfigurationError("data section must be a mapping")
-        market_cache_dir = _resolve_path(data_cfg.get("history_cache", "out/data"), config_dir, repo_root)
-        history_min_days = int(data_cfg.get("history_min_days", 400))
-        intraday_window_minutes = int(data_cfg.get("intraday_window_minutes", 12 * 60))
-
-        # Optional shortlist filter
-        filters_cfg = data.get("filters", {}) or {}
-        if not isinstance(filters_cfg, dict):
-            raise ConfigurationError("filters section must be a mapping if provided")
-        shortlist_cfg_raw = filters_cfg.get("shortlist", {}) or {}
-        if shortlist_cfg_raw is not None and not isinstance(shortlist_cfg_raw, dict):
-            raise ConfigurationError("filters.shortlist must be a mapping if provided")
-        shortlist_filter: Optional[ShortlistFilterConfig]
-        if shortlist_cfg_raw:
-            # Map YAML keys to dataclass fields with type coercion
-            shortlist_filter = ShortlistFilterConfig(
-                enabled=bool(shortlist_cfg_raw.get("enabled", False)),
-                rsi14_max=(float(shortlist_cfg_raw["rsi14_max"]) if "rsi14_max" in shortlist_cfg_raw and shortlist_cfg_raw["rsi14_max"] is not None else ShortlistFilterConfig.rsi14_max),
-                max_pct_to_lo_252=(float(shortlist_cfg_raw["max_pct_to_lo_252"]) if "max_pct_to_lo_252" in shortlist_cfg_raw and shortlist_cfg_raw["max_pct_to_lo_252"] is not None else ShortlistFilterConfig.max_pct_to_lo_252),
-                return20_max=(float(shortlist_cfg_raw["return20_max"]) if "return20_max" in shortlist_cfg_raw and shortlist_cfg_raw["return20_max"] is not None else ShortlistFilterConfig.return20_max),
-                return60_max=(float(shortlist_cfg_raw["return60_max"]) if "return60_max" in shortlist_cfg_raw and shortlist_cfg_raw["return60_max"] is not None else ShortlistFilterConfig.return60_max),
-                require_below_sma50_and_200=bool(shortlist_cfg_raw.get("require_below_sma50_and_200", True)),
-                min_adv_20=(float(shortlist_cfg_raw["min_adv_20"]) if "min_adv_20" in shortlist_cfg_raw and shortlist_cfg_raw["min_adv_20"] is not None else None),
-                drop_logic_all=bool(shortlist_cfg_raw.get("drop_logic_all", True)),
-                keep=[str(x).upper() for x in shortlist_cfg_raw.get("keep", [])],
-                exclude=[str(x).upper() for x in shortlist_cfg_raw.get("exclude", [])],
+    # ------------------------------------------------------------------
+    # Computation helpers
+    def _build_trading_bands(self, snapshot: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, set[str]]]:
+        rows: List[Dict[str, object]] = []
+        flags: Dict[str, set[str]] = {}
+        for row in snapshot.itertuples(index=False):
+            ticker = str(row.Ticker).upper()
+            ref = _decimal(getattr(row, "Ref", float("nan")))
+            if ref is None:
+                continue
+            tick = _tick_size(ref)
+            ceil = _floor_to_tick(ref * Decimal("1.07"), tick)
+            floor = _ceil_to_tick(ref * Decimal("0.93"), tick)
+            if floor > ceil:
+                floor, ceil = ceil, floor
+                flags.setdefault(ticker, set()).add("BAND_ERROR")
+            rows.append(
+                {
+                    "Ticker": ticker,
+                    "Ref": float(ref),
+                    "Ceil": float(ceil),
+                    "Floor": float(floor),
+                    "TickSize": float(tick),
+                }
             )
-        else:
-            shortlist_filter = None
+        df = pd.DataFrame(rows, columns=["Ticker", "Ref", "Ceil", "Floor", "TickSize"])
+        return df, flags
 
-        return cls(
-            universe_csv=universe_csv,
-            include_indices=include_indices,
-            moving_averages=moving_averages,
-            rsi_periods=rsi_periods,
-            atr_periods=atr_periods,
-            ema_periods=ema_periods,
-            returns_periods=returns_periods,
-            bollinger_windows=bollinger_windows,
-            bollinger_k=bollinger_k,
-            bollinger_include_bands=bollinger_include_bands,
-            range_lookback_days=range_lookback_days,
-            adv_periods=adv_periods,
-            macd_fast=macd_fast,
-            macd_slow=macd_slow,
-            macd_signal=macd_signal,
-            presets=presets,
-            portfolio_dir=portfolio_dir,
-            order_history_dir=order_history_dir,
-            output_base_dir=output_base_dir,
-            market_snapshot_path=market_snapshot_path,
-            presets_dir=presets_dir,
-            portfolios_dir=portfolios_dir,
-            diagnostics_dir=diagnostics_dir,
-            market_cache_dir=market_cache_dir,
-            history_min_days=history_min_days,
-            intraday_window_minutes=intraday_window_minutes,
-            shortlist_filter=shortlist_filter,
+    def _build_levels(
+        self,
+        snapshot: pd.DataFrame,
+        trading_bands: pd.DataFrame,
+        presets: Dict[str, pd.DataFrame],
+    ) -> Tuple[pd.DataFrame, Dict[str, set[str]]]:
+        snap_lookup = {row.Ticker: row._asdict() for row in snapshot.itertuples(index=False)}
+        band_lookup = {row.Ticker: row._asdict() for row in trading_bands.itertuples(index=False)}
+        rows: List[Dict[str, object]] = []
+        flags: Dict[str, set[str]] = {}
+        for preset_name, df in presets.items():
+            for row in df.itertuples(index=False):
+                ticker = str(getattr(row, "Ticker")).upper()
+                if ticker not in snap_lookup or ticker not in band_lookup:
+                    continue
+                snap = snap_lookup[ticker]
+                bands = band_lookup[ticker]
+                rule = str(getattr(row, "RuleType", "")).strip()
+                side = str(getattr(row, "Side", "BOTH")).strip().upper() or "BOTH"
+                param1 = getattr(row, "Param1", float("nan"))
+                param2 = getattr(row, "Param2", float("nan"))
+                result = self._evaluate_rule(rule, snap, bands, param1, param2)
+                if result is None:
+                    flags.setdefault(ticker, set()).add("UNKNOWN_RULE")
+                    continue
+                buy_level, sell_level, opp_buy, opp_sell = result
+                limit_kvnd: Optional[int | str] = ""
+                if side in {"BUY", "BOTH"} and buy_level is not None:
+                    limit_kvnd = int(_kvnd(buy_level)) if side == "BUY" else ""
+                if side == "SELL" and sell_level is not None:
+                    limit_kvnd = int(_kvnd(sell_level))
+                rows.append(
+                    {
+                        "Ticker": ticker,
+                        "Preset": preset_name,
+                        "NearTouchBuy": _float_or_blank(buy_level if side != "SELL" else None),
+                        "NearTouchSell": _float_or_blank(sell_level if side != "BUY" else None),
+                        "Opp1Buy": _float_or_blank(opp_buy if side != "SELL" else None),
+                        "Opp1Sell": _float_or_blank(opp_sell if side != "BUY" else None),
+                        "Opp2Buy": "",
+                        "Opp2Sell": "",
+                        "Limit_kVND": limit_kvnd,
+                    }
+                )
+        df = pd.DataFrame(
+            rows,
+            columns=[
+                "Ticker",
+                "Preset",
+                "NearTouchBuy",
+                "NearTouchSell",
+                "Opp1Buy",
+                "Opp1Sell",
+                "Opp2Buy",
+                "Opp2Sell",
+                "Limit_kVND",
+            ],
         )
+        return df, flags
+
+    def _evaluate_rule(
+        self,
+        rule: str,
+        snap: Dict[str, object],
+        bands: Dict[str, object],
+        param1: object,
+        param2: object,
+    ) -> Optional[Tuple[Optional[Decimal], Optional[Decimal], Optional[Decimal], Optional[Decimal]]]:
+        last = _decimal(snap.get("Last"))
+        sma20 = _decimal(snap.get("SMA20"))
+        atr14 = _decimal(snap.get("ATR14"))
+        z20 = _decimal(snap.get("Z20"))
+        tick = Decimal(str(bands.get("TickSize", "0.01")))
+        floor = _decimal(bands.get("Floor"))
+        ceil = _decimal(bands.get("Ceil"))
+        if last is None or tick is None or floor is None or ceil is None:
+            return None
+
+        def clamp(value: Decimal | None) -> Optional[Decimal]:
+            if value is None:
+                return None
+            rounded = _round_to_tick(value, tick)
+            return _clamp_to_band(rounded, floor, ceil)
+
+        if rule == "offset_ticks_from_last":
+            buy_offset = Decimal(str(param1)) if not _is_nan(param1) else Decimal("0")
+            sell_offset = Decimal(str(param2)) if not _is_nan(param2) else Decimal("0")
+            buy = clamp(last + buy_offset * tick)
+            sell = clamp(last + sell_offset * tick)
+            opp_buy = clamp(last + (buy_offset - Decimal("1")) * tick)
+            opp_sell = clamp(last + (sell_offset + Decimal("1")) * tick)
+            return buy, sell, opp_buy, opp_sell
+        if rule == "SMA20±kATR":
+            if atr14 is None:
+                return None
+            k_buy = Decimal(str(param1)) if not _is_nan(param1) else Decimal("0")
+            k_sell = Decimal(str(param2)) if not _is_nan(param2) else Decimal("0")
+            buy = clamp(sma20 - k_buy * atr14) if sma20 is not None else None
+            sell = clamp(sma20 + k_sell * atr14) if sma20 is not None else None
+            return buy, sell, None, None
+        if rule == "zscore_thresholds":
+            if z20 is None or atr14 is None or sma20 is None:
+                return None
+            z_buy_max = Decimal(str(param1)) if not _is_nan(param1) else Decimal("0")
+            z_sell_min = Decimal(str(param2)) if not _is_nan(param2) else Decimal("0")
+            buy = clamp(sma20 - abs(z_buy_max) * atr14) if z20 <= z_buy_max else None
+            sell = clamp(sma20 + abs(z_sell_min) * atr14) if z20 >= z_sell_min else None
+            return buy, sell, None, None
+        if rule == "last_vs_floorceil":
+            buy = clamp(max(last, floor))
+            sell = clamp(min(last, ceil))
+            return buy, sell, None, None
+        if rule == "weighted_momentum_meanrev":
+            if atr14 is None or sma20 is None:
+                return None
+            w_mom = Decimal(str(param1)) if not _is_nan(param1) else Decimal("0.5")
+            w_mr = Decimal(str(param2)) if not _is_nan(param2) else (Decimal("1") - w_mom)
+            mom_buy = clamp(last - tick)
+            mom_sell = clamp(last + tick)
+            mr_buy = clamp(sma20 - Decimal("0.25") * atr14)
+            mr_sell = clamp(sma20 + Decimal("0.25") * atr14)
+            buy = clamp(_weighted_sum([(w_mom, mom_buy), (w_mr, mr_buy)]))
+            sell = clamp(_weighted_sum([(w_mom, mom_sell), (w_mr, mr_sell)]))
+            return buy, sell, None, None
+        if rule == "risk_off_trim":
+            sell_offset = Decimal(str(param1)) if not _is_nan(param1) else Decimal("0")
+            sell = clamp(last + sell_offset * tick)
+            return None, sell, None, None
+        return None
+
+    def _build_sizing(
+        self,
+        snapshot: pd.DataFrame,
+        holdings: pd.DataFrame,
+        fills: pd.DataFrame,
+        params: Dict[str, object],
+    ) -> pd.DataFrame:
+        fills_summary = self._summarise_fills(fills)
+        holdings_lookup = holdings.set_index("Ticker")["Quantity"].to_dict()
+        adv_lookup = snapshot.set_index("Ticker")["ADV20"].to_dict()
+        last_lookup = snapshot.set_index("Ticker")["Last"].to_dict()
+        atr_lookup = snapshot.set_index("Ticker")["ATR14"].to_dict()
+
+        max_order_pct_adv = float(params.get("max_order_pct_adv", 0.05))
+        slice_adv_ratio = float(params.get("slice_adv_ratio", 0.02))
+        buy_budget = float(params.get("buy_budget_vnd", 0.0))
+        sell_budget = float(params.get("sell_budget_vnd", 0.0))
+        max_qty_per_order = int(params.get("max_qty_per_order", 500000))
+
+        rows: List[Dict[str, object]] = []
+        for row in snapshot.itertuples(index=False):
+            ticker = str(row.Ticker)
+            current_qty = float(holdings_lookup.get(ticker, 0.0))
+            target_qty = current_qty
+            delta_qty = target_qty - current_qty
+            adv20 = float(adv_lookup.get(ticker, float("nan")))
+            last_price = float(last_lookup.get(ticker, float("nan")))
+            atr14 = float(atr_lookup.get(ticker, float("nan")))
+
+            liquidity_score = adv20 * last_price if not math.isnan(adv20) and not math.isnan(last_price) else float("nan")
+            volatility_score = (atr14 / last_price) if last_price not in (0, float("nan")) and not math.isnan(atr14) and not math.isnan(last_price) and last_price != 0 else 0.0
+
+            budget_side = buy_budget if delta_qty > 0 else sell_budget
+            if last_price and not math.isnan(last_price) and last_price > 0:
+                budget_qty = budget_side / last_price if budget_side > 0 else float("inf")
+            else:
+                budget_qty = 0.0
+            adv_cap = max_order_pct_adv * adv20 if not math.isnan(adv20) else float("inf")
+            max_order_qty = min(max_qty_per_order, adv_cap, budget_qty)
+            if math.isnan(max_order_qty):
+                max_order_qty = 0.0
+            max_order_qty = max(0.0, float(max_order_qty))
+
+            slice_count = 0
+            slice_qty = 0
+            abs_delta = abs(delta_qty)
+            if abs_delta > 0 and not math.isnan(adv20) and adv20 > 0:
+                slice_count = max(1, int(math.ceil(abs_delta / (slice_adv_ratio * adv20))))
+                slice_qty = _round_to_lot(abs_delta / slice_count)
+            fills_info = fills_summary.get(ticker, {"qty": 0.0, "wap": float("nan")})
+            rows.append(
+                {
+                    "Ticker": ticker,
+                    "TargetQty": float(target_qty),
+                    "CurrentQty": float(current_qty),
+                    "DeltaQty": float(delta_qty),
+                    "MaxOrderQty": float(max_order_qty),
+                    "SliceCount": int(slice_count),
+                    "SliceQty": int(slice_qty),
+                    "LiquidityScore": float(liquidity_score) if not math.isnan(liquidity_score) else float("nan"),
+                    "VolatilityScore": float(volatility_score),
+                    "TodayFilledQty": float(fills_info["qty"]),
+                    "TodayWAP": float(fills_info["wap"]),
+                }
+            )
+        df = pd.DataFrame(
+            rows,
+            columns=[
+                "Ticker",
+                "TargetQty",
+                "CurrentQty",
+                "DeltaQty",
+                "MaxOrderQty",
+                "SliceCount",
+                "SliceQty",
+                "LiquidityScore",
+                "VolatilityScore",
+                "TodayFilledQty",
+                "TodayWAP",
+            ],
+        )
+        return df
+
+    def _summarise_fills(self, fills: pd.DataFrame) -> Dict[str, Dict[str, float]]:
+        if fills.empty:
+            return {}
+        if "Ticker" not in fills.columns or "Qty" not in fills.columns or "Price" not in fills.columns:
+            LOGGER.warning("Fills missing columns, ignoring")
+            return {}
+        summaries: Dict[str, Dict[str, float]] = {}
+        grouped = fills.groupby("Ticker")
+        for ticker, grp in grouped:
+            qty = float(grp["Qty"].sum())
+            wap = float((grp["Qty"] * grp["Price"]).sum() / qty) if qty else float("nan")
+            summaries[str(ticker).upper()] = {"qty": qty, "wap": wap}
+        return summaries
+
+    def _initial_risk_flags(
+        self,
+        snapshot: pd.DataFrame,
+        blocklisted: Dict[str, str],
+        band_flags: Dict[str, set[str]],
+        rule_flags: Dict[str, set[str]],
+    ) -> Dict[str, set[str]]:
+        result: Dict[str, set[str]] = {}
+        for row in snapshot.itertuples(index=False):
+            ticker = str(row.Ticker).upper()
+            guards: set[str] = set()
+            if ticker in blocklisted:
+                guards.add("BLOCKLIST")
+            atr = getattr(row, "ATR14", float("nan"))
+            last = getattr(row, "Last", float("nan"))
+            adv = getattr(row, "ADV20", float("nan"))
+            if math.isnan(atr) or atr == 0:
+                guards.add("ZERO_ATR")
+            if math.isnan(last) or last == 0:
+                guards.add("ZERO_LAST")
+            if math.isnan(adv) or adv == 0:
+                guards.add("LOW_LIQ")
+            if ticker in band_flags:
+                guards.update(band_flags[ticker])
+            if ticker in rule_flags:
+                guards.update(rule_flags[ticker])
+            result[ticker] = guards
+        return result
+
+    def _build_signals(
+        self,
+        snapshot: pd.DataFrame,
+        trading_bands: pd.DataFrame,
+        sectors: pd.DataFrame,
+        news: pd.DataFrame,
+        risk_flags: Dict[str, set[str]],
+    ) -> pd.DataFrame:
+        band_lookup = trading_bands.set_index("Ticker").to_dict(orient="index")
+        sector_lookup = {}
+        if not sectors.empty and "Sector" in sectors.columns and "PNLPct" in sectors.columns:
+            for row in sectors.itertuples(index=False):
+                sector_lookup[str(getattr(row, "Sector", ""))] = float(getattr(row, "PNLPct", 0.0))
+        news_lookup = {}
+        if not news.empty and "Ticker" in news.columns:
+            latest = news.sort_values("AsOf" if "AsOf" in news.columns else "Ticker")
+            for row in latest.itertuples(index=False):
+                ticker = str(getattr(row, "Ticker", "")).upper()
+                score = float(getattr(row, "Score", 0.0)) if "Score" in news.columns else 0.0
+                flags = str(getattr(row, "Flags", "")) if "Flags" in news.columns else ""
+                news_lookup[ticker] = (score, flags)
+
+        rows: List[Dict[str, object]] = []
+        for row in snapshot.itertuples(index=False):
+            ticker = str(row.Ticker).upper()
+            bands = band_lookup.get(ticker, {})
+            ceil = bands.get("Ceil")
+            floor = bands.get("Floor")
+            last = getattr(row, "Last", float("nan"))
+            atr = getattr(row, "ATR14", float("nan"))
+            band_distance = 0.0
+            if not math.isnan(atr) and atr > 0 and ceil is not None and floor is not None and not math.isnan(last):
+                band_distance = min((ceil - last) / atr, (last - floor) / atr)
+                band_distance = max(0.0, band_distance)
+            momentum_score = self._momentum_fit(row)
+            meanrev_score = self._meanrev_fit(row, floor)
+            balanced_score = (momentum_score + meanrev_score) / 2.0
+            news_score, news_flags = news_lookup.get(ticker, (0.0, ""))
+            sector_bias = 0
+            sector_name = getattr(row, "Sector", "") if hasattr(row, "Sector") else ""
+            if sector_name in sector_lookup:
+                pnl_pct = sector_lookup[sector_name]
+                if pnl_pct >= 5:
+                    sector_bias = 2
+                elif pnl_pct >= 2:
+                    sector_bias = 1
+                elif pnl_pct <= -5:
+                    sector_bias = -2
+                elif pnl_pct <= -2:
+                    sector_bias = -1
+            guards = sorted(risk_flags.get(ticker, set()))
+            rows.append(
+                {
+                    "Ticker": ticker,
+                    "PresetFitMomentum": round(momentum_score, 4),
+                    "PresetFitMeanRev": round(meanrev_score, 4),
+                    "PresetFitBalanced": round(balanced_score, 4),
+                    "BandDistance": round(band_distance, 4),
+                    "NewsScore": round(news_score, 4),
+                    "EventFlags": news_flags,
+                    "SectorBias": sector_bias,
+                    "RiskGuards": "|".join(guards) if guards else "",
+                }
+            )
+        return pd.DataFrame(
+            rows,
+            columns=[
+                "Ticker",
+                "PresetFitMomentum",
+                "PresetFitMeanRev",
+                "PresetFitBalanced",
+                "BandDistance",
+                "NewsScore",
+                "EventFlags",
+                "SectorBias",
+                "RiskGuards",
+            ],
+        )
+
+    def _momentum_fit(self, row: pd.Series) -> float:
+        score = 0.0
+        count = 0
+        rsi = getattr(row, "RSI14", float("nan"))
+        ret20 = getattr(row, "Ret20d", float("nan"))
+        macd = getattr(row, "MACD", float("nan"))
+        macd_signal = getattr(row, "MACDSignal", float("nan"))
+        if not math.isnan(rsi):
+            count += 1
+            if rsi > 55:
+                score += 1
+        if not math.isnan(ret20):
+            count += 1
+            if ret20 > 0:
+                score += 1
+        if not math.isnan(macd) and not math.isnan(macd_signal):
+            count += 1
+            if macd > macd_signal:
+                score += 1
+        return score / count if count else 0.0
+
+    def _meanrev_fit(self, row: pd.Series, floor: Optional[float]) -> float:
+        z20 = getattr(row, "Z20", float("nan"))
+        last = getattr(row, "Last", float("nan"))
+        floor_val = floor if floor is not None else float("nan")
+        scores: List[float] = []
+        if not math.isnan(z20):
+            scores.append(1.0 if z20 <= -0.5 else 0.0)
+        if not math.isnan(last) and not math.isnan(floor_val):
+            diff = last - floor_val
+            scores.append(1.0 if diff <= 1 else 0.0)
+        return sum(scores) / len(scores) if scores else 0.0
+
+    def _build_orders(
+        self,
+        snapshot: pd.DataFrame,
+        trading_bands: pd.DataFrame,
+        levels: pd.DataFrame,
+        sizing: pd.DataFrame,
+        signals: pd.DataFrame,
+        params: Dict[str, object],
+        risk_flags: Dict[str, set[str]],
+    ) -> Tuple[pd.DataFrame, Dict[str, set[str]]]:
+        level_lookup = levels.set_index(["Ticker", "Preset"]).to_dict(orient="index")
+        bands_lookup = trading_bands.set_index("Ticker").to_dict(orient="index")
+        sizing_lookup = sizing.set_index("Ticker").to_dict(orient="index")
+        signal_lookup = signals.set_index("Ticker").to_dict(orient="index")
+
+        aggressiveness = str(params.get("aggressiveness", "low")).lower()
+        buy_budget = float(params.get("buy_budget_vnd", 0.0))
+        buy_spent = 0.0
+
+        rows: List[Dict[str, object]] = []
+        additional_flags: Dict[str, set[str]] = {ticker: set(flags) for ticker, flags in risk_flags.items()}
+
+        for row in sizing.itertuples(index=False):
+            ticker = str(row.Ticker)
+            delta = float(getattr(row, "DeltaQty", 0.0))
+            if delta == 0:
+                continue
+            side = "BUY" if delta > 0 else "SELL"
+            guards = additional_flags.setdefault(ticker, set())
+            if "BLOCKLIST" in guards:
+                continue
+            if "LOW_LIQ" in guards and abs(delta) > 100:
+                continue
+            band = bands_lookup.get(ticker)
+            if not band:
+                continue
+            floor = Decimal(str(band.get("Floor")))
+            ceil = Decimal(str(band.get("Ceil")))
+            tick = Decimal(str(band.get("TickSize", "0.01")))
+
+            signal_view = dict(signal_lookup.get(ticker, {}))
+            if ticker in sizing_lookup:
+                signal_view.setdefault("VolatilityScore", sizing_lookup[ticker].get("VolatilityScore", 0.0))
+            preset_choice = self._select_preset_for_side(side, signal_view)
+            level = level_lookup.get((ticker, preset_choice))
+            if not level:
+                continue
+            if side == "BUY":
+                base_price = level.get("NearTouchBuy")
+            else:
+                base_price = level.get("NearTouchSell")
+            if _is_nan(base_price):
+                continue
+            price = Decimal(str(base_price))
+
+            price = self._apply_aggressiveness(
+                price,
+                tick,
+                floor,
+                ceil,
+                side,
+                aggressiveness,
+                signal_view,
+            )
+
+            clamped_price = _clamp_to_band(price, floor, ceil)
+            if clamped_price != price:
+                guards.add("CLAMPED")
+                price = clamped_price
+
+            if price == floor or price == ceil:
+                guards.add("NEAR_LIMIT")
+
+            slice_qty = int(getattr(row, "SliceQty", 0))
+            if slice_qty <= 0:
+                slice_qty = _round_to_lot(abs(delta)) or 0
+            total_qty = min(abs(delta), float(getattr(row, "MaxOrderQty", abs(delta))))
+            total_qty = min(total_qty, 500000)
+            total_qty = _round_to_lot(total_qty)
+            if total_qty == 0:
+                continue
+            order_qty = min(total_qty, slice_qty if slice_qty else total_qty)
+            order_qty = _round_to_lot(order_qty)
+            if order_qty == 0:
+                continue
+
+            vnd_value = float(price) * order_qty
+            if side == "BUY":
+                if buy_spent + vnd_value > buy_budget:
+                    remaining = buy_budget - buy_spent
+                    if remaining <= 0:
+                        continue
+                    order_qty = _round_to_lot(remaining / float(price))
+                    if order_qty == 0:
+                        continue
+                    vnd_value = float(price) * order_qty
+                buy_spent += vnd_value
+            else:
+                sell_volume += vnd_value
+
+            rows.append(
+                {
+                    "Ticker": ticker,
+                    "Side": side,
+                    "Quantity": int(order_qty),
+                    "LimitPrice": int(_kvnd(price)),
+                }
+            )
+
+        df = pd.DataFrame(rows, columns=["Ticker", "Side", "Quantity", "LimitPrice"])
+        return df, additional_flags
+
+    def _select_preset_for_side(self, side: str, signal: Dict[str, object]) -> str:
+        candidates = {
+            "BUY": [
+                (signal.get("PresetFitMomentum", 0.0), "momentum"),
+                (signal.get("PresetFitMeanRev", 0.0), "mean_reversion"),
+                (signal.get("PresetFitBalanced", 0.0), "balanced"),
+            ],
+            "SELL": [
+                (signal.get("PresetFitMomentum", 0.0), "momentum"),
+                (signal.get("PresetFitBalanced", 0.0), "balanced"),
+                (signal.get("PresetFitMeanRev", 0.0), "risk_off"),
+            ],
+        }
+        ranked = sorted(candidates.get(side, []), key=lambda item: float(item[0]), reverse=True)
+        for _, preset in ranked:
+            return preset
+        return "balanced"
+
+    def _apply_aggressiveness(
+        self,
+        price: Decimal,
+        tick: Decimal,
+        floor: Decimal,
+        ceil: Decimal,
+        side: str,
+        aggressiveness: str,
+        signal: Dict[str, object],
+    ) -> Decimal:
+        adjustment = Decimal("0")
+        news_score = Decimal(str(signal.get("NewsScore", 0.0)))
+        band_distance = Decimal(str(signal.get("BandDistance", 0.0)))
+        volatility = Decimal(str(signal.get("VolatilityScore", 0.0))) if "VolatilityScore" in signal else Decimal("0")
+
+        if aggressiveness == "med":
+            if volatility > Decimal("0.05") or news_score < Decimal("0"):
+                adjustment = -tick if side == "BUY" else tick
+        elif aggressiveness == "high":
+            if news_score > Decimal("0") and band_distance > Decimal("1"):
+                adjustment = tick if side == "BUY" else -tick
+        return _clamp_to_band(price + adjustment, floor, ceil)
+
+    def _update_signals_with_flags(
+        self, signals: pd.DataFrame, new_flags: Dict[str, set[str]]
+    ) -> pd.DataFrame:
+        if signals.empty:
+            return signals
+        signals = signals.copy()
+        guard_lookup = {ticker: "|".join(sorted(flags)) if flags else "" for ticker, flags in new_flags.items()}
+        signals["RiskGuards"] = signals["Ticker"].map(lambda t: guard_lookup.get(t, ""))
+        return signals
+
+    # ------------------------------------------------------------------
+    # Manifest & bundling
+    def _validate_outputs(self, specs: Sequence[OutputSpec]) -> None:
+        for spec in specs:
+            if not spec.path.exists():
+                raise EngineError(f"Missing output: {spec.name} at {spec.path}")
+            actual_columns = list(spec.dataframe.columns)
+            expected_columns = list(spec.expected_columns)
+            if actual_columns != expected_columns:
+                raise EngineError(
+                    f"Output {spec.name} columns mismatch. Expected {expected_columns}, got {actual_columns}"
+                )
+            if spec.require_rows and spec.dataframe.empty:
+                raise EngineError(f"Output {spec.name} must contain at least one row")
+            if spec.path.stat().st_size == 0:
+                raise EngineError(f"Output {spec.name} produced an empty file at {spec.path}")
+
+    def _write_manifest(
+        self,
+        cfg: EngineConfig,
+        snapshot: pd.DataFrame,
+        presets: Dict[str, pd.DataFrame],
+        params: Dict[str, object],
+    ) -> Dict[str, object]:
+        source_files = [
+            cfg.technical_snapshot_path,
+            cfg.portfolio_holdings_path,
+            cfg.portfolio_positions_path,
+            cfg.portfolio_sector_path,
+            cfg.fills_path,
+            cfg.universe_path,
+            cfg.blocklist_path,
+            cfg.params_path,
+        ]
+        for preset in cfg.presets_dir.glob("*.csv"):
+            source_files.append(preset)
+        if cfg.news_score_path.exists():
+            source_files.append(cfg.news_score_path)
+        params_hash = hashlib.sha256(cfg.params_path.read_bytes()).hexdigest() if cfg.params_path.exists() else ""
+        manifest = {
+            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "source_files": sorted({_as_repo_relative(p, default=str(p), repo_root=cfg.repo_root) for p in source_files if p.exists()}),
+            "params_hash": params_hash,
+        }
+        cfg.run_manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        return manifest
+
+    def _validate_manifest(self, path: Path) -> None:
+        if not path.exists():
+            raise EngineError(f"Manifest not found at {path}")
+        data = json.loads(path.read_text(encoding="utf-8"))
+        required_keys = {"generated_at", "source_files", "params_hash"}
+        missing = required_keys - set(data.keys())
+        if missing:
+            raise EngineError(f"Manifest missing keys: {sorted(missing)}")
+        if not isinstance(data.get("source_files"), list):
+            raise EngineError("Manifest source_files must be a list")
+
+    def _bundle_outputs(self, cfg: EngineConfig, files: Sequence[Path]) -> AttachmentBundleResult:
+        bundle_path = cfg.bundle_dir / "attachments_latest.zip"
+        found: List[Path] = []
+        missing: List[Path] = []
+        with zipfile.ZipFile(bundle_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for path in files:
+                if not path.exists():
+                    missing.append(path)
+                    continue
+                arcname = _as_repo_relative(path, default=path.name, repo_root=cfg.repo_root)
+                archive.write(path, arcname)
+                found.append(Path(arcname))
+        return AttachmentBundleResult(path=bundle_path, files=found, missing=missing)
+
+
+# ----------------------------------------------------------------------
+# Utility helpers
+def _decimal(value: object) -> Optional[Decimal]:
+    try:
+        if value is None or (isinstance(value, float) and math.isnan(value)):
+            return None
+        return Decimal(str(value))
+    except Exception:  # pragma: no cover - defensive
+        return None
+
+
+def _tick_size(price: Decimal) -> Decimal:
+    if price < Decimal("10"):
+        return Decimal("0.01")
+    if price < Decimal("50"):
+        return Decimal("0.05")
+    return Decimal("0.10")
+
+
+def _floor_to_tick(value: Decimal, tick: Decimal) -> Decimal:
+    return (value / tick).to_integral_value(rounding=ROUND_DOWN) * tick
+
+
+def _ceil_to_tick(value: Decimal, tick: Decimal) -> Decimal:
+    return (value / tick).to_integral_value(rounding=ROUND_UP) * tick
+
+
+def _round_to_tick(value: Decimal, tick: Decimal) -> Decimal:
+    return (value / tick).to_integral_value(rounding=ROUND_HALF_UP) * tick
+
+
+def _clamp_to_band(value: Decimal, floor: Decimal, ceil: Decimal) -> Decimal:
+    if value < floor:
+        return floor
+    if value > ceil:
+        return ceil
+    return value
+
+
+def _kvnd(price: Decimal | float | int) -> int:
+    value = Decimal(str(price)) / Decimal("1000")
+    return int(value.to_integral_value(rounding=ROUND_HALF_UP))
+
+
+def _float_or_blank(value: Optional[Decimal]) -> object:
+    return float(value) if value is not None else ""
+
+
+def _is_nan(value: object) -> bool:
+    try:
+        return math.isnan(float(value))
+    except Exception:
+        return False
+
+
+def _weighted_sum(pairs: Sequence[Tuple[Decimal, Optional[Decimal]]]) -> Optional[Decimal]:
+    total_weight = Decimal("0")
+    total = Decimal("0")
+    for weight, value in pairs:
+        if value is None:
+            continue
+        total_weight += weight
+        total += weight * value
+    if total_weight == 0:
+        return None
+    return total / total_weight
+
+
+def _round_to_lot(quantity: float) -> int:
+    if quantity <= 0:
+        return 0
+    lots = round(quantity / 100.0)
+    return int(lots * 100)
 
 
 def _find_repo_root(start: Path) -> Path:
@@ -244,484 +1125,53 @@ def _find_repo_root(start: Path) -> Path:
     return start
 
 
-def _resolve_path(candidate: str, config_dir: Path, repo_root: Path) -> Path:
-    if not isinstance(candidate, str):
-        raise ConfigurationError(f"Expected string path, got {type(candidate).__name__}")
-    path = Path(candidate)
+def _resolve_path(candidate: object, config_dir: Path, repo_root: Path) -> Path:
+    if isinstance(candidate, Path):
+        path = candidate
+    elif isinstance(candidate, str):
+        path = Path(candidate)
+    else:
+        raise EngineError(f"Expected string path, got {type(candidate).__name__}")
     if path.is_absolute():
         return path.resolve()
-
-    config_candidate = (config_dir / path).resolve()
+    config_resolved = (config_dir / path).resolve()
     try:
-        config_candidate.relative_to(repo_root)
+        config_resolved.relative_to(repo_root)
     except ValueError:
-        raise ConfigurationError(
+        raise EngineError(
             f"Path '{candidate}' escapes repository root {repo_root}. Use absolute paths for external locations."
         )
-    if config_candidate.exists():
-        return config_candidate
+    if config_resolved.exists():
+        return config_resolved
 
-    root_candidate = (repo_root / path).resolve()
+    root_resolved = (repo_root / path).resolve()
     try:
-        root_candidate.relative_to(repo_root)
+        root_resolved.relative_to(repo_root)
     except ValueError:
-        raise ConfigurationError(
+        raise EngineError(
             f"Path '{candidate}' escapes repository root {repo_root}. Use absolute paths for external locations."
         )
-    return root_candidate
+    return root_resolved
 
 
-class MarketDataService(Protocol):
-    """Interface for loading market data."""
-
-    def load_history(self, tickers: Sequence[str]) -> pd.DataFrame:  # pragma: no cover - protocol definition
-        ...
-
-    def load_intraday(self, tickers: Sequence[str]) -> pd.DataFrame:  # pragma: no cover - protocol definition
-        ...
-
-
-class VndirectMarketDataService:
-    """Production data source backed by VNDIRECT APIs."""
-
-    def __init__(self, config: EngineConfig) -> None:
-        self._config = config
-
-    def load_history(self, tickers: Sequence[str]) -> pd.DataFrame:
-        if not tickers:
-            return pd.DataFrame(columns=["Date", "Ticker", "Open", "High", "Low", "Close", "Volume", "t"])
-        return ensure_and_load_history_df(
-            list(tickers),
-            outdir=str(self._config.market_cache_dir),
-            min_days=self._config.history_min_days,
-            resolution="D",
-        )
-
-    def load_intraday(self, tickers: Sequence[str]) -> pd.DataFrame:
-        if not tickers:
-            return pd.DataFrame(columns=["Ticker", "Ts", "Price", "RSI14", "TimeVN"])
-        return ensure_intraday_latest_df(list(tickers), window_minutes=self._config.intraday_window_minutes)
-
-
-class TechnicalSnapshotBuilder:
-    def __init__(self, config: EngineConfig) -> None:
-        self._config = config
-
-    def build(self, history_df: pd.DataFrame, intraday_df: pd.DataFrame, industry_df: pd.DataFrame) -> pd.DataFrame:
-        if history_df.empty:
-            raise RuntimeError("No historical prices available to build technical snapshot")
-        if "Ticker" not in history_df.columns:
-            raise ValueError("History dataframe missing 'Ticker' column")
-        if "Close" not in history_df.columns:
-            raise ValueError("History dataframe missing 'Close' column")
-        intraday_lookup = {
-            str(row.Ticker).upper(): row for row in intraday_df.itertuples(index=False)
-        }
-        industry_lookup = {}
-        if "Ticker" in industry_df.columns:
-            sector_col = "Sector" if "Sector" in industry_df.columns else None
-            for row in industry_df.itertuples(index=False):
-                ticker = str(getattr(row, "Ticker")).upper()
-                sector = getattr(row, sector_col) if sector_col else None
-                industry_lookup[ticker] = sector
-        rows: List[Dict[str, object]] = []
-        for ticker, ticker_df in history_df.groupby("Ticker"):
-            ticker = str(ticker).upper()
-            series = ticker_df.sort_values("t" if "t" in ticker_df.columns else "Date").reset_index(drop=True)
-            if series.empty:
-                continue
-            last = series.iloc[-1]
-            last_close = float(last.get("Close", float("nan")))
-            last_volume = float(last.get("Volume", 0.0)) if not pd.isna(last.get("Volume")) else 0.0
-            prev_close = float("nan")
-            if len(series) >= 2:
-                prev = series.iloc[-2]
-                prev_close = float(prev.get("Close", float("nan")))
-            close_series = pd.to_numeric(series["Close"], errors="coerce")
-            high_series = pd.to_numeric(series.get("High"), errors="coerce") if "High" in series else close_series
-            low_series = pd.to_numeric(series.get("Low"), errors="coerce") if "Low" in series else close_series
-            vol_series = pd.to_numeric(series.get("Volume"), errors="coerce") if "Volume" in series else pd.Series([float("nan")]*len(close_series))
-
-            data: Dict[str, object] = {
-                "Ticker": ticker,
-                "Sector": industry_lookup.get(ticker, ""),
-                "LastClose": last_close,
-                "PreviousClose": prev_close,
-                "Volume": last_volume,
-            }
-            if ticker in intraday_lookup:
-                snap = intraday_lookup[ticker]
-                price = float(getattr(snap, "Price", last_close) or last_close)
-                updated = getattr(snap, "TimeVN", "")
-                source = "intraday"
-            else:
-                price = last_close
-                updated = str(last.get("Date", ""))
-                source = "close"
-            data["LastPrice"] = price
-            if not pd.isna(prev_close) and prev_close:
-                data["ChangePct"] = (price / prev_close - 1.0) * 100.0
-            else:
-                data["ChangePct"] = float("nan")
-            data["LastUpdated"] = updated
-            data["PriceSource"] = source
-
-            for window in self._config.moving_averages:
-                if window <= 0:
-                    continue
-                col = f"SMA_{window}"
-                if len(close_series) >= window:
-                    data[col] = float(ma(close_series, window).iloc[-1])
-                else:
-                    data[col] = float("nan")
-            # EMA
-            for period in self._config.ema_periods:
-                if period <= 0:
-                    continue
-                col = f"EMA_{period}"
-                if len(close_series) >= period:
-                    data[col] = float(ema(close_series, period).iloc[-1])
-                else:
-                    data[col] = float("nan")
-            for period in self._config.rsi_periods:
-                if period <= 0:
-                    continue
-                col = f"RSI_{period}"
-                if len(close_series) > period:
-                    data[col] = float(rsi_wilder(close_series, period).iloc[-1])
-                else:
-                    data[col] = float("nan")
-            for period in self._config.atr_periods:
-                if period <= 0:
-                    continue
-                col = f"ATR_{period}"
-                if len(close_series) > period:
-                    atr_val = float(atr_wilder(high_series, low_series, close_series, period).iloc[-1])
-                    data[col] = atr_val
-                    # ATR percentage vs last price
-                    if last_close and not pd.isna(last_close) and last_close != 0:
-                        data[f"ATRPct_{period}"] = atr_val / last_close * 100.0
-                    else:
-                        data[f"ATRPct_{period}"] = float("nan")
-                else:
-                    data[col] = float("nan")
-                    data[f"ATRPct_{period}"] = float("nan")
-            if len(close_series) >= max(self._config.macd_fast, self._config.macd_slow):
-                data["MACD_Hist"] = float(
-                    macd_hist(
-                        close_series,
-                        fast=self._config.macd_fast,
-                        slow=self._config.macd_slow,
-                        signal=self._config.macd_signal,
-                    ).iloc[-1]
-                )
-            else:
-                data["MACD_Hist"] = float("nan")
-            # Bollinger and z-score
-            for w in self._config.bollinger_windows:
-                if w <= 1:
-                    continue
-                if len(close_series) >= w:
-                    sma_w = ma(close_series, w).iloc[-1]
-                    std_w = pd.to_numeric(close_series, errors="coerce").rolling(w).std().iloc[-1]
-                    if pd.isna(sma_w) or pd.isna(std_w) or std_w == 0:
-                        data[f"Z_{w}"] = float("nan")
-                    else:
-                        data[f"Z_{w}"] = float((last_close - float(sma_w)) / float(std_w))
-                    if self._config.bollinger_include_bands:
-                        k = self._config.bollinger_k
-                        data[f"BBU_{w}_{int(k)}"] = float(sma_w + k * std_w) if not pd.isna(sma_w) and not pd.isna(std_w) else float("nan")
-                        data[f"BBL_{w}_{int(k)}"] = float(sma_w - k * std_w) if not pd.isna(sma_w) and not pd.isna(std_w) else float("nan")
-                else:
-                    data[f"Z_{w}"] = float("nan")
-                    if self._config.bollinger_include_bands:
-                        k = self._config.bollinger_k
-                        data[f"BBU_{w}_{int(k)}"] = float("nan")
-                        data[f"BBL_{w}_{int(k)}"] = float("nan")
-            # Rolling returns
-            for p in self._config.returns_periods:
-                if p <= 0:
-                    continue
-                col = f"Return_{p}"
-                if len(close_series) > p and close_series.iloc[-p-1] and not pd.isna(close_series.iloc[-p-1]):
-                    base = float(close_series.iloc[-p-1])
-                    data[col] = (last_close / base - 1.0) * 100.0 if base else float("nan")
-                else:
-                    data[col] = float("nan")
-            # ADV periods
-            for p in self._config.adv_periods:
-                if p <= 0:
-                    continue
-                col = f"ADV_{p}"
-                if len(vol_series) >= p:
-                    data[col] = float(pd.to_numeric(vol_series, errors="coerce").rolling(p).mean().iloc[-1])
-                else:
-                    data[col] = float("nan")
-            # 52-week range context (close-based hi/lo)
-            L = self._config.range_lookback_days
-            if L > 1 and len(high_series) >= 1:
-                # Use High/Low if available; fallback to Close
-                window = min(L, len(high_series))
-                max_hi = float(pd.concat([high_series.tail(window)], axis=1).max().iloc[-1]) if "High" in series else float(close_series.tail(window).max())
-                min_lo = float(pd.concat([low_series.tail(window)], axis=1).min().iloc[-1]) if "Low" in series else float(close_series.tail(window).min())
-                data["Hi_252"] = max_hi if L == 252 else max_hi
-                data["Lo_252"] = min_lo if L == 252 else min_lo
-                if max_hi and not pd.isna(max_hi):
-                    data["PctFromHi_252"] = (last_close / max_hi - 1.0) * 100.0
-                else:
-                    data["PctFromHi_252"] = float("nan")
-                if min_lo and not pd.isna(min_lo):
-                    data["PctToLo_252"] = (last_close / min_lo - 1.0) * 100.0
-                else:
-                    data["PctToLo_252"] = float("nan")
-            rows.append(data)
-        snapshot = pd.DataFrame(rows)
-        snapshot = snapshot.sort_values("Ticker").reset_index(drop=True)
-        return snapshot
-
-
-class PresetWriter:
-    def __init__(self, presets: Dict[str, PresetConfig], output_dir: Path, shortlist: Optional[ShortlistFilterConfig] = None) -> None:
-        self._presets = presets
-        self._output_dir = output_dir
-        self._shortlist = shortlist
-
-    def write(self, snapshot: pd.DataFrame) -> None:
-        self._output_dir.mkdir(parents=True, exist_ok=True)
-        base_cols = ["Ticker", "Sector", "LastPrice", "LastClose", "PriceSource"]
-        if self._shortlist and self._shortlist.enabled and not snapshot.empty:
-            before = len(snapshot)
-            snapshot = self._apply_shortlist(snapshot)
-            LOGGER.info("Shortlist filter: %d -> %d tickers", before, len(snapshot))
-        for name, preset in self._presets.items():
-            if snapshot.empty:
-                df = pd.DataFrame(columns=base_cols)
-            else:
-                df = snapshot[base_cols].copy()
-                for idx, adj in enumerate(preset.buy_tiers, start=1):
-                    col = f"Buy_{idx}"
-                    df[col] = (df["LastPrice"] * (1.0 + float(adj))).round(4)
-                for idx, adj in enumerate(preset.sell_tiers, start=1):
-                    col = f"Sell_{idx}"
-                    df[col] = (df["LastPrice"] * (1.0 + float(adj))).round(4)
-            out_path = self._output_dir / f"{name}.csv"
-            df.to_csv(out_path, index=False)
-
-    def _apply_shortlist(self, snapshot: pd.DataFrame) -> pd.DataFrame:
-        cfg = self._shortlist
-        assert cfg is not None  # guarded by caller
-        df = snapshot.copy()
-        # Normalize tickers for overrides
-        keep = set(cfg.normalized_keep())
-        ban = set(cfg.normalized_exclude())
-        df["Ticker"] = df["Ticker"].astype(str).str.upper()
-
-        # Manual banlist first
-        manual_ban_mask = df["Ticker"].isin(ban) if ban else pd.Series([False] * len(df), index=df.index)
-
-        # Compose technical weakness conditions (safe with missing columns)
-        def col(name: str) -> pd.Series:
-            return pd.to_numeric(df.get(name, pd.Series([float("nan")] * len(df), index=df.index)), errors="coerce")
-
-        last_price = col("LastPrice")
-        rsi14 = col("RSI_14")
-        sma50 = col("SMA_50")
-        sma200 = col("SMA_200")
-        ret20 = col("Return_20")
-        ret60 = col("Return_60")
-        pct_to_lo = col("PctToLo_252")
-        adv20 = col("ADV_20")
-
-        conds: List[pd.Series] = []
-        # Avoid invalid comparisons by checking threshold presence
-        if cfg.rsi14_max is not None:
-            conds.append(rsi14 <= float(cfg.rsi14_max))
-        if cfg.max_pct_to_lo_252 is not None:
-            conds.append(pct_to_lo <= float(cfg.max_pct_to_lo_252))
-        if cfg.return20_max is not None:
-            conds.append(ret20 <= float(cfg.return20_max))
-        if cfg.return60_max is not None:
-            conds.append(ret60 <= float(cfg.return60_max))
-        if cfg.require_below_sma50_and_200:
-            below_ma = (last_price < sma50) & (last_price < sma200)
-            conds.append(below_ma)
-        if cfg.min_adv_20 is not None:
-            conds.append(adv20 <= float(cfg.min_adv_20))
-
-        if not conds:
-            # No active conditions -> nothing to filter except manual banlist/keep
-            drop_mask = manual_ban_mask
-        else:
-            # Combine conditions conservatively
-            combined = conds[0]
-            for c in conds[1:]:
-                if cfg.drop_logic_all:
-                    combined = combined & c
-                else:
-                    combined = combined | c
-            # NaNs in any condition should not force a drop; treat as False
-            combined = combined.fillna(False)
-            drop_mask = combined | manual_ban_mask
-
-        # Keep-list overrides any drop
-        if keep:
-            drop_mask = drop_mask & (~df["Ticker"].isin(keep))
-
-        kept_df = df[~drop_mask].reset_index(drop=True)
-        return kept_df
-
-
-class PortfolioReporter:
-    def __init__(self, config: EngineConfig, industry_df: pd.DataFrame) -> None:
-        self._config = config
-        self._industry = industry_df
-
-    def refresh(self, snapshot: pd.DataFrame) -> None:
-        portfolios_dir = self._config.portfolio_dir
-        if not portfolios_dir.exists():
-            LOGGER.info("Portfolio directory %s does not exist; skipping reports", portfolios_dir)
-            return
-        snapshot_lookup = snapshot.set_index("Ticker") if not snapshot.empty else pd.DataFrame().set_index([])
-        sector_lookup = {}
-        if "Ticker" in self._industry.columns:
-            for row in self._industry.itertuples(index=False):
-                ticker = str(getattr(row, "Ticker")).upper()
-                sector = getattr(row, "Sector", "") if hasattr(row, "Sector") else ""
-                sector_lookup[ticker] = sector
-        self._config.portfolios_dir.mkdir(parents=True, exist_ok=True)
-        for file in sorted(portfolios_dir.glob("*.csv")):
-            profile = file.stem
-            try:
-                portfolio_df = pd.read_csv(file)
-            except Exception as exc:  # pragma: no cover - defensive path
-                LOGGER.warning("Failed to read portfolio %s: %s", file, exc)
-                continue
-            if portfolio_df.empty:
-                continue
-            if "Ticker" not in portfolio_df.columns or "Quantity" not in portfolio_df.columns or "AvgPrice" not in portfolio_df.columns:
-                LOGGER.warning("Portfolio %s missing required columns", file)
-                continue
-            portfolio_df["Ticker"] = portfolio_df["Ticker"].astype(str).str.upper()
-            portfolio_df["Quantity"] = pd.to_numeric(portfolio_df["Quantity"], errors="coerce").fillna(0.0)
-            portfolio_df["AvgPrice"] = pd.to_numeric(portfolio_df["AvgPrice"], errors="coerce").fillna(0.0)
-            portfolio_df = portfolio_df[portfolio_df["Quantity"] != 0]
-            if portfolio_df.empty:
-                continue
-            merged = portfolio_df.merge(snapshot, on="Ticker", how="left")
-            merged["Sector"] = merged["Sector"].fillna(merged["Ticker"].map(sector_lookup))
-            merged["LastPrice"] = pd.to_numeric(merged["LastPrice"], errors="coerce")
-            merged["LastClose"] = pd.to_numeric(merged["LastClose"], errors="coerce")
-            merged["LastPrice"] = merged["LastPrice"].fillna(merged["LastClose"])
-            merged["MarketValue"] = merged["Quantity"] * merged["LastPrice"].fillna(0.0)
-            merged["CostBasis"] = merged["Quantity"] * merged["AvgPrice"].fillna(0.0)
-            merged["UnrealizedPnL"] = merged["MarketValue"] - merged["CostBasis"]
-            merged["UnrealizedPct"] = merged.apply(
-                lambda row: ((row["LastPrice"] / row["AvgPrice"] - 1.0) * 100.0) if row["AvgPrice"] else float("nan"),
-                axis=1,
-            )
-            positions_path = self._config.portfolios_dir / f"{profile}_positions.csv"
-            merged.to_csv(positions_path, index=False)
-            sector_summary = merged.groupby(merged["Sector"].fillna("Không rõ"), dropna=False).agg(
-                Quantity=("Quantity", "sum"),
-                MarketValue=("MarketValue", "sum"),
-                CostBasis=("CostBasis", "sum"),
-                UnrealizedPnL=("UnrealizedPnL", "sum"),
-            )
-            sector_summary["UnrealizedPct"] = sector_summary.apply(
-                lambda row: ((row["MarketValue"] / row["CostBasis"] - 1.0) * 100.0) if row["CostBasis"] else float("nan"),
-                axis=1,
-            )
-            sector_summary = sector_summary.reset_index().rename(columns={"index": "Sector"})
-            sector_path = self._config.portfolios_dir / f"{profile}_sector.csv"
-            sector_summary.to_csv(sector_path, index=False)
-
-
-class DataEngine:
-    """Coordinates data collection, indicator computation, and report generation."""
-
-    def __init__(self, config: EngineConfig, data_service: MarketDataService) -> None:
-        self._config = config
-        self._data_service = data_service
-
-    def run(self) -> Dict[str, object]:
-        self._prepare_directories()
-        universe_df = self._load_universe()
-        tickers = self._resolve_tickers(universe_df)
-        LOGGER.info("Processing %d tickers", len(tickers))
-        history_df = self._data_service.load_history(tickers)
-        intraday_df = self._data_service.load_intraday(tickers)
-        snapshot_builder = TechnicalSnapshotBuilder(self._config)
-        snapshot = snapshot_builder.build(history_df, intraday_df, universe_df)
-        self._write_market_snapshot(snapshot)
-        PresetWriter(self._config.presets, self._config.presets_dir, self._config.shortlist_filter).write(snapshot)
-        PortfolioReporter(self._config, universe_df).refresh(snapshot)
-        return {
-            "tickers": len(tickers),
-            "snapshot_rows": len(snapshot),
-            "output": str(self._config.market_snapshot_path),
-        }
-
-    def _prepare_directories(self) -> None:
-        self._config.output_base_dir.mkdir(parents=True, exist_ok=True)
-        self._config.presets_dir.mkdir(parents=True, exist_ok=True)
-        self._config.portfolios_dir.mkdir(parents=True, exist_ok=True)
-        self._config.diagnostics_dir.mkdir(parents=True, exist_ok=True)
-        self._config.market_cache_dir.mkdir(parents=True, exist_ok=True)
-        self._config.portfolio_dir.mkdir(parents=True, exist_ok=True)
-        self._config.order_history_dir.mkdir(parents=True, exist_ok=True)
-
-    def _load_universe(self) -> pd.DataFrame:
-        if not self._config.universe_csv.exists():
-            raise RuntimeError(f"Universe CSV not found: {self._config.universe_csv}")
-        df = pd.read_csv(self._config.universe_csv)
-        if "Ticker" not in df.columns:
-            raise RuntimeError("Universe CSV must contain 'Ticker' column")
-        df["Ticker"] = df["Ticker"].astype(str).str.upper()
-        if not self._config.include_indices:
-            df = df[~df["Ticker"].str.contains("VNINDEX|VN30|VN100", na=False)]
-        return df
-
-    def _resolve_tickers(self, universe_df: pd.DataFrame) -> List[str]:
-        tickers = set(universe_df["Ticker"].tolist())
-        if self._config.portfolio_dir.exists():
-            for file in self._config.portfolio_dir.glob("*.csv"):
-                try:
-                    df = pd.read_csv(file, usecols=["Ticker"])
-                except Exception:
-                    continue
-                for t in df["Ticker"].dropna().astype(str):
-                    tickers.add(t.upper())
-        clean = sorted({t.strip().upper() for t in tickers if t and isinstance(t, str)})
-        return clean
-
-    def _write_market_snapshot(self, snapshot: pd.DataFrame) -> None:
-        self._config.market_snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-        snapshot.to_csv(self._config.market_snapshot_path, index=False)
+def _as_repo_relative(path: Path, default: str, repo_root: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(repo_root))
+    except Exception:
+        return default
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Collect market data and compute technical indicators")
-    parser.add_argument(
-        "--config",
-        type=Path,
-        default=Path("config/data_engine.yaml"),
-        help="Path to engine YAML configuration",
-    )
-    parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Emit summary as JSON to stdout",
-    )
+    parser = argparse.ArgumentParser(description="Run the broker data engine")
+    parser.add_argument("--config", type=Path, default=Path("config/data_engine.yaml"))
     args = parser.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
-    config = EngineConfig.from_yaml(Path(args.config))
-    service = VndirectMarketDataService(config)
-    engine = DataEngine(config, service)
+    config = EngineConfig.from_yaml(args.config)
+    engine = DataEngine(config)
     summary = engine.run()
-    if args.json:
-        print(json.dumps(summary, ensure_ascii=False))
+    print(json.dumps(summary, indent=2))
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())
+
