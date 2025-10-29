@@ -6,7 +6,7 @@
 
 Mỗi lần chạy, engine sẽ:
 
-1. Đọc `out/market/technical_snapshot.csv` (giá/indicator), toàn bộ preset trong `out/presets/*.csv`, danh mục hiện tại (`data/portfolios/<profile>.csv`), thông tin PnL/sector (`out/portfolios/<profile>_*.csv`), lịch sử fills (`data/order_history/<profile>_fills.csv`), budget trong `config/params.yaml`, blocklist và universe `data/universe/vn100.csv`.
+1. Đọc `out/market/technical_snapshot.csv` (giá/indicator), toàn bộ preset trong `out/presets/*.csv`, danh mục hiện tại (`data/portfolios/<profile>/portfolio.csv`), thông tin PnL/sector (`out/portfolios/<profile>_*.csv`), lịch sử fills (`data/portfolios/<profile>/order_history.csv`), budget trong `config/params.yaml`, blocklist và universe `data/universe/vn100.csv`.
 2. Tính toán các bảng theo đúng đặc tả v1.1:
    - `out/market/trading_bands.csv`
    - `out/signals/levels.csv`
@@ -92,7 +92,7 @@ Test chính `tests/test_data_engine.py` dựng dữ liệu giả theo hợp đ�
 ## GitHub Actions
 
 - Workflow `portfolio-engine-attachments` chạy trên mọi push hoặc khi kích hoạt thủ công (`workflow_dispatch`).
-- Nếu commit chỉ thay đổi `data/portfolios/*.csv` hoặc `data/order_history/*_fills*.csv`, workflow chỉ gọi engine cho đúng profile bị ảnh hưởng. Với các thay đổi khác, workflow chạy engine lần lượt cho tất cả profile tìm thấy dưới `data/portfolios/`.
+- Nếu commit chỉ thay đổi file trong `data/portfolios/<profile>/`, workflow chỉ gọi engine cho đúng profile bị ảnh hưởng. Với các thay đổi khác, workflow chạy engine lần lượt cho tất cả profile tìm thấy dưới `data/portfolios/`.
 - Pipeline setup Python 3.11, in ra toàn bộ CSV dưới `data/portfolios/` để bạn đối chiếu danh mục gốc, chạy `./broker.sh engine --profile <profile>` theo logic trên, sau đó upload artifact `.artifacts/engine/<profile>_attachments_latest.zip` với thời hạn lưu 3 ngày để bạn tải trực tiếp từ trang run.
 
 ## Lưu ý

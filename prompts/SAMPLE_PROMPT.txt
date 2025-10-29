@@ -6,10 +6,10 @@ Danh sách các file:
   3) out/presets/momentum.csv — mức bậc mua/bán theo preset momentum
   4) out/presets/mean_reversion.csv — mức bậc mua/bán theo preset mean_reversion (pullback)
   5) out/presets/risk_off.csv — mức bậc bán/giảm tỷ trọng theo preset risk_off (de‑leverage/trim)
-  6) data/portfolios/{{PROFILE}}.csv — danh mục hiện tại (Ticker, Quantity, AvgPrice)
+  6) data/portfolios/{{PROFILE}}/portfolio.csv — danh mục hiện tại (Ticker, Quantity, AvgPrice)
   7) out/portfolios/{{PROFILE}}_positions.csv — PnL theo mã, MarketValue/CostBasis/Unrealized
   8) out/portfolios/{{PROFILE}}_sector.csv — tổng hợp PnL theo ngành
-  9) data/order_history/{{PROFILE}}_fills.csv — các lệnh đã khớp trong hôm nay
+  9) data/portfolios/{{PROFILE}}/order_history.csv — các lệnh đã khớp trong hôm nay
 
 Nguyên tắc hoạt động:
 - Các file này nằm trong public repo github.com/minhhai2209/broker-gpt-3. Thiếu bất kỳ file nào: trả về thông báo lỗi ngắn gọn và dừng.

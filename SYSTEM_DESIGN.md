@@ -9,9 +9,9 @@ Phiên bản này hiện thực hợp đồng BROKER-GPT-3 (v1.1, elaborated). E
 ```
 inputs (out/market/technical_snapshot.csv,
         out/presets/*.csv,
-        data/portfolios/<profile>.csv,
+        data/portfolios/<profile>/portfolio.csv,
         out/portfolios/{<profile>_positions,<profile>_sector}.csv,
-        data/order_history/<profile>_fills.csv,
+        data/portfolios/<profile>/order_history.csv,
         data/universe/vn100.csv,
         config/{params.yaml,blocklist.csv},
         out/news/news_score.csv?)
@@ -43,7 +43,7 @@ outputs (out/market/trading_bands.csv,
     bundle: .artifacts/engine
   ```
 - Mọi đường dẫn được chuẩn hoá, bảo đảm không “thoát” repo. `bundle_dir` mặc định `.artifacts/engine/` (được git-ignore) và được tạo sẵn.
-- Các property của config cung cấp đường dẫn cố định cho input/output theo hợp đồng và thay đổi theo `profile` (ví dụ `data/portfolios/<profile>.csv`).
+- Các property của config cung cấp đường dẫn cố định cho input/output theo hợp đồng và thay đổi theo `profile` (ví dụ `data/portfolios/<profile>/portfolio.csv`).
 
 ### DataEngine.run()
 
@@ -99,5 +99,5 @@ outputs (out/market/trading_bands.csv,
 - Nếu cần tạo lệnh thật, bổ sung chiến lược đặt `TargetQty` trước khi chạy engine (ví dụ tạo file trung gian và thay đổi phần `_build_sizing`).
 - Để attach cho ChatGPT, chỉ cần lấy `.artifacts/engine/<profile>_attachments_latest.zip` (đã gồm các CSV quan trọng).
 - Không có network call trong engine → chạy deterministically, dễ kiểm soát kết quả.
-- Workflow CI `portfolio-engine-attachments` chạy trên mọi push. Nếu commit chỉ ảnh hưởng `data/portfolios/*.csv` hoặc `data/order_history/*_fills*.csv` thì chỉ gọi `./broker.sh engine --profile <profile>` cho những profile bị đổi; ngược lại chạy tuần tự cho tất cả profile tìm thấy trong `data/portfolios/`. Artifact `.artifacts/engine/<profile>_attachments_latest.zip` được upload với retention 3 ngày.
+- Workflow CI `portfolio-engine-attachments` chạy trên mọi push. Nếu commit chỉ ảnh hưởng file trong `data/portfolios/<profile>/` thì chỉ gọi `./broker.sh engine --profile <profile>` cho những profile bị đổi; ngược lại chạy tuần tự cho tất cả profile tìm thấy trong `data/portfolios/`. Artifact `.artifacts/engine/<profile>_attachments_latest.zip` được upload với retention 3 ngày.
 - `data/universe/vn100.csv` được tạo lại mỗi lần gọi engine thông qua script `scripts.tools.build_universe` (đọc `data/industry_map.csv`).

@@ -19,7 +19,6 @@ class DataEngineContractTest(unittest.TestCase):
         (self.repo / ".git").mkdir()
         (self.repo / "config").mkdir()
         (self.repo / "data" / "portfolios").mkdir(parents=True)
-        (self.repo / "data" / "order_history").mkdir(parents=True)
         (self.repo / "data" / "universe").mkdir(parents=True)
         (self.repo / "out" / "market").mkdir(parents=True)
         (self.repo / "out" / "presets").mkdir()
@@ -31,6 +30,7 @@ class DataEngineContractTest(unittest.TestCase):
 
     def _write_csv(self, path: Path, rows: list[dict]) -> None:
         df = pd.DataFrame(rows)
+        path.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(path, index=False)
 
     def test_engine_generates_contract_outputs(self) -> None:
@@ -106,7 +106,7 @@ paths:
         )
 
         self._write_csv(
-            self.repo / "data" / "portfolios" / "alpha.csv",
+            self.repo / "data" / "portfolios" / "alpha" / "portfolio.csv",
             [{"Ticker": "AAA", "Quantity": 100, "AvgPrice": 22.0}, {"Ticker": "BBB", "Quantity": 0, "AvgPrice": 0.0}],
         )
         self._write_csv(
@@ -118,7 +118,7 @@ paths:
             [{"Sector": "Tech", "MarketValue": 5000000, "PNLPct": 6.0}, {"Sector": "Finance", "MarketValue": 1000000, "PNLPct": -3.0}],
         )
         self._write_csv(
-            self.repo / "data" / "order_history" / "alpha_fills.csv",
+            self.repo / "data" / "portfolios" / "alpha" / "order_history.csv",
             [
                 {
                     "Time": "2024-07-01T09:15:00+07:00",
@@ -244,7 +244,7 @@ paths:
         )
 
         self._write_csv(
-            self.repo / "data" / "portfolios" / "alpha.csv",
+            self.repo / "data" / "portfolios" / "alpha" / "portfolio.csv",
             [{"Ticker": "AAA", "Quantity": 100, "AvgPrice": 22.0}],
         )
         self._write_csv(
@@ -256,7 +256,7 @@ paths:
             [{"Sector": "Tech", "MarketValue": 5000000, "PNLPct": 6.0}],
         )
         self._write_csv(
-            self.repo / "data" / "order_history" / "alpha_fills.csv",
+            self.repo / "data" / "portfolios" / "alpha" / "order_history.csv",
             [
                 {
                     "Time": "2024-07-01T09:15:00+07:00",

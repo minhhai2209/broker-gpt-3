@@ -99,7 +99,7 @@ class EngineConfig:
 
     @property
     def portfolio_holdings_path(self) -> Path:
-        return self.data_dir / "portfolios" / f"{self.profile}.csv"
+        return self.data_dir / "portfolios" / self.profile / "portfolio.csv"
 
     @property
     def portfolio_positions_path(self) -> Path:
@@ -111,7 +111,7 @@ class EngineConfig:
 
     @property
     def fills_path(self) -> Path:
-        return self.data_dir / "order_history" / f"{self.profile}_fills.csv"
+        return self.data_dir / "portfolios" / self.profile / "order_history.csv"
 
     @property
     def params_path(self) -> Path:

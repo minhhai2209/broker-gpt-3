@@ -30,11 +30,7 @@ jobs:
           profiles=()
           other=0
           for file in "${files[@]}"; do
-            if [[ "$file" =~ ^data/portfolios/([^/]+)\.csv$ ]]; then
-              profiles+=("${BASH_REMATCH[1]}")
-              continue
-            fi
-            if [[ "$file" =~ ^data/order_history/([^/_]+)_fills ]]; then
+            if [[ "$file" =~ ^data/portfolios/([^/]+)/ ]]; then
               profiles+=("${BASH_REMATCH[1]}")
               continue
             fi
@@ -60,11 +56,14 @@ jobs:
         run: |
           shopt -s nullglob
           found=false
-          for file in data/portfolios/*.csv; do
-            found=true
-            echo "===== $file ====="
-            cat "$file"
-            echo ""
+          for dir in data/portfolios/*/; do
+            file="$dir/portfolio.csv"
+            if [ -f "$file" ]; then
+              found=true
+              echo "===== $file ====="
+              cat "$file"
+              echo ""
+            fi
           done
           if [ "$found" = false ]; then
             echo "No portfolio CSV files found under data/portfolios" >&2
@@ -75,8 +74,11 @@ jobs:
         if: steps.changes.outputs.mode == 'all'
         run: |
           shopt -s nullglob
-          for file in data/portfolios/*.csv; do
-            profile="$(basename "$file" .csv)"
+          for dir in data/portfolios/*/; do
+            profile="$(basename "$dir")"
+            if [ ! -f "$dir/portfolio.csv" ]; then
+              continue
+            fi
             echo "[ci] Running engine for $profile"
             ./broker.sh engine --profile "$profile"
           done

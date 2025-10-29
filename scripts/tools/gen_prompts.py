@@ -16,10 +16,12 @@ def repo_root() -> Path:
 def scan_profiles(portfolios_dir: Path) -> List[str]:
     if not portfolios_dir.exists():
         return []
-    names = []
-    for f in sorted(portfolios_dir.glob("*.csv")):
-        if f.is_file():
-            names.append(f.stem)
+    names: List[str] = []
+    for profile_dir in sorted(portfolios_dir.iterdir()):
+        if not profile_dir.is_dir():
+            continue
+        if (profile_dir / "portfolio.csv").exists():
+            names.append(profile_dir.name)
     return names
 
 def render_template(template_text: str, profile: str) -> str:
@@ -48,7 +50,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     else:
         profiles = scan_profiles(portfolios_dir)
     if not profiles:
-        print("[prompts] No profiles found; create data/portfolios/<profile>.csv first", file=sys.stderr)
+        print(
+            "[prompts] No profiles found; create data/portfolios/<profile>/portfolio.csv first",
+            file=sys.stderr,
+        )
         return 2
 
     for profile in profiles:
