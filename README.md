@@ -7,9 +7,9 @@
 Data engine được thiết kế lại để làm đúng một việc: chuẩn bị dữ liệu sạch cho ChatGPT (hoặc bất kỳ công cụ phân tích nào khác) sử dụng. Mỗi lần chạy engine sẽ:
 
 1. Thu thập dữ liệu lịch sử và intraday cho toàn bộ vũ trụ mã.
-2. Tính toán sẵn các chỉ báo kỹ thuật cơ bản và ghi vào một file CSV duy nhất (`out/technical_snapshot.csv`).
-3. Tính toán các mức giá mua/bán theo từng preset và xuất thành từng file CSV riêng (`out/preset_<preset>.csv`).
-4. Đọc danh mục hiện có của từng tài khoản, tổng hợp lãi/lỗ rồi đóng gói cùng snapshot/preset thành bundle phẳng `out/bundle_<profile>.zip`.
+2. Chuẩn hoá snapshot kỹ thuật (`out/technical.csv`) với SMA/EMA/RSI/ATR/MACD, lợi suất và biên độ 52w.
+3. Tính biên trần/sàn, mức giá giao dịch, sizing, tín hiệu preset-fit và thông số vận hành (`out/bands.csv`, `out/levels.csv`, `out/sizing.csv`, `out/signals.csv`, `out/limits.csv`).
+4. Làm giàu danh mục/sector theo giá hiện tại (`out/positions.csv`, `out/sector.csv`) và đóng gói 8 file phẳng vào `out/bundle_<profile>.zip`.
 5. Giữ nguyên lịch sử khớp lệnh dạng CSV trong `data/order_history/` (không xoá).
 
 Không còn bước tạo lệnh tự động, không còn phụ thuộc Vietstock, không còn overlay policy. Bạn chủ động đọc các file CSV và đưa ra quyết định.
@@ -38,7 +38,7 @@ technical_indicators:
   ema_periods: [20, 50]
   rsi_periods: [14]
   atr_periods: [14]
-  returns_periods: [20, 60]
+  returns_periods: [5, 20, 60]
   bollinger:
     windows: [20]
     k: 2
@@ -49,37 +49,22 @@ technical_indicators:
     fast: 12
     slow: 26
     signal: 9
-presets:
-  balanced:
-    buy_tiers: [-0.03, -0.02, -0.01]
-    sell_tiers: [0.02, 0.04, 0.06]
 portfolio:
   directory: data/portfolios     # Mỗi tài khoản là 1 thư mục: <profile>/portfolio.csv
   order_history_directory: data/order_history
 output:
   base_dir: out
-  market_snapshot: technical_snapshot.csv
   presets_dir: .
   portfolios_dir: .
+execution:
+  aggressiveness: med
+  max_order_pct_adv: 0.1
+  slice_adv_ratio: 0.25
+  min_lot: 100
+  max_qty_per_order: 500000
 ```
 
-Bạn có thể chỉnh preset (tỷ lệ ± so với giá hiện tại), đường dẫn output hoặc bổ sung chỉ báo tuỳ nhu cầu.
-
-### Shortlist cho presets (tuỳ chọn nhưng bật sẵn)
-
-Để chỉ loại các mã “xấu hẳn” khỏi danh sách cân nhắc, engine hỗ trợ bộ lọc bảo thủ cho presets. Cấu hình tại `filters.shortlist` trong `config/data_engine.yaml`:
-
-- `enabled`: bật/tắt shortlist.
-- Điều kiện “rất yếu” (mặc định yêu cầu hội tụ tất cả):
-  - `RSI_14` ≤ `rsi14_max` (mặc định 25)
-  - `PctToLo_252` ≤ `max_pct_to_lo_252` (mặc định 2%) — giá sát đáy 52w
-  - `Return_20` ≤ `return20_max` (mặc định -15%) và `Return_60` ≤ `return60_max` (mặc định -25%)
-  - Giá dưới cả `SMA_50` và `SMA_200`
-  - (tuỳ chọn) `ADV_20` ≤ `min_adv_20` để loại mã quá kém thanh khoản
-- `drop_logic_all`: nếu `true` (mặc định), chỉ loại khi tất cả điều kiện cùng thoả.
-- `keep`/`exclude`: danh sách mã luôn giữ lại/luôn loại bỏ (mặc định để trống). Ví dụ: có thể thêm `FPT` vào `keep` nếu muốn minh hoạ, nhưng không bật sẵn để tránh lọc quá “aggressive”.
-
-Mục tiêu là giảm nhiễu, không làm nghèo vũ trụ cơ hội; vì vậy mặc định bộ lọc rất bảo thủ.
+Bạn có thể tinh chỉnh tham số chỉ báo, đường dẫn output hoặc giới hạn sizing (`execution`) tuỳ nhu cầu.
 
 ## Cách chạy
 
@@ -91,7 +76,7 @@ Mục tiêu là giảm nhiễu, không làm nghèo vũ trụ cơ hội; vì vậ
 
 Chuỗi mặc định sẽ chạy:
 - `tcbs --headful` để lấy danh mục (và lệnh khớp hôm nay, mặc định bật).
-- `engine` để cập nhật snapshot kỹ thuật, preset và báo cáo danh mục.
+- `engine` để cập nhật snapshot kỹ thuật và bộ file output (bands/levels/sizing/signals/limits/positions/sector).
 
 ### Engine (chạy riêng)
 
@@ -103,8 +88,8 @@ Engine sẽ:
 
 - Gọi API VNDIRECT để cập nhật giá lịch sử + intraday.
 - Tính SMA/RSI/ATR/MACD theo cấu hình.
-- Xuất các file CSV đã nêu ở trên.
-- Xoá sạch thư mục `out/` trước khi chạy để tính toán lại toàn bộ (bao gồm preset/báo cáo danh mục). Sau khi chạy xong, engine đóng gói các file phẳng theo `prompts/PROMPT.txt` thành `out/bundle_<profile>.zip` (mỗi profile một file).
+- Xuất 8 file CSV chuẩn hoá: `technical.csv`, `bands.csv`, `levels.csv`, `sizing.csv`, `signals.csv`, `limits.csv`, `positions.csv`, `sector.csv`.
+- Xoá sạch thư mục `out/` trước khi chạy để tính toán lại toàn bộ. Sau khi chạy xong, engine đóng gói 8 file này thành `out/bundle_<profile>.zip` (mỗi profile một file, không thêm portfolio/fills).
 
 ### Lấy danh mục + lệnh khớp hôm nay (TCBS, Playwright)
 
@@ -155,10 +140,15 @@ Test bao gồm:
 
 | File | Ý nghĩa |
 | ---- | ------- |
-| `out/technical_snapshot.csv` | Bảng tổng hợp theo mã: giá hiện tại, thay đổi %, SMA/RSI/ATR/MACD, sector |
-| (mở rộng) | EMA_*, ATRPct_*, Return_*, Z_*, Hi_252, Lo_252, PctFromHi_252, PctToLo_252, ADV_* |
-| `out/preset_<preset>.csv` | Mỗi preset một file; chứa giá mua/bán theo từng bậc |
-| `out/bundle_<profile>.zip` | Gói phẳng: `technical_snapshot.csv`, `preset_*.csv`, `portfolio.csv`, `positions.csv`, `sector.csv`, `fills.csv` |
+| `out/technical.csv` | Snapshot kỹ thuật chuẩn hoá: Last/Ref, SMA20/50/200, EMA20, RSI14, ATR14, MACD, Ret5d/Ret20d, ADV20, 52w range |
+| `out/bands.csv` | Tick hợp lệ và giá trần/sàn HOSE theo bước giá chuẩn |
+| `out/levels.csv` | Mức NearTouch/Opp cho các preset mặc định (momentum, mean_reversion, balanced, risk_off) |
+| `out/sizing.csv` | Quy mô mục tiêu, lát cắt, điểm thanh khoản/biến động cho từng mã |
+| `out/signals.csv` | Điểm phù hợp preset-fit và risk guard kỹ thuật (LOW_LIQ, ZERO_ATR, NEAR_LIMIT, ... ) |
+| `out/limits.csv` | Tham số vận hành engine: aggressiveness, max_order_pct_adv, slice_adv_ratio, min_lot, max_qty_per_order |
+| `out/positions.csv` | Danh mục hiện tại đã enrich: MarketValue_kVND, CostBasis_kVND, Unrealized_kVND, PNLPct |
+| `out/sector.csv` | Tổng hợp giá trị/PNL theo ngành và trọng số trong danh mục |
+| `out/bundle_<profile>.zip` | Gói phẳng đúng 8 file trên cho từng profile (không đính kèm portfolio hoặc fills) |
 | `data/order_history/<profile>/fills.csv` | Lệnh khớp hôm nay (do scraper TCBS ghi) |
 | `data/order_history/<profile>/fills_all.csv` | Bảng lệnh khớp đã chuẩn hoá đầy đủ |
 

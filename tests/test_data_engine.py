@@ -57,19 +57,20 @@ class DataEngineTest(unittest.TestCase):
                 fast: 2
                 slow: 3
                 signal: 2
-            presets:
-              sample:
-                buy_tiers: [-0.1]
-                sell_tiers: [0.1]
             portfolio:
               directory: {portfolio_dir}
               order_history_directory: {order_dir}
             output:
               base_dir: {out_dir}
-              market_snapshot: technical.csv
               presets_dir: .
               portfolios_dir: .
               diagnostics_dir: .
+            execution:
+              aggressiveness: med
+              max_order_pct_adv: 0.1
+              slice_adv_ratio: 0.25
+              min_lot: 100
+              max_qty_per_order: 500000
             data:
               history_cache: {cache_dir}
               history_min_days: 1
@@ -111,26 +112,76 @@ class DataEngineTest(unittest.TestCase):
         config = EngineConfig.from_yaml(config_path)
         engine = DataEngine(config, FakeMarketDataService(history_df, intraday_df))
         summary = engine.run()
-        snapshot_path = config.market_snapshot_path
-        self.assertTrue(snapshot_path.exists())
-        snapshot = pd.read_csv(snapshot_path)
-        self.assertIn("SMA_2", snapshot.columns)
-        self.assertEqual(len(snapshot), 2)
-        presets_path = config.presets_dir / "preset_sample.csv"
-        self.assertTrue(presets_path.exists())
-        presets_df = pd.read_csv(presets_path)
-        self.assertIn("Buy_1", presets_df.columns)
-        self.assertAlmostEqual(presets_df.loc[0, "Buy_1"], round(presets_df.loc[0, "LastPrice"] * 0.9, 4))
-        bundle_path = config.output_base_dir / "bundle_alpha.zip"
+
+        out_dir = config.output_base_dir
+        technical_path = out_dir / "technical.csv"
+        bands_path = out_dir / "bands.csv"
+        levels_path = out_dir / "levels.csv"
+        sizing_path = out_dir / "sizing.csv"
+        signals_path = out_dir / "signals.csv"
+        limits_path = out_dir / "limits.csv"
+        positions_path = out_dir / "positions.csv"
+        sector_path = out_dir / "sector.csv"
+
+        for path in [
+            technical_path,
+            bands_path,
+            levels_path,
+            sizing_path,
+            signals_path,
+            limits_path,
+            positions_path,
+            sector_path,
+        ]:
+            self.assertTrue(path.exists(), f"Missing output: {path}")
+
+        technical_df = pd.read_csv(technical_path)
+        self.assertIn("Z20", technical_df.columns)
+        self.assertEqual(len(technical_df), 2)
+        aaa_row = technical_df.loc[technical_df["Ticker"] == "AAA"].iloc[0]
+        self.assertAlmostEqual(aaa_row["Last"], 12.5)
+        self.assertAlmostEqual(aaa_row["Ref"], 12.0)
+        self.assertAlmostEqual(aaa_row["ChangePct"], 12.5 / 12.0 - 1.0, places=6)
+
+        bands_df = pd.read_csv(bands_path)
+        aaa_band = bands_df.loc[bands_df["Ticker"] == "AAA"].iloc[0]
+        self.assertAlmostEqual(aaa_band["Ceil"], 12.8)
+        self.assertAlmostEqual(aaa_band["Floor"], 11.2)
+
+        sizing_df = pd.read_csv(sizing_path)
+        self.assertTrue((sizing_df["DeltaQty"] == 0).all())
+        self.assertTrue((sizing_df["SliceCount"] == 0).all())
+
+        positions_df = pd.read_csv(positions_path)
+        self.assertIn("PNLPct", positions_df.columns)
+        self.assertEqual(len(positions_df), 2)
+        self.assertAlmostEqual(
+            positions_df.loc[positions_df["Ticker"] == "AAA", "Last"].iloc[0], 12.5
+        )
+
+        bundle_path = out_dir / "bundle_alpha.zip"
         self.assertTrue(bundle_path.exists())
         with zipfile.ZipFile(bundle_path) as zf:
             names = set(zf.namelist())
-            self.assertIn("technical.csv", names)
-            self.assertIn("preset_sample.csv", names)
-            self.assertIn("positions.csv", names)
-            positions_df = pd.read_csv(zf.open("positions.csv"))
-            self.assertIn("UnrealizedPnL", positions_df.columns)
-            self.assertAlmostEqual(positions_df.loc[0, "LastPrice"], 12.5)
+            self.assertEqual(
+                names,
+                {
+                    "technical.csv",
+                    "bands.csv",
+                    "levels.csv",
+                    "sizing.csv",
+                    "signals.csv",
+                    "limits.csv",
+                    "positions.csv",
+                    "sector.csv",
+                },
+            )
+            positions_zip = pd.read_csv(zf.open("positions.csv"))
+            self.assertIn("PNLPct", positions_zip.columns)
+            self.assertAlmostEqual(
+                positions_zip.loc[positions_zip["Ticker"] == "AAA", "Last"].iloc[0], 12.5
+            )
+
         self.assertGreater(summary["tickers"], 0)
 
 

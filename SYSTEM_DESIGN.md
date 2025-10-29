@@ -4,7 +4,7 @@
 
 Phiên bản này bỏ hoàn toàn order engine. Toàn bộ hệ thống chỉ còn các thành phần sau:
 
-1. **Engine thu thập dữ liệu** (`scripts/engine/data_engine.py`): tải dữ liệu giá, tính chỉ số kỹ thuật, sinh preset và cập nhật báo cáo danh mục. Khi khởi chạy, engine sẽ xoá sạch `out/` để đảm bảo kết quả mới; kết thúc sẽ tạo bundle phẳng theo `prompts/PROMPT.txt` tại `out/bundle_<profile>.zip` (mỗi profile một file).
+1. **Engine thu thập dữ liệu** (`scripts/engine/data_engine.py`): tải dữ liệu giá, tính chỉ số kỹ thuật, dựng bands/levels/sizing/signals/limits và cập nhật báo cáo danh mục/sector. Khi khởi chạy, engine sẽ xoá sạch `out/`; kết thúc sẽ ghi 8 file CSV chuẩn hoá rồi đóng gói phẳng theo `prompts/PROMPT.txt` tại `out/bundle_<profile>.zip` (mỗi profile một file).
 2. **Kho dữ liệu danh mục** (`data/portfolios/`, `data/order_history/`): lưu trữ danh mục hiện tại và lịch sử khớp lệnh của từng tài khoản.
 3. **TCBS Scraper** (`scripts/scrapers/tcbs.py`): đăng nhập TCBS bằng Playwright, ghi `data/portfolios/<profile>/portfolio.csv` và mặc định thu thập các lệnh đã khớp trong hôm nay vào `data/order_history/<profile>/fills.csv` (kèm bản đầy đủ `fills_all.csv`). Có thể tắt bằng `--no-fills`.
 4. (Tạm thời vô hiệu) GitHub Action: trước đây workflow tại `.github/workflows/data-engine.yml` chạy engine định kỳ và commit kết quả. Hiện đã gỡ; chạy local thay thế.
@@ -41,10 +41,10 @@ Mọi quyết định giao dịch sẽ do người vận hành xử lý dựa tr
 
 - `universe.csv` – nguồn danh sách mã + sector.
 - `technical_indicators` – cấu hình SMA/RSI/ATR/MACD.
-- `presets` – mỗi preset gồm `buy_tiers` và `sell_tiers` (tỷ lệ so với giá hiện tại).
 - `portfolio.directory` – thư mục chứa danh mục từng tài khoản.
 - `order_history_directory` – thư mục append lịch sử khớp lệnh.
-- `output` – vị trí ghi market snapshot, preset và báo cáo danh mục.
+- `output` – vị trí ghi các file CSV chuẩn hoá (default `out/`).
+- `execution` – tham số sizing (aggressiveness, max_order_pct_adv, slice_adv_ratio, min lot, max qty/order).
 - `data.history_cache` – nơi cache dữ liệu lịch sử.
 
 Mọi đường dẫn được chuẩn hoá thành `Path.resolve()`. Thiếu trường bắt buộc sẽ raise `ConfigurationError` (fail-fast).
@@ -56,39 +56,23 @@ Mọi đường dẫn được chuẩn hoá thành `Path.resolve()`. Thiếu tr�
 
 ### TechnicalSnapshotBuilder
 
-- Ghép dữ liệu lịch sử và intraday, tính các chỉ số kỹ thuật.
+- Ghép dữ liệu lịch sử và intraday, tính snapshot kỹ thuật chuẩn hoá.
 - Với mỗi ticker:
-  - `LastPrice` = intraday nếu có, ngược lại lấy `Close` cuối cùng.
-  - `ChangePct` = phần trăm so với phiên trước.
-  - `SMA_<n>`/`RSI_<n>`/`ATR_<n>`/`MACD_Hist` theo config.
+  - `Last` = giá intraday nếu có, fallback `Close` cuối cùng; `Ref` = `LastClose`.
+  - `ChangePct` = (Last/Ref − 1) ở dạng thập phân.
+  - `SMA_20/50/200`, `EMA_20`, `RSI_14`, `ATR_14`, `MACD`, `MACDSignal`, `MACD_Hist`.
+  - `Return_5`/`Return_20` (dạng phần trăm trong snapshot, được chuẩn hoá thành số thập phân khi ghi `technical.csv`).
+  - `ADV_20`, `Hi_252`, `Lo_252`, Z-score (`Z_20`).
   - `Sector` lấy từ universe.
-- Output: `out/technical_snapshot.csv` (một dòng/mã, đầy đủ các cột kỹ thuật và thời gian cập nhật).
-
-### PresetWriter
-
-- Đọc snapshot, tạo file cho từng preset dưới dạng `out/preset_<preset>.csv`.
-- Mỗi file gồm `Ticker`, `Sector`, `LastPrice`, `LastClose`, `PriceSource`, các cột `Buy_i`, `Sell_i` (round 4 chữ số).
-- Mô tả preset được trình bày trong prompt mẫu (không lặp lại dưới dạng cột trong CSV để tránh dư thừa).
-
-#### Shortlist (lọc bảo thủ, chỉ loại mã rất yếu)
-
-- Nếu khai báo `filters.shortlist.enabled: true` trong `config/data_engine.yaml`, `PresetWriter` sẽ áp dụng một mask bảo thủ để loại các mã “xấu hẳn” khỏi mọi file preset.
-- Điều kiện mặc định (yêu cầu hội tụ tất cả):
-  - `RSI_14` ≤ 25,
-  - `PctToLo_252` ≤ 2 (% so với đáy 52w),
-  - `Return_20` ≤ -15% và `Return_60` ≤ -25%,
-  - `LastPrice` < `SMA_50` và `LastPrice` < `SMA_200`.
-- Có thể bật thêm ngưỡng thanh khoản `ADV_20` (mặc định tắt).
-- `keep`/`exclude` cho phép override thủ công (ví dụ: có thể thêm `FPT` nếu cần minh hoạ). Mặc định để trống để tránh dùng override một cách chủ quan.
-- Thiết kế hướng đến tính quyết định và ổn định: thiếu cột nào thì điều kiện tương ứng không kích hoạt (không fail), nhưng engine vẫn fail-fast với lỗi cấu hình YAML.
+- Output trung gian giữ nguyên dưới dạng DataFrame; writer `_build_technical_output` chuyển thành `out/technical.csv` (một dòng/mã, chỉ giữ các cột chính nêu trong spec).
 
 ### PortfolioReporter
 
 - Đọc từng danh mục `data/portfolios/<profile>/portfolio.csv` (schema: `Ticker,Quantity,AvgPrice`).
-- Hợp nhất với snapshot để xác định `LastPrice` và sector.
-- Tính toán:
-  - `MarketValue`, `CostBasis`, `UnrealizedPnL`, `UnrealizedPct`.
-- Xuất `positions.csv` và `sector.csv` vào bundle `out/bundle_<profile>.zip`.
+- Hợp nhất với snapshot để xác định `Last`, `Sector`, tính `MarketValue_kVND`, `CostBasis_kVND`, `Unrealized_kVND`, `PNLPct`.
+- Sinh hai tầng kết quả:
+  - Theo profile: DataFrame vị thế + tổng hợp sector (sử dụng khi ghi bundle `bundle_<profile>.zip`).
+  - Tổng hợp toàn bộ profile: `aggregate_positions` (gộp theo ticker) và `aggregate_sector` (gộp theo sector) để ghi `out/positions.csv` và `out/sector.csv`.
 - Không chạm vào file danh mục gốc; chỉ đọc.
 
 ### TCBS Scraper
