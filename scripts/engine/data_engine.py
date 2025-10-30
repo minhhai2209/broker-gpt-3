@@ -6,6 +6,7 @@ import json
 import logging
 import math
 from dataclasses import dataclass
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP
 import shutil
 import zipfile
@@ -112,6 +113,8 @@ class EngineConfig:
     min_lot: int
     max_qty_per_order: int
     shortlist_filter: Optional[ShortlistFilterConfig]
+    # Optional CSV to override exchange reference prices used for bands
+    reference_overrides_csv: Optional[Path] = None
 
     @classmethod
     def from_yaml(cls, path: Path) -> "EngineConfig":
@@ -188,6 +191,10 @@ class EngineConfig:
         market_cache_dir = _resolve_path(data_cfg.get("history_cache", "out/data"), config_dir, repo_root)
         history_min_days = int(data_cfg.get("history_min_days", 400))
         intraday_window_minutes = int(data_cfg.get("intraday_window_minutes", 12 * 60))
+        ref_override_raw = data_cfg.get("reference_overrides")
+        reference_overrides_csv: Optional[Path] = None
+        if ref_override_raw:
+            reference_overrides_csv = _resolve_path(str(ref_override_raw), config_dir, repo_root)
 
         execution_cfg = data.get("execution", {}) or {}
         if not isinstance(execution_cfg, dict):
@@ -264,6 +271,7 @@ class EngineConfig:
             min_lot=min_lot,
             max_qty_per_order=max_qty_per_order,
             shortlist_filter=shortlist_filter,
+            reference_overrides_csv=reference_overrides_csv,
         )
 
 
@@ -409,6 +417,28 @@ class TechnicalSnapshotBuilder:
                 ticker = str(getattr(row, "Ticker")).upper()
                 sector = getattr(row, sector_col) if sector_col else None
                 industry_lookup[ticker] = sector
+        # Optional: load reference overrides (Ticker,Ref)
+        ref_override: Dict[str, float] = {}
+        if self._config.reference_overrides_csv:
+            ov_path = self._config.reference_overrides_csv
+            if not ov_path.exists():
+                raise RuntimeError(f"reference_overrides path not found: {ov_path}")
+            try:
+                df_ov = pd.read_csv(ov_path)
+            except Exception as exc:  # pragma: no cover - defensive read validation
+                raise RuntimeError(f"Failed to read reference_overrides CSV: {ov_path}: {exc}")
+            for col in ("Ticker", "Ref"):
+                if col not in df_ov.columns:
+                    raise RuntimeError("reference_overrides CSV must have columns: Ticker,Ref")
+            for r in df_ov.itertuples(index=False):
+                t = str(getattr(r, "Ticker")).strip().upper()
+                try:
+                    ref_val = float(getattr(r, "Ref"))
+                except Exception:
+                    continue
+                if t and not pd.isna(ref_val):
+                    ref_override[t] = ref_val
+
         rows: List[Dict[str, object]] = []
         for ticker, ticker_df in history_df.groupby("Ticker"):
             ticker = str(ticker).upper()
@@ -417,11 +447,23 @@ class TechnicalSnapshotBuilder:
                 continue
             last = series.iloc[-1]
             last_close = float(last.get("Close", float("nan")))
+            # Apply reference override if provided (wins over any further logic)
+            if ticker in ref_override:
+                last_close = float(ref_override[ticker])
             last_volume = float(last.get("Volume", 0.0)) if not pd.isna(last.get("Volume")) else 0.0
             prev_close = float("nan")
             if len(series) >= 2:
                 prev = series.iloc[-2]
                 prev_close = float(prev.get("Close", float("nan")))
+            # If the latest daily bar is for today (intraday partial), don't treat its close as reference.
+            # Use previous day's close for LastClose to match HOSE 'giá tham chiếu'.
+            try:
+                today_vn = datetime.now(timezone(timedelta(hours=7))).strftime('%Y-%m-%d')
+                last_date_str = str(last.get('Date', '')) if 'Date' in series.columns else ''
+                if last_date_str == today_vn and not pd.isna(prev_close) and ticker not in ref_override:
+                    last_close = prev_close
+            except Exception:
+                pass
             close_series = pd.to_numeric(series["Close"], errors="coerce")
             high_series = pd.to_numeric(series.get("High"), errors="coerce") if "High" in series else close_series
             low_series = pd.to_numeric(series.get("Low"), errors="coerce") if "Low" in series else close_series
@@ -1204,7 +1246,7 @@ class DataEngine:
         snapshot = snapshot_builder.build(history_df, intraday_df, universe_df)
         technical_df = _build_technical_output(snapshot)
         bands_df = _build_bands(technical_df)
-        levels_df = _build_levels(technical_df, bands_df)
+        # levels.csv removed from outputs; keep computation disabled
         portfolio_result = PortfolioReporter(self._config, universe_df).refresh(snapshot)
         sizing_df = _build_sizing(technical_df, portfolio_result.holdings, self._config)
         signals_df = _build_signals(technical_df, bands_df, snapshot)
@@ -1216,17 +1258,56 @@ class DataEngine:
         out_dir.mkdir(parents=True, exist_ok=True)
         technical_path = out_dir / "technical.csv"
         bands_path = out_dir / "bands.csv"
-        levels_path = out_dir / "levels.csv"
+        # levels.csv removed
         sizing_path = out_dir / "sizing.csv"
         signals_path = out_dir / "signals.csv"
         limits_path = out_dir / "limits.csv"
         positions_path = out_dir / "positions.csv"
         sector_path = out_dir / "sector.csv"
 
+        # Apply output schema trims per latest requirements
+        def _drop_by_names(df: pd.DataFrame, names: list[str]) -> pd.DataFrame:
+            if df is None or df.empty:
+                return df
+            cols = [c for c in df.columns if c not in set(names)]
+            return df[cols]
+
+        def _drop_by_prefixes(df: pd.DataFrame, prefixes: list[str]) -> pd.DataFrame:
+            if df is None or df.empty:
+                return df
+            cols = [c for c in df.columns if not any(c.startswith(pfx) for pfx in prefixes)]
+            return df[cols]
+
+        # levels.csv removed entirely – no trimming or writing
+
+        # signals.csv: drop PresetFitMomentum/MeanRev/Balanced, SectorBias, RiskGuards
+        if not signals_df.empty:
+            signals_df = _drop_by_names(
+                signals_df,
+                [
+                    "PresetFitMomentum",
+                    "PresetFitMeanRev",
+                    "PresetFitBalanced",
+                    "SectorBias",
+                    "RiskGuards",
+                ],
+            )
+
+        # sizing.csv: drop TargetQty, DeltaQty, SliceCount, SliceQty
+        if not sizing_df.empty:
+            sizing_df = _drop_by_names(
+                sizing_df,
+                [
+                    "TargetQty",
+                    "DeltaQty",
+                    "SliceCount",
+                    "SliceQty",
+                ],
+            )
+
         outputs = [
             (technical_path, technical_df),
             (bands_path, bands_df),
-            (levels_path, levels_df),
             (sizing_path, sizing_df),
             (signals_path, signals_df),
             (limits_path, limits_df),
@@ -1239,7 +1320,7 @@ class DataEngine:
 
         self._zip_prompt_files(
             portfolio_result,
-            [technical_path, bands_path, levels_path, sizing_path, signals_path, limits_path],
+            [technical_path, bands_path, sizing_path, signals_path, limits_path],
         )
         return {
             "tickers": len(tickers),

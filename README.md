@@ -8,7 +8,7 @@ Data engine được thiết kế lại để làm đúng một việc: chuẩn 
 
 1. Thu thập dữ liệu lịch sử và intraday cho toàn bộ vũ trụ mã.
 2. Chuẩn hoá snapshot kỹ thuật (`out/technical.csv`) với SMA/EMA/RSI/ATR/MACD, lợi suất và biên độ 52w.
-3. Tính biên trần/sàn, mức giá giao dịch, sizing, tín hiệu preset-fit và thông số vận hành (`out/bands.csv`, `out/levels.csv`, `out/sizing.csv`, `out/signals.csv`, `out/limits.csv`).
+3. Tính biên trần/sàn, sizing và tín hiệu phụ trợ + thông số vận hành (`out/bands.csv`, `out/sizing.csv`, `out/signals.csv`, `out/limits.csv`).
 4. Làm giàu danh mục/sector theo giá hiện tại (`out/positions.csv`, `out/sector.csv`) và đóng gói 8 file phẳng vào `out/bundle_<profile>.zip`.
 5. Giữ nguyên lịch sử khớp lệnh dạng CSV trong `data/order_history/` (không xoá).
 
@@ -62,6 +62,12 @@ execution:
   slice_adv_ratio: 0.25
   min_lot: 100
   max_qty_per_order: 500000
+data:
+  history_cache: out/data
+  history_min_days: 1
+  intraday_window_minutes: 60
+  # Optional: override HOSE reference prices when có điều chỉnh tham chiếu
+  # reference_overrides: data/reference_overrides.csv   # schema: Ticker,Ref
 ```
 
 Bạn có thể tinh chỉnh tham số chỉ báo, đường dẫn output hoặc giới hạn sizing (`execution`) tuỳ nhu cầu.
@@ -76,7 +82,7 @@ Bạn có thể tinh chỉnh tham số chỉ báo, đường dẫn output hoặc
 
 Chuỗi mặc định sẽ chạy:
 - `tcbs --headful` để lấy danh mục (và lệnh khớp hôm nay, mặc định bật).
-- `engine` để cập nhật snapshot kỹ thuật và bộ file output (bands/levels/sizing/signals/limits/positions/sector).
+- `engine` để cập nhật snapshot kỹ thuật và bộ file output (bands/sizing/signals/limits/positions/sector).
 
 ### Engine (chạy riêng)
 
@@ -88,7 +94,7 @@ Engine sẽ:
 
 - Gọi API VNDIRECT để cập nhật giá lịch sử + intraday.
 - Tính SMA/RSI/ATR/MACD theo cấu hình.
-- Xuất 8 file CSV chuẩn hoá: `technical.csv`, `bands.csv`, `levels.csv`, `sizing.csv`, `signals.csv`, `limits.csv`, `positions.csv`, `sector.csv`.
+- Xuất 7 file CSV chuẩn hoá: `technical.csv`, `bands.csv`, `sizing.csv`, `signals.csv`, `limits.csv`, `positions.csv`, `sector.csv`.
 - Xoá sạch thư mục `out/` trước khi chạy để tính toán lại toàn bộ. Sau khi chạy xong, engine đóng gói 8 file này thành `out/bundle_<profile>.zip` (mỗi profile một file, không thêm portfolio/fills).
 
 ### Lấy danh mục + lệnh khớp hôm nay (TCBS, Playwright)
@@ -142,13 +148,12 @@ Test bao gồm:
 | ---- | ------- |
 | `out/technical.csv` | Snapshot kỹ thuật chuẩn hoá: Last/Ref, SMA20/50/200, EMA20, RSI14, ATR14, MACD, Ret5d/Ret20d, ADV20, 52w range |
 | `out/bands.csv` | Tick hợp lệ và giá trần/sàn HOSE theo bước giá chuẩn |
-| `out/levels.csv` | Mức NearTouch/Opp cho các preset mặc định (momentum, mean_reversion, balanced, risk_off) |
-| `out/sizing.csv` | Quy mô mục tiêu, lát cắt, điểm thanh khoản/biến động cho từng mã |
-| `out/signals.csv` | Điểm phù hợp preset-fit và risk guard kỹ thuật (LOW_LIQ, ZERO_ATR, NEAR_LIMIT, ... ) |
+| `out/sizing.csv` | Điểm thanh khoản/biến động và giới hạn lệnh theo mã (không còn TargetQty/DeltaQty/SliceCount/SliceQty) |
+| `out/signals.csv` | Tín hiệu cơ bản: chỉ còn BandDistance (PresetFit/SectorBias/RiskGuards đã loại bỏ) |
 | `out/limits.csv` | Tham số vận hành engine: aggressiveness, max_order_pct_adv, slice_adv_ratio, min_lot, max_qty_per_order |
 | `out/positions.csv` | Danh mục hiện tại đã enrich: MarketValue_kVND, CostBasis_kVND, Unrealized_kVND, PNLPct |
 | `out/sector.csv` | Tổng hợp giá trị/PNL theo ngành và trọng số trong danh mục |
-| `out/bundle_<profile>.zip` | Gói phẳng đúng 8 file trên cho từng profile (không đính kèm portfolio hoặc fills) |
+| `out/bundle_<profile>.zip` | Gói phẳng đúng 7 file trên cho từng profile (không đính kèm portfolio hoặc fills) |
 | `data/order_history/<profile>/fills.csv` | Lệnh khớp hôm nay (do scraper TCBS ghi) |
 | `data/order_history/<profile>/fills_all.csv` | Bảng lệnh khớp đã chuẩn hoá đầy đủ |
 
@@ -185,6 +190,8 @@ Ghi chú: Mô tả preset (balanced, momentum) đã được hard-code ngay tron
 - Lô chẵn: bội số 100 cổ phiếu; khối lượng tối đa mỗi lệnh: 500.000 cổ.
 - Biên độ giá trong ngày HOSE: ±7% so với giá tham chiếu.
 - Làm tròn giá trần/sàn theo quy chế: trần làm tròn xuống, sàn làm tròn lên theo đúng đơn vị yết giá.
+
+Lưu ý về giá tham chiếu: `bands.csv` tính từ cột `Ref` trong `technical.csv` (mặc định là giá đóng cửa gần nhất). Khi sàn điều chỉnh tham chiếu do cổ tức/CP thưởng/gộp tách…, hãy cung cấp `data/reference_overrides.csv` và khai báo `data.reference_overrides` như trên để engine dùng đúng giá tham chiếu của sàn.
 
 Gợi ý kiểm tra nhanh (giá báo theo nghìn đồng):
 - `p_vnd = round(LimitPrice * 1000)`, chọn `tick` theo bảng trên tại mức `p_vnd`.

@@ -5,22 +5,20 @@ Danh sách các file (được đóng gói phẳng trong cùng một thư mục)
      Cột: Ticker, Last, Ref, ChangePct, SMA20, SMA50, SMA200, EMA20, RSI14, ATR14, MACD, MACDSignal, Z20, Ret5d, Ret20d, ADV20, High52w, Low52w
   2) bands.csv — biên độ tham chiếu theo quy tắc sàn/trần và bước giá
      Cột: Ticker, Ref, Ceil, Floor, TickSize
-  3) levels.csv — mức near-touch/opportunistic đề xuất theo preset
-     Cột: Ticker, Preset, SideDeclared, NearTouchBuy, NearTouchSell, Opp1Buy, Opp1Sell, Opp2Buy, Opp2Sell
-  4) sizing.csv — gợi ý khối lượng mục tiêu và chia lệnh theo thanh khoản/biến động
-     Cột: Ticker, TargetQty, CurrentQty, DeltaQty, MaxOrderQty, SliceCount, SliceQty, LiquidityScore_kVND, VolatilityScore, TodayFilledQty, TodayWAP
-  5) signals.csv — mức độ phù hợp preset và tín hiệu phụ trợ
-     Cột: Ticker, PresetFitMomentum, PresetFitMeanRev, PresetFitBalanced, BandDistance, SectorBias, RiskGuards
-  6) limits.csv — giới hạn thực thi lệnh
+  3) sizing.csv — thông tin giới hạn/điểm thanh khoản-biến động
+     Cột: Ticker, CurrentQty, MaxOrderQty, LiquidityScore_kVND, VolatilityScore, TodayFilledQty, TodayWAP
+  4) signals.csv — tín hiệu cơ bản cho mức độ gần biên
+     Cột: Ticker, BandDistance
+  5) limits.csv — giới hạn thực thi lệnh
      Cột: Aggressiveness, MaxOrderPctADV, SliceADVRatio, MinLot, MaxQtyPerOrder
-  7) positions.csv — PnL theo mã ở trạng thái hiện tại
+  6) positions.csv — PnL theo mã ở trạng thái hiện tại
      Cột: Ticker, Quantity, AvgPrice, Last, MarketValue_kVND, CostBasis_kVND, Unrealized_kVND, PNLPct
-  8) sector.csv — tổng hợp PnL theo ngành ở trạng thái hiện tại
+  7) sector.csv — tổng hợp PnL theo ngành ở trạng thái hiện tại
      Cột: Sector, MarketValue_kVND, WeightPct, PNLPct
 
 Nguyên tắc hoạt động:
 - Các file này được đóng gói phẳng trong một file ZIP đính kèm. Thiếu bất kỳ file nào: trả về thông báo lỗi ngắn gọn và dừng.
-- Chỉ xét các mã xuất hiện trong technical.csv; dùng signals.csv và levels.csv để ưu tiên/preset. Trên thực tế, engine chỉ tính toán cho các mã trong VN100, bạn không cần tự kiểm tra lại.
+- Chỉ xét các mã xuất hiện trong technical.csv; tham khảo signals.csv (BandDistance) và bands.csv khi cân nhắc mức giá. Trên thực tế, engine chỉ tính toán cho các mã trong VN100, bạn không cần tự kiểm tra lại.
 - Kết hợp tin vĩ mô/doanh nghiệp; bạn tự lượng giá ảnh hưởng.
 - Chỉ dùng lệnh LO; LimitPrice dùng đơn vị nghìn đồng. Mục tiêu: xác suất khớp cao nhưng vẫn kiểm soát giá. Ra lệnh theo bậc.
 - Tổng giá trị lệnh mua không vượt quá ngân sách.

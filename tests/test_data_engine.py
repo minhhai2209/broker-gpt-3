@@ -116,7 +116,6 @@ class DataEngineTest(unittest.TestCase):
         out_dir = config.output_base_dir
         technical_path = out_dir / "technical.csv"
         bands_path = out_dir / "bands.csv"
-        levels_path = out_dir / "levels.csv"
         sizing_path = out_dir / "sizing.csv"
         signals_path = out_dir / "signals.csv"
         limits_path = out_dir / "limits.csv"
@@ -126,7 +125,6 @@ class DataEngineTest(unittest.TestCase):
         for path in [
             technical_path,
             bands_path,
-            levels_path,
             sizing_path,
             signals_path,
             limits_path,
@@ -149,8 +147,9 @@ class DataEngineTest(unittest.TestCase):
         self.assertAlmostEqual(aaa_band["Floor"], 11.2)
 
         sizing_df = pd.read_csv(sizing_path)
-        self.assertTrue((sizing_df["DeltaQty"] == 0).all())
-        self.assertTrue((sizing_df["SliceCount"] == 0).all())
+        # Columns DeltaQty and SliceCount are no longer exported
+        self.assertNotIn("DeltaQty", sizing_df.columns)
+        self.assertNotIn("SliceCount", sizing_df.columns)
 
         positions_df = pd.read_csv(positions_path)
         self.assertIn("PNLPct", positions_df.columns)
@@ -168,7 +167,6 @@ class DataEngineTest(unittest.TestCase):
                 {
                     "technical.csv",
                     "bands.csv",
-                    "levels.csv",
                     "sizing.csv",
                     "signals.csv",
                     "limits.csv",

@@ -4,7 +4,7 @@
 
 Phiên bản này bỏ hoàn toàn order engine. Toàn bộ hệ thống chỉ còn các thành phần sau:
 
-1. **Engine thu thập dữ liệu** (`scripts/engine/data_engine.py`): tải dữ liệu giá, tính chỉ số kỹ thuật, dựng bands/levels/sizing/signals/limits và cập nhật báo cáo danh mục/sector. Khi khởi chạy, engine sẽ xoá sạch `out/`; kết thúc sẽ ghi 8 file CSV chuẩn hoá rồi đóng gói phẳng theo `prompts/PROMPT.txt` tại `out/bundle_<profile>.zip` (mỗi profile một file).
+1. **Engine thu thập dữ liệu** (`scripts/engine/data_engine.py`): tải dữ liệu giá, tính chỉ số kỹ thuật, dựng bands/sizing/signals/limits và cập nhật báo cáo danh mục/sector. Khi khởi chạy, engine sẽ xoá sạch `out/`; kết thúc sẽ ghi 7 file CSV chuẩn hoá rồi đóng gói phẳng theo `prompts/PROMPT.txt` tại `out/bundle_<profile>.zip` (mỗi profile một file). Lưu ý: `levels.csv` đã bị loại khỏi output; `sizing.csv` bỏ `TargetQty/DeltaQty/SliceCount/SliceQty`; `signals.csv` chỉ giữ `Ticker,BandDistance`.
 2. **Kho dữ liệu danh mục** (`data/portfolios/`, `data/order_history/`): lưu trữ danh mục hiện tại và lịch sử khớp lệnh của từng tài khoản.
 3. **TCBS Scraper** (`scripts/scrapers/tcbs.py`): đăng nhập TCBS bằng Playwright, ghi `data/portfolios/<profile>/portfolio.csv` và mặc định thu thập các lệnh đã khớp trong hôm nay vào `data/order_history/<profile>/fills.csv` (kèm bản đầy đủ `fills_all.csv`). Có thể tắt bằng `--no-fills`.
 4. (Tạm thời vô hiệu) GitHub Action: trước đây workflow tại `.github/workflows/data-engine.yml` chạy engine định kỳ và commit kết quả. Hiện đã gỡ; chạy local thay thế.
@@ -53,6 +53,7 @@ Mọi đường dẫn được chuẩn hoá thành `Path.resolve()`. Thiếu tr�
 
 - `load_history(tickers)` gọi `ensure_and_load_history_df` để đảm bảo cache đầy đủ rồi trả về DataFrame hợp nhất (cột `Date,Ticker,Open,High,Low,Close,Volume,t`).
 - `load_intraday(tickers)` gọi `ensure_intraday_latest_df` để lấy giá phút gần nhất. Nếu API fail, engine vẫn fallback về giá đóng cửa gần nhất.
+- Có thể cung cấp `data/reference_overrides` (CSV `Ticker,Ref`) trong cấu hình để ép giá tham chiếu khi tính `bands.csv` trong các phiên có điều chỉnh tham chiếu của sàn.
 
 ### TechnicalSnapshotBuilder
 
