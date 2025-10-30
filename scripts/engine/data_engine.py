@@ -1025,30 +1025,19 @@ def _build_sizing(
     columns = [
         "Ticker",
         "TargetQty",
-        "CurrentQty",
         "DeltaQty",
-        "MaxOrderQty",
         "SliceCount",
         "SliceQty",
-        "LiquidityScore_kVND",
-        "VolatilityScore",
-        "TodayFilledQty",
-        "TodayWAP",
     ]
     if technical.empty:
         return pd.DataFrame(columns=columns)
     rows: List[Dict[str, object]] = []
     for row in technical.itertuples(index=False):
         ticker = getattr(row, "Ticker")
-        last = float(getattr(row, "Last", float("nan")))
-        atr = float(getattr(row, "ATR14", float("nan")))
         adv20 = float(getattr(row, "ADV20", float("nan")))
         current_qty = float(holdings.get(ticker, 0.0))
         target_qty = current_qty
         delta_qty = target_qty - current_qty
-        max_by_adv = config.max_order_pct_adv * adv20 if not math.isnan(adv20) else 0.0
-        raw_max_order = min(max_by_adv, float(config.max_qty_per_order)) if adv20 and adv20 > 0 else 0.0
-        max_order_qty = _round_to_lot(raw_max_order, config.min_lot, mode="floor")
         abs_delta = abs(delta_qty)
         if abs_delta == 0:
             slice_count = 0
@@ -1062,27 +1051,16 @@ def _build_sizing(
             slice_qty = _round_to_lot(abs_delta / slice_count, config.min_lot)
         else:
             slice_qty = 0
-        liquidity = float(adv20 * last) if not math.isnan(adv20) and not math.isnan(last) else float("nan")
-        if not math.isnan(last) and last > 0 and not math.isnan(atr):
-            volatility = atr / last
-        else:
-            volatility = 0.0
         rows.append(
             {
                 "Ticker": ticker,
                 "TargetQty": int(round(target_qty)),
-                "CurrentQty": int(round(current_qty)),
                 "DeltaQty": int(round(delta_qty)),
-                "MaxOrderQty": int(max_order_qty),
                 "SliceCount": int(slice_count),
                 "SliceQty": int(slice_qty),
-                "LiquidityScore_kVND": liquidity,
-                "VolatilityScore": volatility,
-                "TodayFilledQty": 0,
-                "TodayWAP": float("nan"),
             }
         )
-    sizing = pd.DataFrame(rows).sort_values("Ticker").reset_index(drop=True)
+    sizing = pd.DataFrame(rows, columns=columns).sort_values("Ticker").reset_index(drop=True)
     return sizing
 
 
@@ -1092,7 +1070,6 @@ def _build_signals(technical: pd.DataFrame, bands: pd.DataFrame, snapshot: pd.Da
         "PresetFitMomentum",
         "PresetFitMeanRev",
         "PresetFitBalanced",
-        "BandDistance",
         "SectorBias",
         "RiskGuards",
     ]
@@ -1134,18 +1111,6 @@ def _build_signals(technical: pd.DataFrame, bands: pd.DataFrame, snapshot: pd.Da
 
         balanced = (momentum_score + mean_rev_score) / 2.0
 
-        if math.isnan(atr):
-            band_distance = float("nan")
-        elif atr == 0:
-            band_distance = 0.0
-        else:
-            candidates = []
-            if not math.isnan(ceil_value) and not math.isnan(last):
-                candidates.append((ceil_value - last) / atr)
-            if not math.isnan(last) and not math.isnan(floor_value):
-                candidates.append((last - floor_value) / atr)
-            band_distance = min(candidates) if candidates else float("nan")
-
         risk_flags: List[str] = []
         if math.isnan(atr) or atr == 0:
             risk_flags.append("ZERO_ATR")
@@ -1164,7 +1129,6 @@ def _build_signals(technical: pd.DataFrame, bands: pd.DataFrame, snapshot: pd.Da
                 "PresetFitMomentum": momentum_score,
                 "PresetFitMeanRev": mean_rev_score,
                 "PresetFitBalanced": balanced,
-                "BandDistance": band_distance,
                 "SectorBias": 0,
                 "RiskGuards": "|".join(sorted(set(risk_flags))),
             }
