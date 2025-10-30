@@ -7,10 +7,10 @@ Danh sách các file (được đóng gói phẳng trong cùng một thư mục)
      Cột: Ticker, Ref, Ceil, Floor, TickSize
   3) levels.csv — mức near-touch/opportunistic đề xuất theo preset
      Cột: Ticker, Preset, SideDeclared, NearTouchBuy, NearTouchSell, Opp1Buy, Opp1Sell, Opp2Buy, Opp2Sell
-  4) sizing.csv — gợi ý khối lượng mục tiêu và chia lệnh theo thanh khoản/biến động
-     Cột: Ticker, TargetQty, CurrentQty, DeltaQty, MaxOrderQty, SliceCount, SliceQty, LiquidityScore_kVND, VolatilityScore, TodayFilledQty, TodayWAP
-  5) signals.csv — mức độ phù hợp preset và tín hiệu phụ trợ
-     Cột: Ticker, PresetFitMomentum, PresetFitMeanRev, PresetFitBalanced, BandDistance, SectorBias, RiskGuards
+  4) sizing.csv — gợi ý khối lượng mục tiêu và kế hoạch chia lệnh
+     Cột: Ticker, TargetQty, DeltaQty, SliceCount, SliceQty
+  5) signals.csv — mức độ phù hợp preset và rào chắn rủi ro
+     Cột: Ticker, PresetFitMomentum, PresetFitMeanRev, PresetFitBalanced, SectorBias, RiskGuards
   6) limits.csv — giới hạn thực thi lệnh
      Cột: Aggressiveness, MaxOrderPctADV, SliceADVRatio, MinLot, MaxQtyPerOrder
   7) positions.csv — PnL theo mã ở trạng thái hiện tại
