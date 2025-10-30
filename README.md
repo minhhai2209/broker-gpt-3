@@ -143,8 +143,8 @@ Test bao gồm:
 | `out/technical.csv` | Snapshot kỹ thuật chuẩn hoá: Last/Ref, SMA20/50/200, EMA20, RSI14, ATR14, MACD, Ret5d/Ret20d, ADV20, 52w range |
 | `out/bands.csv` | Tick hợp lệ và giá trần/sàn HOSE theo bước giá chuẩn |
 | `out/levels.csv` | Mức NearTouch/Opp cho các preset mặc định (momentum, mean_reversion, balanced, risk_off) |
-| `out/sizing.csv` | Quy mô mục tiêu và kế hoạch chia lệnh cho từng mã |
-| `out/signals.csv` | Điểm phù hợp preset-fit và rào chắn rủi ro (LOW_LIQ, ZERO_ATR, NEAR_LIMIT, ... ) |
+| `out/sizing.csv` | Quy mô mục tiêu, lát cắt, điểm thanh khoản/biến động cho từng mã |
+| `out/signals.csv` | Điểm phù hợp preset-fit và risk guard kỹ thuật (LOW_LIQ, ZERO_ATR, NEAR_LIMIT, ... ) |
 | `out/limits.csv` | Tham số vận hành engine: aggressiveness, max_order_pct_adv, slice_adv_ratio, min_lot, max_qty_per_order |
 | `out/positions.csv` | Danh mục hiện tại đã enrich: MarketValue_kVND, CostBasis_kVND, Unrealized_kVND, PNLPct |
 | `out/sector.csv` | Tổng hợp giá trị/PNL theo ngành và trọng số trong danh mục |
