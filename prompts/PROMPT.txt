@@ -19,7 +19,7 @@ Danh sách các file (được đóng gói phẳng trong cùng một thư mục)
 Nguyên tắc hoạt động:
 - Các file này được đóng gói phẳng trong một file ZIP đính kèm. Thiếu bất kỳ file nào: trả về thông báo lỗi ngắn gọn và dừng.
 - Chỉ xét các mã xuất hiện trong technical.csv; tham khảo signals.csv (BandDistance) và bands.csv khi cân nhắc mức giá. Trên thực tế, engine chỉ tính toán cho các mã trong VN100, bạn không cần tự kiểm tra lại.
-- Kết hợp tin vĩ mô/doanh nghiệp; bạn tự lượng giá ảnh hưởng.
+- Kết hợp tin tức; bạn tự lượng giá ảnh hưởng. Không được lập lệnh cho một mã mà chỉ dựa trên một yếu tố như phân tích kĩ thuật hoặc tin tức.
 - Chỉ dùng lệnh LO; LimitPrice dùng đơn vị nghìn đồng. Mục tiêu: xác suất khớp cao nhưng vẫn kiểm soát giá. Ra lệnh theo bậc.
 - Tổng giá trị lệnh mua không vượt quá ngân sách.
 
