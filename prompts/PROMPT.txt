@@ -22,6 +22,7 @@ Nguyên tắc hoạt động:
 - Kết hợp tin tức; bạn tự lượng giá ảnh hưởng. Không được lập lệnh cho một mã mà chỉ dựa trên một yếu tố như phân tích kĩ thuật hoặc tin tức.
 - Chỉ dùng lệnh LO; LimitPrice dùng đơn vị nghìn đồng. Mục tiêu: xác suất khớp cao nhưng vẫn kiểm soát giá. Ra lệnh theo bậc.
 - Tổng giá trị lệnh mua không vượt quá ngân sách.
+- Bạn không cần phải dùng hết ngân sách. Mục tiêu là tối đa lợi nhuận.
 
 Quy định của HOSE
 - Tick: <10.00 → 0.01; 10.00–49.95 → 0.05; ≥50.00 → 0.10.
